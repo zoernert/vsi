@@ -41,6 +41,10 @@
     {
       "name": "Qdrant Compatible",
       "description": "Direct Qdrant API compatibility"
+    },
+    {
+      "name": "LLM Q&A",
+      "description": "LLM-powered question answering with vector search context"
     }
   ],
   "security": [
@@ -858,6 +862,127 @@
           }
         }
       }
+    },
+    "/llm-qa/ask": {
+      "post": {
+        "summary": "Ask a question using LLM with vector search context",
+        "description": "Submit a question to get an AI-generated answer based on retrieved context from vector search",
+        "tags": ["LLM Q&A"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response with answer and context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collection}/ask": {
+      "post": {
+        "summary": "Ask a question using LLM with vector search context",
+        "description": "Submit a question to get an AI-generated answer based on retrieved context from vector search",
+        "tags": ["LLM Q&A"],
+        "parameters": [
+          {
+            "name": "collection",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "my_documents"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["question"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "description": "The question to ask",
+                    "example": "What are the benefits of renewable energy?"
+                  },
+                  "systemPrompt": {
+                    "type": "string",
+                    "description": "Optional custom system prompt for the LLM",
+                    "example": "You are an expert on renewable energy. Answer concisely."
+                  },
+                  "userPrompt": {
+                    "type": "string",
+                    "description": "Optional custom user prompt template",
+                    "example": "Based on the context below, answer the question: {question}"
+                  },
+                  "maxResults": {
+                    "type": "integer",
+                    "description": "Maximum number of search results to retrieve per query",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "default": 5,
+                    "example": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response with answer and context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing required fields"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -879,6 +1004,73 @@
         "properties": {
           "error": {
             "type": "string"
+          }
+        }
+      },
+      "QuestionRequest": {
+        "type": "object",
+        "required": ["question", "collectionName"],
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "The question to ask",
+            "example": "What are the benefits of renewable energy?"
+          },
+          "collectionName": {
+            "type": "string",
+            "description": "Name of the vector collection to search",
+            "example": "documents"
+          },
+          "systemPrompt": {
+            "type": "string",
+            "description": "Optional custom system prompt for the LLM",
+            "example": "You are an expert on renewable energy. Answer concisely."
+          },
+          "userPrompt": {
+            "type": "string",
+            "description": "Optional custom user prompt template",
+            "example": "Based on the context below, answer the question: {question}"
+          },
+          "maxResults": {
+            "type": "integer",
+            "description": "Maximum number of search results to retrieve per query",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 5,
+            "example": 5
+          }
+        }
+      },
+      "QuestionResponse": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string",
+            "description": "The AI-generated answer",
+            "example": "Renewable energy offers several benefits including reduced carbon emissions, energy independence, and long-term cost savings."
+          },
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of query variations used for search",
+            "example": [
+              "What are the benefits of renewable energy?",
+              "Advantages of clean energy sources",
+              "Why choose renewable energy over fossil fuels?"
+            ]
+          },
+          "retrievedContext": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Context chunks retrieved from vector search",
+            "example": [
+              "Renewable energy sources like solar and wind power...",
+              "Studies show that renewable energy reduces CO2 emissions..."
+            ]
           }
         }
       }

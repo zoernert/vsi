@@ -45,8 +45,88 @@ async function extractTextFromFile(filePath, originalName) {
         return fs.readFileSync(filePath, 'utf8');
     }
     
-    // For PDFs and other files, you might want to add proper text extraction
-    // For now, return filename as fallback
+    // Handle image files with AI-generated descriptions
+    if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(ext)) {
+        try {
+            // Use Gemini Vision to generate detailed description
+            const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+            const model = genAI.getGenerativeModel({ model: modelName });
+            
+            // Read image file and convert to base64
+            const imageBuffer = fs.readFileSync(filePath);
+            const base64Image = imageBuffer.toString('base64');
+            
+            const prompt = `Please provide a detailed description of this image. Include:
+1. What objects, people, text, or scenes are visible
+2. Colors, composition, and visual elements
+3. Any text that appears in the image (OCR)
+4. Context and setting
+5. Any other relevant details that would help someone understand the content
+
+Be thorough and descriptive, as this will be used for searching and question answering about the image content.`;
+
+            const imagePart = {
+                inlineData: {
+                    data: base64Image,
+                    mimeType: `image/${ext.substring(1)}`
+                }
+            };
+
+            const result = await model.generateContent([prompt, imagePart]);
+            const response = await result.response;
+            const description = response.text();
+            
+            return description || `Image: ${originalName}`;
+            
+        } catch (error) {
+            console.error('Error generating image description:', error);
+            // Fallback to basic description
+            return `Image file: ${originalName}. Unable to generate detailed description: ${error.message}`;
+        }
+    }
+    
+    if (ext === '.pdf') {
+        try {
+            const pdfParse = require('pdf-parse');
+            const dataBuffer = fs.readFileSync(filePath);
+            const data = await pdfParse(dataBuffer);
+            
+            // Return the extracted text from PDF
+            return data.text || `Document: ${originalName}`;
+        } catch (error) {
+            console.error('Error extracting PDF text:', error);
+            return `Document: ${originalName}`;
+        }
+    }
+    
+    if (ext === '.docx') {
+        try {
+            const mammoth = require('mammoth');
+            const result = await mammoth.extractRawText({ path: filePath });
+            return result.value || `Document: ${originalName}`;
+        } catch (error) {
+            console.error('Error extracting DOCX text:', error);
+            return `Document: ${originalName}`;
+        }
+    }
+    
+    if (ext === '.xlsx' || ext === '.xls') {
+        try {
+            const XLSX = require('xlsx');
+            const workbook = XLSX.readFile(filePath);
+            let text = '';
+            workbook.SheetNames.forEach(name => {
+                const sheet = workbook.Sheets[name];
+                text += XLSX.utils.sheet_to_txt(sheet) + '\n';
+            });
+            return text || `Document: ${originalName}`;
+        } catch (error) {
+            console.error('Error extracting Excel text:', error);
+            return `Document: ${originalName}`;
+        }
+    }
+    
+    // For other file types, return filename as fallback
     return `Document: ${originalName}`;
 }
 
@@ -106,14 +186,20 @@ router.post('/collections/:collection/upload', upload.single('file'), async (req
         console.log(`Uploading file ${file.originalname} to collection ${collection}`);
         console.log(`File saved as: ${file.filename} (UUID: ${path.parse(file.filename).name})`);
         
-        // Extract text from file
+        // Extract text from file (now includes AI-generated image descriptions)
         const text = await extractTextFromFile(file.path, file.originalname);
+        console.log(`Extracted text length: ${text.length} characters`);
+        console.log(`Text preview: ${text.substring(0, 200)}...`);
         
         // Generate embedding
         const embedding = await generateEmbedding(text);
         
         // Extract UUID from filename (remove extension)
         const fileUuid = path.parse(file.filename).name;
+        
+        // Determine file type for better categorization
+        const ext = path.extname(file.originalname).toLowerCase();
+        const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(ext);
         
         // Create point for Qdrant
         const point = {
@@ -124,7 +210,9 @@ router.post('/collections/:collection/upload', upload.single('file'), async (req
                 filepath: file.path,
                 fileUuid: fileUuid, // Store the file UUID for download links
                 downloadUrl: `/api/files/${fileUuid}`,
-                text: text.substring(0, 1000),
+                text: text, // Store the full extracted text/description
+                fileType: isImage ? 'image' : 'document',
+                mimeType: file.mimetype,
                 uploadedBy: req.user.username,
                 uploadedAt: new Date().toISOString(),
                 type: 'file'
@@ -140,8 +228,8 @@ router.post('/collections/:collection/upload', upload.single('file'), async (req
         });
         
         const message = wasExisting 
-            ? 'File uploaded and indexed successfully'
-            : 'Collection created and file uploaded successfully';
+            ? `${isImage ? 'Image' : 'File'} uploaded and indexed successfully`
+            : `Collection created and ${isImage ? 'image' : 'file'} uploaded successfully`;
         
         res.json({ 
             message,
@@ -150,7 +238,9 @@ router.post('/collections/:collection/upload', upload.single('file'), async (req
             filename: file.originalname,
             downloadUrl: `/api/files/${fileUuid}`,
             fileInfoUrl: `/api/files/${fileUuid}/info`,
-            collectionCreated: !wasExisting
+            collectionCreated: !wasExisting,
+            fileType: isImage ? 'image' : 'document',
+            extractedTextLength: text.length
         });
         
     } catch (error) {
@@ -166,18 +256,18 @@ router.post('/collections/:collection/create-text', async (req, res) => {
         const { title, content } = req.body;
         const username = req.user.username;
         const actualCollectionName = getUserCollectionName(username, collection);
-        
+
         if (!title || !content) {
             return res.status(400).json({ error: 'Title and content are required' });
         }
-        
+
         console.log(`Creating text document "${title}" in collection ${collection}`);
-        
+
         // Generate embedding
         const text = `${title}\n\n${content}`;
         const embedding = await generateEmbedding(text);
-        
-        // Create point for Qdrant
+
+        // Create point for Qdrant        
         const point = {
             id: uuidv4(),
             vector: embedding,
@@ -190,26 +280,26 @@ router.post('/collections/:collection/create-text', async (req, res) => {
                 type: 'text'
             }
         };
-        
+
         // Auto-create collection if it doesn't exist
         const wasExisting = await ensureCollectionExists(actualCollectionName, collection);
-        
+
         // Upsert point to collection
         await qdrantClient.upsert(actualCollectionName, {
             points: [point]
         });
-        
+
         const message = wasExisting 
             ? 'Text document created and indexed successfully'
             : 'Collection created and text document indexed successfully';
-        
+
         res.json({ 
             message,
             id: point.id,
             title: title,
             collectionCreated: !wasExisting
         });
-        
+
     } catch (error) {
         console.error('Text creation error:', error);
         res.status(500).json({ error: error.message });
@@ -222,7 +312,7 @@ router.post('/collections/:collection/reindex', async (req, res) => {
         const { collection } = req.params;
         const username = req.user.username;
         const actualCollectionName = getUserCollectionName(username, collection);
-        
+
         console.log(`Reindexing collection ${actualCollectionName}`);
         
         // For now, just return success
@@ -231,7 +321,6 @@ router.post('/collections/:collection/reindex', async (req, res) => {
             message: `Collection ${collection} reindexing started`,
             status: 'in_progress'
         });
-        
     } catch (error) {
         console.error('Reindex error:', error);
         res.status(500).json({ error: error.message });
@@ -245,7 +334,7 @@ router.post('/collections/:collection/search', async (req, res) => {
         const { query, limit = 10, filter } = req.body;
         const username = req.user.username;
         const actualCollectionName = getUserCollectionName(username, collection);
-        
+           
         if (!query) {
             return res.status(400).json({ error: 'Search query is required' });
         }
@@ -254,10 +343,10 @@ router.post('/collections/:collection/search', async (req, res) => {
         
         // Auto-create collection if it doesn't exist (empty collection for search)
         await ensureCollectionExists(actualCollectionName, collection);
-        
+
         // Generate embedding for search query
         const queryEmbedding = await generateEmbedding(query);
-        
+
         // Search in Qdrant
         const searchResult = await qdrantClient.search(actualCollectionName, {
             vector: queryEmbedding,
@@ -266,7 +355,7 @@ router.post('/collections/:collection/search', async (req, res) => {
             with_vector: false,
             filter: filter
         });
-        
+
         // Format results
         const results = searchResult.map(hit => ({
             id: hit.id,
@@ -300,12 +389,12 @@ router.get('/collections/:collection/documents/:id', async (req, res) => {
             with_payload: true,
             with_vector: false
         });
-        
+
         if (points.length === 0) {
             return res.status(404).json({ error: 'Document not found' });
         }
         
-        res.json({
+        res.json({ 
             id: points[0].id,
             payload: points[0].payload
         });
@@ -339,10 +428,9 @@ router.get('/collections/:collection/documents', async (req, res) => {
             payload: point.payload
         }));
         
-        res.json({
+        res.json({ 
             documents,
             count: documents.length,
-            offset: parseInt(offset),
             limit: parseInt(limit)
         });
         

@@ -31,6 +31,12 @@ const collectionRoutes = require('./routes/collectionRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const fileRoutes = require('./routes/fileRoutes'); // New public file routes
 const webRoutes = require('./routes/webRoutes');
+const llmQaRoutes = require('./controllers/llm-qa.controller'); // Add LLM Q&A routes
+
+// Make vector service available to routes (you'll need to import your VectorService)
+// const { VectorService } = require('./services/vector.service');
+// const vectorService = new VectorService();
+// app.set('vectorService', vectorService);
 
 // Public file download routes (NO AUTHENTICATION)
 app.use('/api', fileRoutes);
@@ -39,6 +45,7 @@ app.use('/api', fileRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api', collectionRoutes);
 app.use('/api', uploadRoutes);
+app.use('/api/collections', llmQaRoutes); // Add LLM Q&A routes
 
 // Qdrant-compatible API routes
 app.use('/collections', collectionsRouter);

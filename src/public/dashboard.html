@@ -49,6 +49,37 @@
                 </div>
             </div>
 
+            <!-- LLM Q&A Section -->
+            <div class="card">
+                <h3>🤖 LLM Question & Answer</h3>
+                <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Ask questions about your documents and get AI-powered answers with context.</p>
+                
+                <div class="qa-section">
+                    <div class="qa-form">
+                        <div style="margin-bottom: 10px;">
+                            <label for="qa-question">Question:</label>
+                            <textarea id="qa-question" placeholder="Enter your question here..." rows="3" style="resize: vertical;"></textarea>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label for="qa-collection-select">Collection:</label>
+                            <select id="qa-collection-select">
+                                <option value="">Select a collection...</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label for="qa-system-prompt">System Prompt (optional):</label>
+                            <textarea id="qa-system-prompt" placeholder="Custom instructions for the AI assistant..." rows="2"></textarea>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label for="qa-max-results">Max Results:</label>
+                            <input type="number" id="qa-max-results" value="5" min="1" max="20" style="width: 80px;">
+                        </div>
+                        <button onclick="askQuestion()" class="btn btn-primary">Ask Question</button>
+                    </div>
+                    <div id="qa-results" style="margin-top: 15px;"></div>
+                </div>
+            </div>
+
             <!-- API Key Section -->
             <div class="card">
                 <h3>API Access</h3>
@@ -148,11 +179,17 @@ curl -X GET "${window.location.origin}/api/collections/my_docs/documents" \
                     <select id="upload-collection">
                         <option value="">Select collection...</option>
                     </select>
-                    <input type="file" id="file-input" multiple>
+                    <input type="file" id="file-input" multiple 
+                           accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg,.png,.gif,.bmp,.webp">
                     <button onclick="uploadFiles()" class="btn btn-primary">Upload & Index</button>
                 </div>
                 <div id="upload-progress"></div>
                 <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 12px;">
+                    <strong>📥 Supported File Types:</strong>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        <li><strong>Documents:</strong> PDF, Word (.docx), Excel (.xlsx, .xls), Text (.txt), Markdown (.md)</li>
+                        <li><strong>Images:</strong> JPEG, PNG, GIF, BMP, WebP (with AI description generation)</li>
+                    </ul>
                     <strong>📥 File Downloads:</strong> Uploaded files can be downloaded using their UUID (no authentication required).
                     Each uploaded file gets a unique download URL that you can share.
                 </div>
@@ -200,5 +237,185 @@ curl -X GET "${window.location.origin}/api/collections/my_docs/documents" \
     </div>
 
     <script src="dashboard.js"></script>
+    <script>
+        // Global variable for base URL
+        let BASE_URL = window.location.origin; // Fallback
+
+        // Fetch base URL from settings API
+        async function loadBaseUrl() {
+            try {
+                const response = await fetch('/api/settings', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                if (response.ok) {
+                    const settings = await response.json();
+                    if (settings.BASE_URL) {
+                        BASE_URL = settings.BASE_URL;
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to load base URL setting:', error);
+            }
+        }
+
+        // LLM Q&A Functions
+        async function askQuestion() {
+            const question = document.getElementById('qa-question').value.trim();
+            const collectionName = document.getElementById('qa-collection-select').value;
+            const systemPrompt = document.getElementById('qa-system-prompt').value.trim();
+            const maxResults = parseInt(document.getElementById('qa-max-results').value);
+
+            if (!question || !collectionName) {
+                alert('Please provide both question and collection name');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('qa-results');
+            resultsDiv.innerHTML = '<div style="text-align: center; padding: 15px; color: #666; font-style: italic;">🤔 Processing your question...</div>';
+
+            try {
+                const requestBody = {
+                    question,
+                    maxResults
+                };
+
+                if (systemPrompt) {
+                    requestBody.systemPrompt = systemPrompt;
+                }
+
+                const token = localStorage.getItem('token');
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
+                const response = await fetch(`/api/collections/${encodeURIComponent(collectionName)}/ask`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(requestBody)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to get answer');
+                }
+
+                displayQAResults(data);
+            } catch (error) {
+                resultsDiv.innerHTML = `<div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 4px; border-left: 4px solid #dc3545;">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function displayQAResults(data) {
+            const resultsDiv = document.getElementById('qa-results');
+            
+            const html = `
+                <div style="background: white; border: 1px solid #dee2e6; border-radius: 4px; padding: 15px;">
+                    <div style="background: #e8f5e8; padding: 15px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #28a745;">
+                        <h4 style="margin: 0 0 10px 0;">💡 Answer:</h4>
+                        <p style="margin: 0; white-space: pre-wrap;">${escapeHtml(data.answer)}</p>
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 0.9em;">
+                        <h5 style="margin: 0 0 8px 0; color: #495057;">🔍 Query Variations Used (${data.queries.length}):</h5>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            ${data.queries.map(query => `<li style="margin-bottom: 4px;">${escapeHtml(query)}</li>`).join('')}
+                        </ul>
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9em;">
+                        <h5 style="margin: 0 0 8px 0; color: #495057;">📄 Retrieved Context (${data.retrievedContext.length} chunks):</h5>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            ${data.retrievedContext.map(context => formatContextSource(context)).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        function formatContextSource(context) {
+            // Check if this context looks like it's from a file (contains download URL pattern)
+            const fileUrlMatch = context.match(/\/api\/files\/([a-f0-9-]{36})/);
+            const filenameMatch = context.match(/Document: (.+?)(?:\.|$)/);
+            
+            if (fileUrlMatch && filenameMatch) {
+                const fileUuid = fileUrlMatch[1];
+                const filename = filenameMatch[1];
+                const downloadUrl = `${BASE_URL}/api/files/${fileUuid}`;
+                const truncated = context.length > 150 ? context.substring(0, 150) + '...' : context;
+                
+                return `
+                    <div style="margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #007bff;">
+                        <div style="font-weight: bold; margin-bottom: 4px;">
+                            📎 <a href="${downloadUrl}" target="_blank" style="color: #007bff; text-decoration: none;">${escapeHtml(filename)}</a>
+                            <span style="font-size: 0.8em; color: #666; margin-left: 8px;">
+                                <a href="${downloadUrl}" target="_blank" style="color: #666;">↗ Download</a>
+                            </span>
+                        </div>
+                        <div style="font-size: 0.9em; color: #666;">${escapeHtml(truncated)}</div>
+                    </div>
+                `;
+            } else {
+                // Regular text context
+                const truncated = context.length > 150 ? context.substring(0, 150) + '...' : context;
+                return `
+                    <div style="margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <div style="font-size: 0.9em;">${escapeHtml(truncated)}</div>
+                    </div>
+                `;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Update the existing loadCollections function to also load base URL
+        const originalLoadCollections = loadCollections;
+        loadCollections = async function() {
+            // Load base URL first
+            await loadBaseUrl();
+            
+            await originalLoadCollections();
+            
+            // Also update Q&A dropdown
+            try {
+                const response = await fetch('/collections', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                const data = await response.json();
+                
+                const qaSelect = document.getElementById('qa-collection-select');
+                if (qaSelect) {
+                    qaSelect.innerHTML = '<option value="">Select a collection...</option>';
+                    data.collections.forEach(collection => {
+                        const option = document.createElement('option');
+                        option.value = collection.name;
+                        option.textContent = collection.name;
+                        qaSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load collections for Q&A:', error);
+            }
+        };
+
+        // Load base URL on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBaseUrl();
+        });
+    </script>
 </body>
 </html>
