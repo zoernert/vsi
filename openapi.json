@@ -31,6 +31,10 @@
       "description": "Document upload, indexing, and management"
     },
     {
+      "name": "Files",
+      "description": "File download and information (no authentication required)"
+    },
+    {
       "name": "Search",
       "description": "Semantic search and retrieval"
     },
@@ -93,6 +97,9 @@
           },
           "400": {
             "description": "Bad request - User already exists or invalid input"
+          },
+          "403": {
+            "description": "Self-registration is disabled"
           }
         }
       }
@@ -138,6 +145,10 @@
                     "username": {
                       "type": "string",
                       "example": "john_doe"
+                    },
+                    "isAdmin": {
+                      "type": "boolean",
+                      "example": false
                     }
                   }
                 }
@@ -310,11 +321,29 @@
                     "message": {
                       "type": "string"
                     },
-                    "id": {
-                      "type": "string"
+                    "documentId": {
+                      "type": "string",
+                      "description": "Document ID in the vector store"
+                    },
+                    "fileUuid": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "UUID for file download"
                     },
                     "filename": {
                       "type": "string"
+                    },
+                    "downloadUrl": {
+                      "type": "string",
+                      "example": "/api/files/550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "fileInfoUrl": {
+                      "type": "string",
+                      "example": "/api/files/550e8400-e29b-41d4-a716-446655440000/info"
+                    },
+                    "collectionCreated": {
+                      "type": "boolean",
+                      "description": "Whether the collection was auto-created"
                     }
                   }
                 }
@@ -539,6 +568,139 @@
         "responses": {
           "200": {
             "description": "Document deleted successfully"
+          }
+        }
+      }
+    },
+    "/api/files/{fileId}": {
+      "get": {
+        "tags": ["Files"],
+        "summary": "Download file by UUID",
+        "description": "Download an uploaded file using its UUID. No authentication required.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "550e8400-e29b-41d4-a716-446655440000",
+            "description": "UUID of the file to download"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File content",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Attachment filename"
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "File size in bytes"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file ID format"
+          },
+          "404": {
+            "description": "File not found"
+          }
+        }
+      }
+    },
+    "/api/files/{fileId}/info": {
+      "get": {
+        "tags": ["Files"],
+        "summary": "Get file information by UUID",
+        "description": "Get metadata about an uploaded file using its UUID. No authentication required.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fileId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "fileName": {
+                      "type": "string",
+                      "example": "550e8400-e29b-41d4-a716-446655440000.txt"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "example": 1024
+                    },
+                    "uploadedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "modifiedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "extension": {
+                      "type": "string",
+                      "example": ".txt"
+                    },
+                    "downloadUrl": {
+                      "type": "string",
+                      "example": "/api/files/550e8400-e29b-41d4-a716-446655440000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file ID format"
+          },
+          "404": {
+            "description": "File not found"
           }
         }
       }

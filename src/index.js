@@ -29,12 +29,16 @@ require('./config/qdrant');
 const authRoutes = require('./routes/authRoutes');
 const collectionRoutes = require('./routes/collectionRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const fileRoutes = require('./routes/fileRoutes'); // New public file routes
 const webRoutes = require('./routes/webRoutes');
 
-// API routes (define these first to avoid conflicts)
+// Public file download routes (NO AUTHENTICATION)
+app.use('/api', fileRoutes);
+
+// API routes (require authentication)
 app.use('/api/auth', authRoutes);
-app.use('/api', collectionRoutes); // Collections are user-specific, so they use auth middleware
-app.use('/api', uploadRoutes); // Uploads are user-specific, so they use auth middleware
+app.use('/api', collectionRoutes);
+app.use('/api', uploadRoutes);
 
 // Qdrant-compatible API routes
 app.use('/collections', collectionsRouter);

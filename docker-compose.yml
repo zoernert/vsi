@@ -28,7 +28,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
+      # Mount uploads directory to host for file persistence and access
       - ./uploads:/app/uploads:Z
+      # Mount user data directory to host for persistence
       - ./data/users:/app/data:Z
     environment:
       - NODE_ENV=production
@@ -38,6 +40,11 @@ services:
       - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
       - API_KEY=${API_KEY:-}
       - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-info}
+      - ALLOW_SELF_REGISTRATION=${ALLOW_SELF_REGISTRATION:-false}
+      - ALLOW_RAPIDAPI_USERS=${ALLOW_RAPIDAPI_USERS:-false}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - BASE_URL=${BASE_URL:-http://localhost:3000}
     depends_on:
       qdrant:
         condition: service_healthy

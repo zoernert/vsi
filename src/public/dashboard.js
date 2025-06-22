@@ -318,6 +318,8 @@ async function uploadFiles() {
     const progressDiv = document.getElementById('upload-progress');
     progressDiv.innerHTML = '<div class="progress"><div class="progress-bar" style="width: 0%"></div></div>';
     
+    const uploadResults = [];
+    
     for (let i = 0; i < files.length; i++) {
         const formData = new FormData();
         formData.append('file', files[i]);
@@ -334,18 +336,44 @@ async function uploadFiles() {
             const progress = ((i + 1) / files.length) * 100;
             progressDiv.querySelector('.progress-bar').style.width = `${progress}%`;
             
-            if (!response.ok) {
-                console.error(`Failed to upload ${files[i].name}`);
+            if (response.ok) {
+                const result = await response.json();
+                uploadResults.push(result);
+                console.log(`✅ Uploaded: ${result.filename} (UUID: ${result.fileUuid})`);
+            } else {
+                console.error(`❌ Failed to upload ${files[i].name}`);
             }
         } catch (error) {
-            console.error(`Error uploading ${files[i].name}:`, error);
+            console.error(`❌ Error uploading ${files[i].name}:`, error);
         }
     }
     
     fileInput.value = '';
-    setTimeout(() => {
-        progressDiv.innerHTML = '';
-    }, 2000);
+    
+    // Show upload results
+    if (uploadResults.length > 0) {
+        let resultMessage = `Successfully uploaded ${uploadResults.length} file(s):\n\n`;
+        uploadResults.forEach(result => {
+            resultMessage += `• ${result.filename}\n  Download: ${window.location.origin}${result.downloadUrl}\n\n`;
+        });
+        
+        setTimeout(() => {
+            progressDiv.innerHTML = `
+                <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 10px; margin-top: 10px;">
+                    <strong>Upload Complete!</strong><br>
+                    <small>Files can be downloaded using their UUIDs (no authentication required)</small>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                progressDiv.innerHTML = '';
+            }, 5000);
+        }, 1000);
+    } else {
+        setTimeout(() => {
+            progressDiv.innerHTML = '';
+        }, 2000);
+    }
 }
 
 async function createTextDocument() {
@@ -456,6 +484,10 @@ function displaySearchResults(results, containerId) {
         const payload = result.payload;
         const score = (result.score * 100).toFixed(1);
         
+        // Create download link if it's a file with fileUuid
+        const downloadLink = payload.fileUuid ? 
+            `<br><a href="/api/files/${payload.fileUuid}" target="_blank" class="btn btn-small btn-secondary">📥 Download File</a>` : '';
+        
         html += `
             <div class="result-item">
                 <div class="result-header">
@@ -464,7 +496,7 @@ function displaySearchResults(results, containerId) {
                 </div>
                 <div class="result-content">
                     ${payload.title ? `<h5>${payload.title}</h5>` : ''}
-                    ${payload.filename ? `<strong>File:</strong> ${payload.filename}<br>` : ''}
+                    ${payload.filename ? `<strong>File:</strong> ${payload.filename}${downloadLink}<br>` : ''}
                     <div class="result-text">${payload.text || payload.content || 'No preview available'}</div>
                     <div class="result-meta">
                         Created: ${new Date(payload.createdAt || payload.uploadedAt).toLocaleString()}
@@ -491,6 +523,10 @@ function displayBrowseResults(documents, collection, containerId) {
     documents.forEach(doc => {
         const payload = doc.payload;
         
+        // Create download link if it's a file with fileUuid
+        const downloadLink = payload.fileUuid ? 
+            `<br><a href="/api/files/${payload.fileUuid}" target="_blank" class="btn btn-small btn-secondary">📥 Download</a>` : '';
+        
         html += `
             <div class="document-item">
                 <div class="document-header">
@@ -499,7 +535,7 @@ function displayBrowseResults(documents, collection, containerId) {
                 </div>
                 <div class="document-content">
                     ${payload.title ? `<h5>${payload.title}</h5>` : ''}
-                    ${payload.filename ? `<strong>File:</strong> ${payload.filename}<br>` : ''}
+                    ${payload.filename ? `<strong>File:</strong> ${payload.filename}${downloadLink}<br>` : ''}
                     <div class="document-text">${(payload.text || payload.content || 'No preview available').substring(0, 200)}...</div>
                     <div class="document-meta">
                         Created: ${new Date(payload.createdAt || payload.uploadedAt).toLocaleString()}

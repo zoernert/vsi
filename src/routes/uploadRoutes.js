@@ -9,7 +9,7 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Apply authentication to all routes
+// Apply authentication to ALL routes in this file
 router.use(authenticateToken);
 
 // Configure multer for file uploads
@@ -104,6 +104,7 @@ router.post('/collections/:collection/upload', upload.single('file'), async (req
         }
         
         console.log(`Uploading file ${file.originalname} to collection ${collection}`);
+        console.log(`File saved as: ${file.filename} (UUID: ${path.parse(file.filename).name})`);
         
         // Extract text from file
         const text = await extractTextFromFile(file.path, file.originalname);
@@ -111,13 +112,18 @@ router.post('/collections/:collection/upload', upload.single('file'), async (req
         // Generate embedding
         const embedding = await generateEmbedding(text);
         
+        // Extract UUID from filename (remove extension)
+        const fileUuid = path.parse(file.filename).name;
+        
         // Create point for Qdrant
         const point = {
-            id: uuidv4(),
+            id: uuidv4(), // Document ID (different from file UUID)
             vector: embedding,
             payload: {
                 filename: file.originalname,
                 filepath: file.path,
+                fileUuid: fileUuid, // Store the file UUID for download links
+                downloadUrl: `/api/files/${fileUuid}`,
                 text: text.substring(0, 1000),
                 uploadedBy: req.user.username,
                 uploadedAt: new Date().toISOString(),
@@ -139,8 +145,11 @@ router.post('/collections/:collection/upload', upload.single('file'), async (req
         
         res.json({ 
             message,
-            id: point.id,
+            documentId: point.id,
+            fileUuid: fileUuid,
             filename: file.originalname,
+            downloadUrl: `/api/files/${fileUuid}`,
+            fileInfoUrl: `/api/files/${fileUuid}/info`,
             collectionCreated: !wasExisting
         });
         
