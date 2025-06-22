@@ -1,0 +1,56 @@
+# Multi-stage build for production
+FROM node:18-alpine AS dependencies
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+FROM node:18-alpine AS build
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+# Add any build steps here if needed in the future
+
+FROM node:18-alpine AS runtime
+
+# Install dumb-init and curl for health checks
+RUN apk add --no-cache dumb-init curl
+
+# Create app directory
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S vsi -u 1001 -G nodejs
+
+# Copy dependencies
+COPY --from=dependencies --chown=vsi:nodejs /app/node_modules ./node_modules
+
+# Copy application code
+COPY --chown=vsi:nodejs . .
+
+# Copy entrypoint script
+COPY --chown=vsi:nodejs docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Create necessary directories
+RUN mkdir -p uploads data && \
+    chown -R vsi:nodejs uploads data
+
+# Switch to non-root user
+USER vsi
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:3000/api/auth/debug/users || exit 1
+
+# Use custom entrypoint
+ENTRYPOINT ["dumb-init", "--", "docker-entrypoint.sh"]
+
+# Start the application
+CMD ["npm", "start"]

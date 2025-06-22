@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - VSI Vector Store</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="dashboard-header">
+            <h1>VSI Dashboard</h1>
+            <div class="user-info">
+                <span id="username-display"></span>
+                <span id="admin-badge" class="admin-badge" style="display: none;">ADMIN</span>
+                <button onclick="logout()" class="btn btn-secondary">Logout</button>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Admin Panel -->
+            <div id="admin-panel" class="card" style="display: none;">
+                <h3>👨‍💼 Admin Panel</h3>
+                
+                <div class="admin-section">
+                    <h4>Create User</h4>
+                    <div class="admin-controls">
+                        <input type="text" id="admin-new-username" placeholder="Username">
+                        <input type="password" id="admin-new-password" placeholder="Password">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="admin-new-isadmin"> Admin User
+                        </label>
+                        <button onclick="createUser()" class="btn btn-primary">Create User</button>
+                    </div>
+                </div>
+                
+                <div class="admin-section">
+                    <h4>User Management</h4>
+                    <button onclick="loadUsers()" class="btn btn-secondary">Refresh Users</button>
+                    <div id="users-list"></div>
+                </div>
+                
+                <div class="admin-section">
+                    <h4>System Status</h4>
+                    <div id="system-status">
+                        <p><strong>Self Registration:</strong> <span id="self-reg-status">-</span></p>
+                        <p><strong>RapidAPI Support:</strong> <span id="rapidapi-status">-</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Key Section -->
+            <div class="card">
+                <h3>API Access</h3>
+                <div class="api-key-section">
+                    <label>Your Bearer Token:</label>
+                    <div class="api-key-display">
+                        <input type="text" id="api-key" readonly>
+                        <button onclick="copyApiKey()" class="btn btn-small">Copy</button>
+                    </div>
+                </div>
+                
+                <div class="usage-info">
+                    <h4>HTTP Client Examples:</h4>
+                    <pre><code id="http-examples">// Using fetch
+fetch('${window.location.origin}/collections', {
+  headers: {
+    'Authorization': 'Bearer your-token-here'
+  }
+});
+
+// Using axios
+axios.get('${window.location.origin}/collections', {
+  headers: {
+    'Authorization': 'Bearer your-token-here'
+  }
+});</code></pre>
+
+                    <h4>Qdrant-Compatible API:</h4>
+                    <p>Use standard Qdrant operations with authentication:</p>
+                    <pre><code id="qdrant-examples"># List collections
+curl -X GET "${window.location.origin}/collections" \
+  -H "Authorization: Bearer your-token-here"
+
+# Create collection
+curl -X PUT "${window.location.origin}/collections/my_docs" \
+  -H "Authorization: Bearer your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{"vectors":{"size":768,"distance":"Cosine"}}'
+
+# Search vectors
+curl -X POST "${window.location.origin}/collections/my_docs/points/search" \
+  -H "Authorization: Bearer your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{"vector":[0.1,0.2,0.3],"limit":5,"with_payload":true}'
+
+# Upsert points
+curl -X PUT "${window.location.origin}/collections/my_docs/points" \
+  -H "Authorization: Bearer your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{"points":[{"id":"doc1","vector":[0.1,0.2,0.3],"payload":{"text":"Hello"}}]}'</code></pre>
+
+                    <h4>VSI-Specific API:</h4>
+                    <p>Enhanced features for document management:</p>
+                    <pre><code id="vsi-examples"># Upload file
+curl -X POST "${window.location.origin}/api/collections/my_docs/upload" \
+  -H "Authorization: Bearer your-token-here" \
+  -F "file=@document.txt"
+
+# Create text document
+curl -X POST "${window.location.origin}/api/collections/my_docs/create-text" \
+  -H "Authorization: Bearer your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"My Note","content":"This is my document content"}'
+
+# Semantic search
+curl -X POST "${window.location.origin}/api/collections/my_docs/search" \
+  -H "Authorization: Bearer your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"machine learning","limit":10}'
+
+# List documents
+curl -X GET "${window.location.origin}/api/collections/my_docs/documents" \
+  -H "Authorization: Bearer your-token-here"</code></pre>
+                    
+                    <div style="margin-top: 15px;">
+                        <a href="/openapi.json" target="_blank" class="btn btn-small btn-secondary">📋 API Documentation</a>
+                        <a href="https://github.com/your-repo/vsi" target="_blank" class="btn btn-small btn-secondary">📖 README</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Collections Section -->
+            <div class="card">
+                <h3>Collections</h3>
+                <div class="collection-controls">
+                    <input type="text" id="new-collection-name" placeholder="Collection name">
+                    <button onclick="createCollection()" class="btn btn-primary">Create</button>
+                    <button onclick="loadCollections()" class="btn btn-secondary">Refresh</button>
+                </div>
+                <div id="collections-list"></div>
+            </div>
+
+            <!-- File Upload Section -->
+            <div class="card">
+                <h3>Upload Files</h3>
+                <div class="upload-section">
+                    <select id="upload-collection">
+                        <option value="">Select collection...</option>
+                    </select>
+                    <input type="file" id="file-input" multiple>
+                    <button onclick="uploadFiles()" class="btn btn-primary">Upload & Index</button>
+                </div>
+                <div id="upload-progress"></div>
+            </div>
+
+            <!-- Text Creation Section -->
+            <div class="card">
+                <h3>Create Text Document</h3>
+                <div class="text-creation">
+                    <select id="text-collection">
+                        <option value="">Select collection...</option>
+                    </select>
+                    <input type="text" id="text-title" placeholder="Document title">
+                    <textarea id="text-content" placeholder="Enter your text content here..." rows="6"></textarea>
+                    <button onclick="createTextDocument()" class="btn btn-primary">Create & Index</button>
+                </div>
+            </div>
+
+            <!-- Search Section -->
+            <div class="card">
+                <h3>Search Documents</h3>
+                <div class="search-section">
+                    <select id="search-collection">
+                        <option value="">Select collection...</option>
+                    </select>
+                    <input type="text" id="search-query" placeholder="Enter your search query...">
+                    <button onclick="searchDocuments()" class="btn btn-primary">Search</button>
+                </div>
+                <div id="search-results"></div>
+            </div>
+
+            <!-- Document Browser Section -->
+            <div class="card">
+                <h3>Document Browser</h3>
+                <div class="browser-section">
+                    <select id="browse-collection">
+                        <option value="">Select collection...</option>
+                    </select>
+                    <button onclick="browseDocuments()" class="btn btn-secondary">Browse All</button>
+                </div>
+                <div id="browse-results"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

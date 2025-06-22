@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSI Vector Store Service</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>VSI Vector Store Service</h1>
+        <p>Qdrant-compatible vector store with document upload and processing capabilities.</p>
+        
+        <div class="card">
+            <h3>Getting Started</h3>
+            <p>Login or register to access your vector collections and manage documents.</p>
+            <a href="/login" class="btn btn-primary">Login / Register</a>
+        </div>
+
+        <div class="card">
+            <h3>API Documentation</h3>
+            <p>Explore the REST API with our comprehensive documentation:</p>
+            <div style="margin: 15px 0;">
+                <a href="/openapi.json" class="btn btn-secondary" target="_blank">OpenAPI Specification</a>
+                <a href="https://github.com/swagger-api/swagger-ui" class="btn btn-secondary" target="_blank">Swagger UI Guide</a>
+            </div>
+            
+            <h4>Key Endpoints:</h4>
+            <ul>
+                <li><code>GET /collections</code> - List collections</li>
+                <li><code>POST /collections/{name}/points/search</code> - Search vectors</li>
+                <li><code>PUT /collections/{name}/points</code> - Upsert points</li>
+                <li><code>POST /api/collections/{name}/search</code> - Semantic search</li>
+                <li><code>/api/v1/qdrant/*</code> - Direct Qdrant proxy</li>
+            </ul>
+            
+            <h4>Authentication:</h4>
+            <p>Use JWT Bearer tokens or API keys in request headers:</p>
+            <pre><code>Authorization: Bearer your-jwt-token
+# or
+api-key: your-api-key</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Features</h3>
+            <ul>
+                <li>🔍 <strong>Semantic Search</strong> - Natural language document search</li>
+                <li>📄 <strong>Document Upload</strong> - Automatic text extraction and indexing</li>
+                <li>🔗 <strong>Qdrant Compatible</strong> - Works with standard Qdrant clients</li>
+                <li>🛡️ <strong>Secure</strong> - JWT authentication and user management</li>
+                <li>🌐 <strong>Web Interface</strong> - Easy-to-use dashboard</li>
+                <li>⚡ <strong>Fast</strong> - Vector-based similarity search</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Quick Example</h3>
+            <p>Using the service with a Qdrant client:</p>
+            <pre><code id="landing-example">// JavaScript
+import { QdrantClient } from '@qdrant/qdrant-js';
+
+const client = new QdrantClient({
+  url: 'http://localhost:3000',
+  apiKey: 'your-jwt-token'
+});
+
+const results = await client.search('my_collection', {
+  vector: [0.1, 0.2, 0.3, ...],
+  limit: 10
+});</code></pre>
+        </div>
+    </div>
+
+    <script>
+        // Load server config and update examples
+        fetch('/api/config')
+            .then(response => response.json())
+            .then(config => {
+                const example = document.getElementById('landing-example');
+                if (example) {
+                    example.textContent = `// JavaScript
+import { QdrantClient } from '@qdrant/qdrant-js';
+
+const client = new QdrantClient({
+  url: '${config.baseUrl}',
+  apiKey: 'your-jwt-token'
+});
+
+const results = await client.search('my_collection', {
+  vector: [0.1, 0.2, 0.3, ...],
+  limit: 10
+});`;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading config:', error);
+            });
+    </script>
+</body>
+</html>
