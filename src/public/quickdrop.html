@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickDrop - VSI Vector Store</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .quickdrop-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .drop-zone {
+            border: 3px dashed #ccc;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .drop-zone.dragover {
+            border-color: #007bff;
+            background: #e3f2fd;
+            transform: scale(1.02);
+        }
+        
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.6;
+        }
+        
+        .upload-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .upload-method {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .text-input-area {
+            width: 100%;
+            min-height: 200px;
+            resize: vertical;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .collection-selector {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .curl-example {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .upload-status {
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .upload-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .upload-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .file-preview {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="quickdrop-container">
+        <header class="dashboard-header">
+            <h1>📤 QuickDrop</h1>
+            <div class="user-info">
+                <span id="username-display"></span>
+                <a href="/dashboard" class="btn btn-secondary">← Back to Dashboard</a>
+                <button onclick="logout()" class="btn btn-secondary">Logout</button>
+            </div>
+        </header>
+
+        <!-- Collection Selection -->
+        <div class="collection-selector">
+            <h3>📁 Select Collection</h3>
+            <select id="collection-select" onchange="updateCurlExample()">
+                <option value="">Choose a collection...</option>
+            </select>
+            <button onclick="refreshCollections()" class="btn btn-small btn-secondary">🔄 Refresh</button>
+        </div>
+
+        <!-- Main Drop Zone -->
+        <div class="drop-zone" id="drop-zone">
+            <div class="drop-zone-icon">📁</div>
+            <h3>Drop files here, click to select, or paste content</h3>
+            <p>Supports: Documents (PDF, Word, Excel), Images (JPEG, PNG, GIF, etc.), Text files</p>
+            <input type="file" id="file-input" multiple style="display: none;" 
+                   accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.jpg,.jpeg,.png,.gif,.bmp,.webp">
+        </div>
+
+        <!-- Upload Options -->
+        <div class="upload-options">
+            <!-- File Selection -->
+            <div class="upload-method">
+                <h4>📂 Select Files</h4>
+                <button onclick="document.getElementById('file-input').click()" class="btn btn-primary">
+                    Choose Files
+                </button>
+                <div id="selected-files"></div>
+            </div>
+
+            <!-- Text Input -->
+            <div class="upload-method">
+                <h4>✏️ Create Text Document</h4>
+                <input type="text" id="text-title" placeholder="Document title..." style="margin-bottom: 10px;">
+                <textarea id="text-content" class="text-input-area" 
+                         placeholder="Paste or type your content here..."></textarea>
+                <button onclick="createTextDocument()" class="btn btn-primary">Create Document</button>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <button onclick="clearAll()" class="btn btn-secondary">🗑️ Clear All</button>
+            <button onclick="uploadAll()" class="btn btn-primary" id="upload-all-btn" disabled>
+                📤 Upload All Files
+            </button>
+        </div>
+
+        <!-- Upload Status -->
+        <div id="upload-status" class="upload-status"></div>
+
+        <!-- File Previews -->
+        <div id="file-previews"></div>
+
+        <!-- cURL Example -->
+        <div class="card" style="margin-top: 20px;">
+            <h3>📋 cURL Example</h3>
+            <p>Use this command to upload files programmatically:</p>
+            <div id="curl-example" class="curl-example">
+Select a collection first to see the cURL example
+            </div>
+            <button onclick="copyCurlExample()" class="btn btn-small btn-secondary">📋 Copy Command</button>
+        </div>
+    </div>
+
+    <script src="quickdrop.js"></script>
+</body>
+</html>

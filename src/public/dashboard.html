@@ -13,6 +13,7 @@
             <div class="user-info">
                 <span id="username-display"></span>
                 <span id="admin-badge" class="admin-badge" style="display: none;">ADMIN</span>
+                <a href="/quickdrop.html" class="btn btn-primary" style="margin-right: 10px;">📤 QuickDrop</a>
                 <button onclick="logout()" class="btn btn-secondary">Logout</button>
             </div>
         </header>
@@ -45,6 +46,7 @@
                     <div id="system-status">
                         <p><strong>Self Registration:</strong> <span id="self-reg-status">-</span></p>
                         <p><strong>RapidAPI Support:</strong> <span id="rapidapi-status">-</span></p>
+                        <p><strong>MCP Service:</strong> <span id="mcp-status">-</span></p>
                     </div>
                 </div>
             </div>
@@ -144,6 +146,12 @@ curl -X POST "${window.location.origin}/api/collections/my_docs/create-text" \
   -H "Content-Type: application/json" \
   -d '{"title":"My Note","content":"This is my document content"}'
 
+# Ask questions (LLM Q&A)
+curl -X POST "${window.location.origin}/api/collections/my_docs/ask" \
+  -H "Authorization: Bearer your-token-here" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What is machine learning?","maxResults":5}'
+
 # Semantic search
 curl -X POST "${window.location.origin}/api/collections/my_docs/search" \
   -H "Authorization: Bearer your-token-here" \
@@ -156,7 +164,8 @@ curl -X GET "${window.location.origin}/api/collections/my_docs/documents" \
                     
                     <div style="margin-top: 15px;">
                         <a href="/openapi.json" target="_blank" class="btn btn-small btn-secondary">📋 API Documentation</a>
-                        <a href="https://github.com/your-repo/vsi" target="_blank" class="btn btn-small btn-secondary">📖 README</a>
+                        <a href="/mcp" target="_blank" class="btn btn-small btn-secondary">🔗 MCP Service</a>
+                        <a href="/documentation" target="_blank" class="btn btn-small btn-secondary">📖 Full Documentation</a>
                     </div>
                 </div>
             </div>
@@ -409,6 +418,26 @@ curl -X GET "${window.location.origin}/api/collections/my_docs/documents" \
                 }
             } catch (error) {
                 console.error('Failed to load collections for Q&A:', error);
+            }
+            
+            // Check MCP service status
+            try {
+                const mcpResponse = await fetch('/mcp', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                const mcpStatusElement = document.getElementById('mcp-status');
+                if (mcpStatusElement) {
+                    mcpStatusElement.textContent = mcpResponse.ok ? '✅ Active' : '❌ Inactive';
+                    mcpStatusElement.style.color = mcpResponse.ok ? 'green' : 'red';
+                }
+            } catch (error) {
+                const mcpStatusElement = document.getElementById('mcp-status');
+                if (mcpStatusElement) {
+                    mcpStatusElement.textContent = '❌ Inactive';
+                    mcpStatusElement.style.color = 'red';
+                }
             }
         };
 

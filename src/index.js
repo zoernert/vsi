@@ -32,6 +32,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const fileRoutes = require('./routes/fileRoutes'); // New public file routes
 const webRoutes = require('./routes/webRoutes');
 const llmQaRoutes = require('./controllers/llm-qa.controller'); // Add LLM Q&A routes
+const mcpRoutes = require('./routes/mcpRoutes'); // Add MCP routes
 
 // Make vector service available to routes (you'll need to import your VectorService)
 // const { VectorService } = require('./services/vector.service');
@@ -46,6 +47,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api', collectionRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api/collections', llmQaRoutes); // Add LLM Q&A routes
+
+// MCP service endpoint
+app.use('/mcp', mcpRoutes);
 
 // Qdrant-compatible API routes
 app.use('/collections', collectionsRouter);

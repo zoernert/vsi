@@ -1,0 +1,568 @@
+# VSI Vector Store - Comprehensive Documentation
+
+## Overview
+
+VSI (Vector Store Interface) is a comprehensive vector database solution built on top of Qdrant, providing advanced document management, semantic search, and AI-powered question answering capabilities. It offers multiple interfaces including a web dashboard, REST API, Qdrant-compatible API, and Model Context Protocol (MCP) integration.
+
+## Key Features
+
+### 1. Multi-Modal Document Support
+- **Text Documents**: Plain text, Markdown files
+- **Office Documents**: PDF, Word (.docx), Excel (.xlsx, .xls)
+- **Images**: JPEG, PNG, GIF, BMP, WebP with AI-generated descriptions
+- **Automatic Processing**: Text extraction, chunking, and embedding generation
+
+### 2. AI-Powered Capabilities
+- **Semantic Search**: Vector-based similarity search across documents
+- **LLM Question & Answer**: Ask questions about your documents with context-aware responses
+- **Query Expansion**: Automatic generation of query variations for better search results
+- **Content Understanding**: AI-generated descriptions for images and complex documents
+
+### 3. Multiple API Interfaces
+- **REST API**: Custom VSI endpoints for document management
+- **Qdrant-Compatible API**: Full compatibility with Qdrant client libraries
+- **Model Context Protocol (MCP)**: Integration with AI assistants like Claude
+- **Web Dashboard**: User-friendly interface for all operations
+
+### 4. User Management & Security
+- **Authentication**: Bearer token-based authentication
+- **User Roles**: Regular users and administrators
+- **Collection Isolation**: User-specific collections with secure access
+- **Admin Controls**: User management, system monitoring
+
+## API Endpoints Reference
+
+### Authentication
+All API endpoints (except file downloads) require authentication using Bearer tokens.
+
+```bash
+# Get authentication token
+curl -X POST "{{BASE_URL}}/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your_username","password":"your_password"}'
+```
+
+### Collection Management
+
+#### List Collections
+```bash
+# VSI API
+curl -X GET "{{BASE_URL}}/api/collections" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Qdrant Compatible
+curl -X GET "{{BASE_URL}}/collections" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+#### Create Collection
+```bash
+# VSI API
+curl -X POST "{{BASE_URL}}/api/collections" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my_documents","description":"My document collection"}'
+
+# Qdrant Compatible
+curl -X PUT "{{BASE_URL}}/collections/my_documents" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"vectors":{"size":768,"distance":"Cosine"}}'
+```
+
+#### Delete Collection
+```bash
+# VSI API
+curl -X DELETE "{{BASE_URL}}/api/collections/my_documents" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Qdrant Compatible
+curl -X DELETE "{{BASE_URL}}/collections/my_documents" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Document Operations
+
+#### Upload Files
+```bash
+# Upload single file
+curl -X POST "{{BASE_URL}}/api/collections/my_documents/upload" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@document.pdf"
+
+# Upload with custom metadata
+curl -X POST "{{BASE_URL}}/api/collections/my_documents/upload" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@document.pdf" \
+  -F "metadata={\"category\":\"research\",\"author\":\"John Doe\"}"
+```
+
+#### Create Text Document
+```bash
+curl -X POST "{{BASE_URL}}/api/collections/my_documents/create-text" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Meeting Notes",
+    "content": "This is the content of my document...",
+    "metadata": {
+      "date": "2024-01-15",
+      "type": "meeting_notes"
+    }
+  }'
+```
+
+#### List Documents
+```bash
+curl -X GET "{{BASE_URL}}/api/collections/my_documents/documents" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# With pagination
+curl -X GET "{{BASE_URL}}/api/collections/my_documents/documents?limit=10&offset=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+#### Download Files
+```bash
+# Files can be downloaded without authentication using their UUID
+curl -X GET "{{BASE_URL}}/api/files/550e8400-e29b-41d4-a716-446655440000" \
+  -o downloaded_file.pdf
+```
+
+### Search Operations
+
+#### Semantic Search
+```bash
+curl -X POST "{{BASE_URL}}/api/collections/my_documents/search" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "machine learning algorithms",
+    "limit": 10,
+    "includeMetadata": true
+  }'
+```
+
+#### Vector Search (Qdrant Compatible)
+```bash
+curl -X POST "{{BASE_URL}}/collections/my_documents/points/search" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vector": [0.1, 0.2, 0.3, ...],
+    "limit": 5,
+    "with_payload": true,
+    "score_threshold": 0.7
+  }'
+```
+
+### LLM Question & Answer
+
+#### Ask Questions
+```bash
+curl -X POST "{{BASE_URL}}/api/collections/my_documents/ask" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What are the main benefits of machine learning?",
+    "maxResults": 5,
+    "systemPrompt": "You are a technical expert. Provide detailed explanations."
+  }'
+```
+
+### Advanced Vector Operations
+
+#### Upsert Points (Qdrant Compatible)
+```bash
+curl -X PUT "{{BASE_URL}}/collections/my_documents/points" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "points": [
+      {
+        "id": "doc1",
+        "vector": [0.1, 0.2, 0.3, ...],
+        "payload": {
+          "title": "Document Title",
+          "content": "Document content...",
+          "metadata": {"type": "article"}
+        }
+      }
+    ]
+  }'
+```
+
+#### Retrieve Points
+```bash
+curl -X POST "{{BASE_URL}}/collections/my_documents/points" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ids": ["doc1", "doc2"],
+    "with_payload": true,
+    "with_vector": false
+  }'
+```
+
+#### Delete Points
+```bash
+curl -X POST "{{BASE_URL}}/collections/my_documents/points/delete" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "points": ["doc1", "doc2"]
+  }'
+```
+
+## Model Context Protocol (MCP) Integration
+
+VSI includes a comprehensive MCP server that allows AI assistants to interact with your vector store directly.
+
+### Available MCP Tools
+
+1. **list_collections**: List all available collections
+2. **create_collection**: Create new collections with custom parameters
+3. **delete_collection**: Remove collections
+4. **add_document**: Add text documents with automatic embedding
+5. **upload_file**: Upload files with base64 encoding
+6. **search_documents**: Perform semantic searches
+7. **ask_question**: Ask questions with LLM integration
+8. **get_document**: Retrieve specific documents by ID
+9. **delete_document**: Remove documents from collections
+10. **list_documents**: Browse documents with pagination
+11. **get_collection_info**: Get detailed collection information
+
+### MCP Server Usage
+
+```bash
+# Start MCP server
+node src/mcp-server.js
+
+# Check MCP status via web API
+curl -X GET "{{BASE_URL}}/mcp" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Integration with Claude Desktop
+
+Add to your Claude Desktop configuration:
+```json
+{
+  "mcpServers": {
+    "vsi-vector-store": {
+      "command": "node",
+      "args": ["/path/to/vsi/src/mcp-server.js"],
+      "env": {
+        "QDRANT_URL": "http://localhost:6333",
+        "GOOGLE_AI_API_KEY": "your_google_ai_key"
+      }
+    }
+  }
+}
+```
+
+## Use Cases & Examples
+
+### 1. Document Knowledge Base
+Build a searchable knowledge base from your documents:
+
+```bash
+# Create collection
+curl -X POST "{{BASE_URL}}/api/collections" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"company_docs","description":"Company documentation"}'
+
+# Upload multiple documents
+for file in *.pdf; do
+  curl -X POST "{{BASE_URL}}/api/collections/company_docs/upload" \
+    -H "Authorization: Bearer YOUR_TOKEN" \
+    -F "file=@$file"
+done
+
+# Search for information
+curl -X POST "{{BASE_URL}}/api/collections/company_docs/search" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"employee benefits","limit":5}'
+```
+
+### 2. Research Assistant
+Create an AI research assistant with your papers:
+
+```bash
+# Ask complex questions
+curl -X POST "{{BASE_URL}}/api/collections/research_papers/ask" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Compare the methodologies used in machine learning papers",
+    "systemPrompt": "You are a research assistant. Provide detailed comparisons with citations.",
+    "maxResults": 10
+  }'
+```
+
+### 3. Image Archive with AI Descriptions
+Index images with automatic descriptions:
+
+```bash
+# Upload images (AI will generate descriptions automatically)
+curl -X POST "{{BASE_URL}}/api/collections/photo_archive/upload" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@vacation_photo.jpg"
+
+# Search images by content
+curl -X POST "{{BASE_URL}}/api/collections/photo_archive/search" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"sunset beach ocean","limit":10}'
+```
+
+### 4. Customer Support Knowledge Base
+Build a support system with FAQ and documentation:
+
+```bash
+# Create support collection
+curl -X POST "{{BASE_URL}}/api/collections" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"support_kb","description":"Customer support knowledge base"}'
+
+# Add FAQ entries
+curl -X POST "{{BASE_URL}}/api/collections/support_kb/create-text" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "How to reset password",
+    "content": "To reset your password: 1. Click forgot password, 2. Enter email...",
+    "metadata": {"category": "account", "priority": "high"}
+  }'
+
+# Answer customer questions
+curl -X POST "{{BASE_URL}}/api/collections/support_kb/ask" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "I cannot log into my account",
+    "systemPrompt": "You are a helpful customer support agent. Provide step-by-step solutions."
+  }'
+```
+
+## Client Libraries & SDKs
+
+### JavaScript/Node.js
+```javascript
+const axios = require('axios');
+
+class VSIClient {
+  constructor(baseUrl, token) {
+    this.baseUrl = baseUrl;
+    this.token = token;
+    this.headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  }
+
+  async searchDocuments(collection, query, limit = 10) {
+    const response = await axios.post(
+      `${this.baseUrl}/api/collections/${collection}/search`,
+      { query, limit },
+      { headers: this.headers }
+    );
+    return response.data;
+  }
+
+  async askQuestion(collection, question, systemPrompt = null) {
+    const body = { question };
+    if (systemPrompt) body.systemPrompt = systemPrompt;
+    
+    const response = await axios.post(
+      `${this.baseUrl}/api/collections/${collection}/ask`,
+      body,
+      { headers: this.headers }
+    );
+    return response.data;
+  }
+}
+
+// Usage
+const client = new VSIClient('http://localhost:3000', 'your_token');
+const results = await client.searchDocuments('my_docs', 'machine learning');
+```
+
+### Python
+```python
+import requests
+
+class VSIClient:
+    def __init__(self, base_url, token):
+        self.base_url = base_url
+        self.headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+    
+    def search_documents(self, collection, query, limit=10):
+        response = requests.post(
+            f'{self.base_url}/api/collections/{collection}/search',
+            json={'query': query, 'limit': limit},
+            headers=self.headers
+        )
+        return response.json()
+    
+    def ask_question(self, collection, question, system_prompt=None):
+        data = {'question': question}
+        if system_prompt:
+            data['systemPrompt'] = system_prompt
+            
+        response = requests.post(
+            f'{self.base_url}/api/collections/{collection}/ask',
+            json=data,
+            headers=self.headers
+        )
+        return response.json()
+
+# Usage
+client = VSIClient('http://localhost:3000', 'your_token')
+results = client.search_documents('my_docs', 'machine learning')
+```
+
+### Using Qdrant Client Libraries
+VSI is fully compatible with official Qdrant client libraries:
+
+```python
+from qdrant_client import QdrantClient
+
+# Configure with authentication
+client = QdrantClient(
+    url="http://localhost:3000",
+    api_key="your_bearer_token"
+)
+
+# Use standard Qdrant operations
+results = client.search(
+    collection_name="my_documents",
+    query_vector=[0.1, 0.2, 0.3, ...],
+    limit=10
+)
+```
+
+## Configuration & Environment Variables
+
+```bash
+# Required
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=your_qdrant_key
+GOOGLE_AI_API_KEY=your_google_ai_key
+JWT_SECRET=your_jwt_secret
+
+# Optional
+PORT=3000
+UPLOAD_SIZE_LIMIT=50mb
+ALLOW_SELF_REGISTRATION=true
+BASE_URL=http://localhost:3000
+RAPIDAPI_KEY=your_rapidapi_key
+RAPIDAPI_HOST=your_rapidapi_host
+
+# Database (if using external DB)
+DATABASE_URL=postgresql://user:pass@localhost:5432/vsi
+```
+
+## Error Handling
+
+### Common HTTP Status Codes
+- **200**: Success
+- **400**: Bad Request (invalid parameters)
+- **401**: Unauthorized (invalid or missing token)
+- **403**: Forbidden (insufficient permissions)
+- **404**: Not Found (collection or document doesn't exist)
+- **413**: Payload Too Large (file size exceeds limit)
+- **429**: Too Many Requests (rate limiting)
+- **500**: Internal Server Error
+
+### Error Response Format
+```json
+{
+  "error": "Error message",
+  "code": "ERROR_CODE",
+  "details": {
+    "field": "Additional error details"
+  }
+}
+```
+
+## Performance Optimization
+
+### Best Practices
+1. **Batch Operations**: Upload multiple documents in batches
+2. **Chunking**: Large documents are automatically chunked for better search
+3. **Caching**: Search results are cached for frequently accessed queries
+4. **Indexing**: Collections are automatically optimized for search performance
+
+### Monitoring
+```bash
+# Check collection info
+curl -X GET "{{BASE_URL}}/api/collections/my_docs/info" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# System status
+curl -X GET "{{BASE_URL}}/api/status" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Security Considerations
+
+1. **Token Security**: Store bearer tokens securely, rotate regularly
+2. **File Uploads**: Files are scanned and validated before processing
+3. **User Isolation**: Collections are user-specific and isolated
+4. **HTTPS**: Always use HTTPS in production
+5. **CORS**: Configure CORS settings for your domain
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Authentication Errors**
+   - Verify token is correct and not expired
+   - Check Authorization header format: `Bearer YOUR_TOKEN`
+
+2. **Upload Failures**
+   - Check file size limits (default: 50MB)
+   - Verify file format is supported
+   - Ensure collection exists
+
+3. **Search Returns No Results**
+   - Check if documents are indexed (may take time for large files)
+   - Try different query terms
+   - Verify collection name is correct
+
+4. **MCP Connection Issues**
+   - Ensure environment variables are set
+   - Check Google AI API key is valid
+   - Verify Qdrant connection
+
+### Debug Mode
+Enable debug logging by setting:
+```bash
+DEBUG=vsi:* node src/index.js
+```
+
+## Support & Resources
+
+- **Web Dashboard**: Access the full-featured web interface at `/`
+- **API Documentation**: OpenAPI spec available at `/openapi.json`
+- **MCP Status**: Check MCP service at `/mcp`
+- **Health Check**: Monitor system status at `/api/health`
+
+## Version History
+
+- **v1.0.0**: Initial release with basic vector operations
+- **v1.1.0**: Added LLM Q&A capabilities
+- **v1.2.0**: Introduced MCP integration
+- **v1.3.0**: Enhanced file upload support
+- **v1.4.0**: Added user management and authentication
+
+---
+
+For additional support or feature requests, please refer to the project repository or contact the development team at dev@stromdao.com .

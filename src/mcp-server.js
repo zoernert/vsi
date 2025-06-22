@@ -206,6 +206,73 @@ const tools = [
             required: ['collection'],
         },
     },
+    {
+        name: 'upload_file',
+        description: 'Upload and index a file to a collection',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                collection: {
+                    type: 'string',
+                    description: 'Name of the collection',
+                },
+                filename: {
+                    type: 'string',
+                    description: 'Name of the file',
+                },
+                content: {
+                    type: 'string',
+                    description: 'Base64 encoded file content',
+                },
+                mime_type: {
+                    type: 'string',
+                    description: 'MIME type of the file',
+                },
+            },
+            required: ['collection', 'filename', 'content'],
+        },
+    },
+    {
+        name: 'ask_question',
+        description: 'Ask a question about documents in a collection using LLM',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                collection: {
+                    type: 'string',
+                    description: 'Name of the collection to search',
+                },
+                question: {
+                    type: 'string',
+                    description: 'Question to ask about the documents',
+                },
+                system_prompt: {
+                    type: 'string',
+                    description: 'Optional system prompt for the AI',
+                },
+                max_results: {
+                    type: 'number',
+                    description: 'Maximum number of context chunks to retrieve',
+                    default: 5,
+                },
+            },
+            required: ['collection', 'question'],
+        },
+    },
+    {
+        name: 'get_collection_info',
+        description: 'Get detailed information about a collection',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                collection: {
+                    type: 'string',
+                    description: 'Name of the collection',
+                },
+            },
+            required: ['collection'],
+        },
+    },
 ];
 
 // Handle list_tools requests
@@ -242,6 +309,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             
             case 'list_documents':
                 return await handleListDocuments(args);
+            
+            case 'upload_file':
+                return await handleUploadFile(args);
+            
+            case 'ask_question':
+                return await handleAskQuestion(args);
+            
+            case 'get_collection_info':
+                return await handleGetCollectionInfo(args);
             
             default:
                 throw new Error(`Unknown tool: ${name}`);
@@ -500,6 +576,184 @@ async function handleListDocuments(args) {
             },
         ],
     };
+}
+
+async function handleUploadFile(args) {
+    const { collection, filename, content, mime_type } = args;
+    const actualCollectionName = getUserCollectionName(collection);
+
+    try {
+        // Decode base64 content
+        const buffer = Buffer.from(content, 'base64');
+        
+        // Generate document ID
+        const documentId = uuidv4();
+        
+        // Extract text content based on file type
+        let textContent = '';
+        if (mime_type && mime_type.startsWith('text/')) {
+            textContent = buffer.toString('utf-8');
+        } else {
+            textContent = `File: ${filename} (${mime_type || 'unknown type'})`;
+        }
+
+        // Generate embedding
+        const embedding = await generateEmbedding(textContent);
+
+        // Ensure collection exists
+        try {
+            await qdrantClient.getCollection(actualCollectionName);
+        } catch (error) {
+            if (error.message.includes('Not found')) {
+                await qdrantClient.createCollection(actualCollectionName, {
+                    vectors: {
+                        size: 768,
+                        distance: 'Cosine',
+                    },
+                });
+            } else {
+                throw error;
+            }
+        }
+
+        // Create point
+        const point = {
+            id: documentId,
+            vector: embedding,
+            payload: {
+                title: filename,
+                content: textContent,
+                text: textContent,
+                filename,
+                mimeType: mime_type,
+                size: buffer.length,
+                createdAt: new Date().toISOString(),
+                type: 'file',
+                source: 'mcp',
+            },
+        };
+
+        // Add document
+        await qdrantClient.upsert(actualCollectionName, {
+            points: [point],
+        });
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `File '${filename}' uploaded to collection '${collection}' with ID: ${documentId}`,
+                },
+            ],
+        };
+    } catch (error) {
+        throw new Error(`Failed to upload file: ${error.message}`);
+    }
+}
+
+async function handleAskQuestion(args) {
+    const { collection, question, system_prompt, max_results = 5 } = args;
+    const actualCollectionName = getUserCollectionName(collection);
+
+    try {
+        // Generate query variations
+        const queries = [question];
+        
+        // Search for relevant documents
+        const allResults = [];
+        for (const query of queries) {
+            const queryEmbedding = await generateEmbedding(query);
+            const searchResult = await qdrantClient.search(actualCollectionName, {
+                vector: queryEmbedding,
+                limit: max_results,
+                with_payload: true,
+                with_vector: false,
+                score_threshold: 0.1,
+            });
+            allResults.push(...searchResult);
+        }
+
+        // Remove duplicates and get top results
+        const uniqueResults = allResults.reduce((acc, current) => {
+            const exists = acc.find(item => item.id === current.id);
+            if (!exists) {
+                acc.push(current);
+            }
+            return acc;
+        }, []);
+
+        const topResults = uniqueResults
+            .sort((a, b) => b.score - a.score)
+            .slice(0, max_results);
+
+        // Prepare context
+        const retrievedContext = topResults.map(hit => 
+            hit.payload.content || hit.payload.text || ''
+        );
+
+        // Generate answer using Google AI
+        if (!process.env.GOOGLE_AI_API_KEY) {
+            throw new Error('Google AI API key not configured');
+        }
+
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        
+        const systemPromptText = system_prompt || 
+            "You are a helpful AI assistant. Answer questions based on the provided context. " +
+            "If the context doesn't contain enough information to answer the question, say so clearly.";
+
+        const contextText = retrievedContext.join('\n\n');
+        const prompt = `${systemPromptText}\n\nContext:\n${contextText}\n\nQuestion: ${question}\n\nAnswer:`;
+
+        const result = await model.generateContent(prompt);
+        const answer = result.response.text();
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: JSON.stringify({
+                        question,
+                        answer,
+                        queries,
+                        retrievedContext,
+                        contextCount: retrievedContext.length,
+                    }, null, 2),
+                },
+            ],
+        };
+    } catch (error) {
+        throw new Error(`Failed to answer question: ${error.message}`);
+    }
+}
+
+async function handleGetCollectionInfo(args) {
+    const { collection } = args;
+    const actualCollectionName = getUserCollectionName(collection);
+
+    try {
+        const collectionInfo = await qdrantClient.getCollection(actualCollectionName);
+        
+        // Get document count
+        const countResult = await qdrantClient.count(actualCollectionName);
+        
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: JSON.stringify({
+                        name: collection,
+                        actualName: actualCollectionName,
+                        vectorsCount: countResult.count,
+                        config: collectionInfo.config,
+                        status: collectionInfo.status,
+                    }, null, 2),
+                },
+            ],
+        };
+    } catch (error) {
+        throw new Error(`Failed to get collection info: ${error.message}`);
+    }
 }
 
 // Start the server

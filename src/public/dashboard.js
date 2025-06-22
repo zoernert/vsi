@@ -9,6 +9,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
     
+    // Ensure token is stored in localStorage
+    if (token && !localStorage.getItem('token')) {
+        localStorage.setItem('token', token);
+    }
+    
     document.getElementById('username-display').textContent = username;
     document.getElementById('api-key').value = token;
     
