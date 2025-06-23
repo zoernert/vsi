@@ -15,7 +15,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     document.getElementById('username-display').textContent = username;
-    document.getElementById('api-key').value = token;
+    const apiKeyElement = document.getElementById('api-key');
+    if (apiKeyElement) {
+        apiKeyElement.value = token;
+    }
     
     // Load server configuration including base URL
     await loadServerConfig();
@@ -25,14 +28,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Show admin badge and panel if user is admin
     if (isAdmin) {
-        document.getElementById('admin-badge').style.display = 'inline-block';
-        document.getElementById('admin-panel').style.display = 'block';
-        loadSystemStatus();
-        loadUsers();
+        const adminPanel = document.getElementById('admin-panel');
+        if (adminPanel) {
+            adminPanel.style.display = 'block';
+            loadSystemStatus();
+            loadUsers();
+        }
     }
     
     loadCollections();
-    updateCollectionSelects();
+    loadUsageStats();
 });
 
 async function loadServerConfig() {
@@ -288,28 +293,150 @@ async function reindexCollection(name) {
 }
 
 function updateCollectionSelects() {
-    const uploadSelect = document.getElementById('upload-collection');
-    const textSelect = document.getElementById('text-collection');
-    const searchSelect = document.getElementById('search-collection');
-    const browseSelect = document.getElementById('browse-collection');
-    
-    // Clear existing options
-    uploadSelect.innerHTML = '<option value="">Select collection...</option>';
-    textSelect.innerHTML = '<option value="">Select collection...</option>';
-    searchSelect.innerHTML = '<option value="">Select collection...</option>';
-    browseSelect.innerHTML = '<option value="">Select collection...</option>';
+    const selects = [
+        'upload-collection',
+        'text-collection',
+        'browse-collection',
+        'qa-collection-select'
+    ];
     
     // Get collections from the displayed list
     const collectionItems = document.querySelectorAll('.collection-item span');
-    collectionItems.forEach(item => {
-        const name = item.textContent;
-        uploadSelect.innerHTML += `<option value="${name}">${name}</option>`;
-        textSelect.innerHTML += `<option value="${name}">${name}</option>`;
-        searchSelect.innerHTML += `<option value="${name}">${name}</option>`;
-        browseSelect.innerHTML += `<option value="${name}">${name}</option>`;
+    
+    selects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (select) {
+            select.innerHTML = '<option value="">Select collection...</option>';
+            collectionItems.forEach(item => {
+                const name = item.textContent;
+                select.innerHTML += `<option value="${name}">${name}</option>`;
+            });
+        }
     });
 }
 
+// File selection and display functions
+function handleFileSelection(event) {
+    const files = event.target.files;
+    displaySelectedFiles(files);
+}
+
+function displaySelectedFiles(files) {
+    const display = document.getElementById('selected-files-display');
+    const filesList = document.getElementById('selected-files-list');
+    const dropZone = document.querySelector('.file-drop-zone');
+    
+    if (files.length === 0) {
+        display.style.display = 'none';
+        dropZone.classList.remove('has-files');
+        return;
+    }
+    
+    dropZone.classList.add('has-files');
+    display.style.display = 'block';
+    
+    filesList.innerHTML = '';
+    
+    Array.from(files).forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'selected-file-item';
+        
+        const fileIcon = getFileIcon(file.name);
+        const fileSize = formatFileSize(file.size);
+        
+        fileItem.innerHTML = `
+            <div class="selected-file-info">
+                <i class="${fileIcon} file-icon"></i>
+                <div class="file-details">
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${fileSize}</div>
+                </div>
+            </div>
+            <button class="file-remove-btn" onclick="removeSelectedFile(${index})" title="Remove file">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        
+        filesList.appendChild(fileItem);
+    });
+}
+
+function getFileIcon(filename) {
+    const ext = filename.toLowerCase().split('.').pop();
+    const iconMap = {
+        'pdf': 'fas fa-file-pdf',
+        'txt': 'fas fa-file-alt',
+        'md': 'fas fa-file-alt',
+        'doc': 'fas fa-file-word',
+        'docx': 'fas fa-file-word',
+        'xls': 'fas fa-file-excel',
+        'xlsx': 'fas fa-file-excel',
+        'jpg': 'fas fa-file-image',
+        'jpeg': 'fas fa-file-image',
+        'png': 'fas fa-file-image',
+        'gif': 'fas fa-file-image',
+        'bmp': 'fas fa-file-image',
+        'webp': 'fas fa-file-image'
+    };
+    return iconMap[ext] || 'fas fa-file';
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function removeSelectedFile(index) {
+    const fileInput = document.getElementById('file-input');
+    const dt = new DataTransfer();
+    
+    Array.from(fileInput.files).forEach((file, i) => {
+        if (i !== index) {
+            dt.items.add(file);
+        }
+    });
+    
+    fileInput.files = dt.files;
+    displaySelectedFiles(fileInput.files);
+}
+
+function clearSelectedFiles() {
+    const fileInput = document.getElementById('file-input');
+    fileInput.value = '';
+    displaySelectedFiles([]);
+}
+
+function switchUploadTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.upload-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.closest('.upload-tab-btn').classList.add('active');
+    
+    // Show/hide tab content
+    document.querySelectorAll('.upload-tab-content').forEach(content => {
+        content.style.display = 'none';
+    });
+    document.getElementById(`upload-tab-${tabName}`).style.display = 'block';
+    
+    // Update context help
+    if (tabName === 'url') {
+        updateContextHelp('url-upload');
+    } else {
+        updateContextHelp('upload');
+    }
+}
+
+// Enhanced drag and drop
+function handleDragLeave(event) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over');
+}
+
+// Enhanced file upload function
 async function uploadFiles() {
     const collection = document.getElementById('upload-collection').value;
     const fileInput = document.getElementById('file-input');
@@ -346,38 +473,122 @@ async function uploadFiles() {
                 uploadResults.push(result);
                 console.log(`✅ Uploaded: ${result.filename} (UUID: ${result.fileUuid})`);
             } else {
-                console.error(`❌ Failed to upload ${files[i].name}`);
+                const error = await response.json();
+                console.error(`❌ Failed to upload ${files[i].name}:`, error.error || 'Unknown error');
             }
         } catch (error) {
             console.error(`❌ Error uploading ${files[i].name}:`, error);
         }
     }
     
-    fileInput.value = '';
+    // Clear file selection after upload
+    clearSelectedFiles();
     
     // Show upload results
     if (uploadResults.length > 0) {
-        let resultMessage = `Successfully uploaded ${uploadResults.length} file(s):\n\n`;
-        uploadResults.forEach(result => {
-            resultMessage += `• ${result.filename}\n  Download: ${window.location.origin}${result.downloadUrl}\n\n`;
-        });
-        
         setTimeout(() => {
             progressDiv.innerHTML = `
-                <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 10px; margin-top: 10px;">
-                    <strong>Upload Complete!</strong><br>
-                    <small>Files can be downloaded using their UUIDs (no authentication required)</small>
+                <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 15px; margin-top: 10px;">
+                    <strong><i class="fas fa-check-circle"></i> Upload Complete!</strong><br>
+                    <small>Successfully uploaded ${uploadResults.length} file(s). Files can be downloaded using their UUIDs (no authentication required).</small>
+                    <div style="margin-top: 10px; max-height: 100px; overflow-y: auto; font-size: 12px;">
+                        ${uploadResults.map(result => `• ${result.filename} - <a href="${result.downloadUrl}" target="_blank">Download</a>`).join('<br>')}
+                    </div>
                 </div>
             `;
             
             setTimeout(() => {
                 progressDiv.innerHTML = '';
-            }, 5000);
+            }, 8000);
         }, 1000);
     } else {
         setTimeout(() => {
+            progressDiv.innerHTML = '<div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24;">❌ Upload failed. Please try again.</div>';
+            setTimeout(() => {
+                progressDiv.innerHTML = '';
+            }, 5000);
+        }, 1000);
+    }
+}
+
+// URL upload function
+async function uploadFromUrl() {
+    const collection = document.getElementById('upload-collection').value;
+    const url = document.getElementById('url-input').value.trim();
+    const customFilename = document.getElementById('url-filename').value.trim();
+    
+    if (!collection || !url) {
+        alert('Please select a collection and enter a URL.');
+        return;
+    }
+    
+    if (!isValidUrl(url)) {
+        alert('Please enter a valid URL.');
+        return;
+    }
+    
+    const progressDiv = document.getElementById('upload-progress');
+    progressDiv.innerHTML = '<div class="progress"><div class="progress-bar" style="width: 50%"></div></div><p>Downloading from URL...</p>';
+    
+    try {
+        const response = await fetch(`/api/collections/${collection}/upload-url`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                url: url,
+                filename: customFilename
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            // Clear inputs
+            document.getElementById('url-input').value = '';
+            document.getElementById('url-filename').value = '';
+            
+            progressDiv.innerHTML = `
+                <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 15px; margin-top: 10px;">
+                    <strong><i class="fas fa-check-circle"></i> URL Download Complete!</strong><br>
+                    <small>Successfully downloaded and indexed: ${result.filename}</small><br>
+                    <a href="${result.downloadUrl}" target="_blank" class="fiori-btn secondary" style="margin-top: 8px; font-size: 12px;">
+                        <i class="fas fa-download"></i> Download File
+                    </a>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                progressDiv.innerHTML = '';
+            }, 8000);
+            
+        } else {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to download from URL');
+        }
+        
+    } catch (error) {
+        console.error('URL upload error:', error);
+        progressDiv.innerHTML = `
+            <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24;">
+                ❌ Failed to download from URL: ${error.message}
+            </div>
+        `;
+        
+        setTimeout(() => {
             progressDiv.innerHTML = '';
-        }, 2000);
+        }, 5000);
+    }
+}
+
+function isValidUrl(string) {
+    try {
+        new URL(string);
+        return true;
+    } catch (_) {
+        return false;
     }
 }
 
@@ -554,6 +765,113 @@ function displayBrowseResults(documents, collection, containerId) {
     container.innerHTML = html;
 }
 
+function displayQAResults(data) {
+    const resultsDiv = document.getElementById('qa-results');
+    
+    if (!data.answer && (!data.context || data.context.length === 0)) {
+        resultsDiv.innerHTML = '<div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; border-left: 4px solid #ffc107;">⚠️ No relevant information found for your question.</div>';
+        return;
+    }
+    
+    let html = '<div class="qa-response">';
+    
+    // Display the AI answer if available
+    if (data.answer) {
+        html += `
+            <div style="background: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 4px; border-left: 4px solid #17a2b8; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0;">🤖 AI Answer:</h4>
+                <div style="white-space: pre-wrap; line-height: 1.5;">${data.answer}</div>
+            </div>
+        `;
+    }
+    
+    // Display context sources
+    if (data.context && data.context.length > 0) {
+        html += `
+            <div style="margin-top: 15px;">
+                <h4>📚 Sources (${data.context.length} documents):</h4>
+                <div class="context-sources">
+        `;
+        
+        data.context.forEach((item, index) => {
+            const payload = item.payload;
+            const score = (item.score * 100).toFixed(1);
+            
+            // Create download link if it's a file with fileUuid
+            const downloadLink = payload.fileUuid ? 
+                `<br><a href="/api/files/${payload.fileUuid}" target="_blank" class="btn btn-small btn-secondary">📥 Download File</a>` : '';
+            
+            html += `
+                <div class="context-item" style="border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; margin-bottom: 10px; background: #f8f9fa;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: bold; color: #495057;">Source ${index + 1}</span>
+                        <span style="background: #e9ecef; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${score}% relevance</span>
+                    </div>
+                    ${payload.title ? `<h6 style="margin: 0 0 8px 0; color: #007bff;">${payload.title}</h6>` : ''}
+                    ${payload.filename ? `<div style="font-size: 14px; color: #6c757d; margin-bottom: 8px;"><strong>File:</strong> ${payload.filename}${downloadLink}</div>` : ''}
+                    <div style="background: white; padding: 10px; border-radius: 4px; border-left: 3px solid #007bff; font-size: 14px; line-height: 1.4;">
+                        ${(payload.text || payload.content || 'No preview available').substring(0, 300)}${(payload.text || payload.content || '').length > 300 ? '...' : ''}
+                    </div>
+                    <div style="font-size: 12px; color: #868e96; margin-top: 8px;">
+                        ${new Date(payload.createdAt || payload.uploadedAt).toLocaleString()}
+                        ${payload.createdBy || payload.uploadedBy ? ` • by ${payload.createdBy || payload.uploadedBy}` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div></div>';
+    }
+    
+    html += '</div>';
+    resultsDiv.innerHTML = html;
+}
+
+async function askQuestion() {
+    const question = document.getElementById('qa-question').value.trim();
+    const collectionName = document.getElementById('qa-collection-select').value;
+    const systemPrompt = document.getElementById('qa-system-prompt').value.trim();
+    const maxResults = parseInt(document.getElementById('qa-max-results').value);
+
+    if (!question || !collectionName) {
+        alert('Please provide both question and collection name');
+        return;
+    }
+
+    const resultsDiv = document.getElementById('qa-results');
+    resultsDiv.innerHTML = '<div style="text-align: center; padding: 15px; color: #666; font-style: italic;">🤔 Processing your question...</div>';
+
+    try {
+        const requestBody = {
+            question,
+            maxResults
+        };
+
+        if (systemPrompt) {
+            requestBody.systemPrompt = systemPrompt;
+        }
+
+        const response = await fetch(`/api/collections/${encodeURIComponent(collectionName)}/ask`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to get answer');
+        }
+
+        displayQAResults(data);
+    } catch (error) {
+        resultsDiv.innerHTML = `<div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 4px; border-left: 4px solid #dc3545;">❌ Error: ${error.message}</div>`;
+    }
+}
+
 async function deleteDocument(collection, documentId) {
     if (!confirm('Are you sure you want to delete this document?')) {
         return;
@@ -576,6 +894,110 @@ async function deleteDocument(collection, documentId) {
         console.error('Delete document error:', error);
         alert('Error deleting document. Please try again.');
     }
+}
+
+// Load personal usage statistics
+async function loadUsageStats() {
+    try {
+        const response = await fetch('/api/auth/usage/personal', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayUsageStats(data);
+        } else if (response.status === 404) {
+            // Usage API not available, show mock data or hide section
+            displayUsageStatsUnavailable();
+        } else {
+            document.getElementById('usage-stats').innerHTML = 
+                '<p style="color: #dc3545;">Unable to load usage statistics</p>';
+        }
+    } catch (error) {
+        console.error('Error loading usage stats:', error);
+        displayUsageStatsUnavailable();
+    }
+}
+
+function displayUsageStatsUnavailable() {
+    document.getElementById('usage-stats').innerHTML = `
+        <div style="text-align: center; padding: 20px; color: #666;">
+            <p>📊 Usage statistics are not available at this time.</p>
+            <p style="font-size: 0.9em; margin-top: 10px;">The usage tracking service may not be configured yet.</p>
+        </div>
+    `;
+}
+
+function displayUsageStats(data) {
+    const tierBadgeColors = {
+        free: '#6c757d',
+        starter: '#17a2b8',
+        professional: '#28a745',
+        enterprise: '#6f42c1',
+        unlimited: '#fd7e14'
+    };
+
+    const html = `
+        <div style="margin-bottom: 15px;">
+            <span style="background: ${tierBadgeColors[data.tier] || tierBadgeColors.free}; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; text-transform: uppercase; font-size: 0.8em;">
+                ${data.tier || 'free'} Plan
+            </span>
+        </div>
+
+        <div class="usage-grid">
+            <div class="usage-item">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>📄 Documents</span>
+                    <span>${data.current?.documents || 0} / ${data.limits?.documents === Infinity ? '∞' : (data.limits?.documents || '∞')}</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: ${data.usage?.documentsPercent || 0}%; background: ${(data.usage?.documentsPercent || 0) > 80 ? '#dc3545' : '#007bff'};"></div>
+                </div>
+            </div>
+
+            <div class="usage-item">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>💾 Storage</span>
+                    <span>${data.formatted?.storageUsed || '0 B'} / ${data.formatted?.storageLimit || '∞'}</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: ${data.usage?.storagePercent || 0}%; background: ${(data.usage?.storagePercent || 0) > 80 ? '#dc3545' : '#28a745'};"></div>
+                </div>
+            </div>
+
+            <div class="usage-item">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>📞 API Calls (Month)</span>
+                    <span>${data.current?.apiCallsThisMonth || 0} / ${data.limits?.apiCallsMonthly === Infinity ? '∞' : (data.limits?.apiCallsMonthly || '∞')}</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: ${data.usage?.apiCallsPercent || 0}%; background: ${(data.usage?.apiCallsPercent || 0) > 80 ? '#dc3545' : '#ffc107'};"></div>
+                </div>
+            </div>
+
+            <div class="usage-item">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>📂 Collections</span>
+                    <span>${data.current?.collections || 0} / ${data.limits?.collections === Infinity ? '∞' : (data.limits?.collections || '∞')}</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: ${data.usage?.collectionsPercent || 0}%; background: ${(data.usage?.collectionsPercent || 0) > 80 ? '#dc3545' : '#17a2b8'};"></div>
+                </div>
+            </div>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9em;">
+            <strong>Plan Features:</strong>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                ${(data.limits?.features || ['basic_features']).map(feature => `<li>${feature.replace(/_/g, ' ')}</li>`).join('')}
+            </ul>
+            <strong>Max File Size:</strong> ${data.formatted?.maxFileSize || '10 MB'}
+        </div>
+    `;
+
+    document.getElementById('usage-stats').innerHTML = html;
 }
 
 // Admin functions
@@ -727,3 +1149,12 @@ async function deleteUser(targetUsername) {
         alert('Error deleting user. Please try again.');
     }
 }
+
+// Make these functions globally available for HTML onclick handlers
+window.handleFileSelection = handleFileSelection;
+window.switchUploadTab = switchUploadTab;
+window.handleDragLeave = handleDragLeave;
+window.uploadFromUrl = uploadFromUrl;
+window.isValidUrl = isValidUrl;
+window.removeSelectedFile = removeSelectedFile;
+window.clearSelectedFiles = clearSelectedFiles;

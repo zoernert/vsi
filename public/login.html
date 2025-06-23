@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSI Vector Store - Login</title>
+    <link rel="stylesheet" href="fiori-styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, var(--fiori-primary) 0%, #0056b3 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            background: var(--fiori-bg-primary);
+            border-radius: 12px;
+            box-shadow: var(--fiori-shadow-lg);
+            width: 100%;
+            max-width: 400px;
+            overflow: hidden;
+        }
+        
+        .login-header {
+            background: linear-gradient(135deg, var(--fiori-primary) 0%, #0056b3 100%);
+            color: white;
+            text-align: center;
+            padding: 40px 20px 30px;
+        }
+        
+        .login-header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        
+        .login-header p {
+            opacity: 0.95;
+            font-size: 0.95rem;
+        }
+        
+        .login-form {
+            padding: 32px;
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--fiori-text-primary);
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid var(--fiori-border);
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            background: var(--fiori-bg-primary);
+            transition: border-color 0.2s, box-shadow 0.2s;
+            box-sizing: border-box;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--fiori-primary);
+            box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.1);
+        }
+        
+        .login-button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--fiori-primary) 0%, #0056b3 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .login-button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: var(--fiori-shadow-md);
+        }
+        
+        .login-button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .error-message {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border: 1px solid #fecaca;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .loading {
+            text-align: center;
+            color: var(--fiori-text-secondary);
+            font-size: 14px;
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .loading.active {
+            display: flex;
+        }
+        
+        .loading.active::before {
+            content: '';
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--fiori-border);
+            border-top: 2px solid var(--fiori-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .auth-footer {
+            background: var(--fiori-bg-secondary);
+            padding: 20px 32px;
+            text-align: center;
+            border-top: 1px solid var(--fiori-border);
+        }
+        
+        .auth-footer p {
+            color: var(--fiori-text-secondary);
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        
+        .auth-footer a {
+            color: var(--fiori-primary);
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+        
+        .auth-footer a:hover {
+            background: rgba(0, 112, 243, 0.1);
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 0;
+                border-radius: 8px;
+            }
+            
+            .login-form {
+                padding: 24px;
+            }
+            
+            .auth-footer {
+                padding: 16px 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>
+                <i class="fas fa-rocket"></i>
+                VSI Vector Store
+            </h1>
+            <p>Sign in to access your vector collections</p>
+        </div>
+        
+        <form id="loginForm" class="login-form">
+            <div id="errorMessage" class="error-message" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span></span>
+            </div>
+            
+            <div class="form-group">
+                <label for="username">
+                    <i class="fas fa-user"></i>
+                    Username
+                </label>
+                <input type="text" id="username" name="username" required autocomplete="username">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">
+                    <i class="fas fa-lock"></i>
+                    Password
+                </label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+            
+            <button type="submit" class="login-button" id="loginButton">
+                <i class="fas fa-sign-in-alt"></i>
+                Sign In
+            </button>
+            
+            <div class="loading" id="loading" style="display: none;">
+                Signing in...
+            </div>
+        </form>
+        
+        <div class="auth-footer">
+            <p>New to VSI Vector Store?</p>
+            <a href="/dashboard.html">
+                <i class="fas fa-arrow-right"></i>
+                Explore Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('errorMessage');
+            const errorSpan = errorDiv.querySelector('span');
+            const loadingDiv = document.getElementById('loading');
+            const loginButton = document.getElementById('loginButton');
+            
+            // Reset error state
+            errorDiv.style.display = 'none';
+            loadingDiv.style.display = 'flex';
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing In...';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store token
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('username', data.username || username);
+                    localStorage.setItem('isAdmin', data.isAdmin || false);
+                    
+                    // Success feedback
+                    loginButton.innerHTML = '<i class="fas fa-check"></i> Success!';
+                    loginButton.style.background = 'var(--fiori-success)';
+                    
+                    // Redirect to dashboard
+                    setTimeout(() => {
+                        window.location.href = '/dashboard.html';
+                    }, 500);
+                } else {
+                    throw new Error(data.error || 'Login failed');
+                }
+            } catch (error) {
+                errorSpan.textContent = error.message || 'Network error. Please try again.';
+                errorDiv.style.display = 'flex';
+            } finally {
+                if (!errorDiv.style.display || errorDiv.style.display === 'none') {
+                    loadingDiv.style.display = 'none';
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+                    loginButton.style.background = '';
+                }
+            }
+        });
+        
+        const token = localStorage.getItem('token');
+        if (token) {
+            fetch('/api/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.username) {
+                    window.location.href = '/dashboard.html';
+                }
+            })
+            .catch(() => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('username');
+                localStorage.removeItem('isAdmin');
+            });
+        }
+    </script>
+</body>
+</html>

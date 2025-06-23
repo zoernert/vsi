@@ -280,6 +280,179 @@ Content: "Vector databases are specialized databases designed to store and query
 Search my knowledge collection for documents about "machine learning algorithms" and show me the top 5 results.
 ```
 
+## Development Setup
+
+### Database Setup for Development
+
+The VSI service now requires PostgreSQL for user management and usage tracking. Here's how to set up a development database:
+
+#### Option 1: Using Docker Compose (Recommended)
+
+The easiest way is to use the provided docker-compose.yml which includes all services:
+
+```bash
+# Start all services including PostgreSQL
+docker-compose up -d
+
+# View logs
+docker-compose logs -f vsi-service
+```
+
+#### Option 2: Standalone PostgreSQL Container
+
+If you want to run just the database separately for development:
+
+```bash
+# Create a data directory on your host (optional, for easier access)
+mkdir -p ./data/postgres
+
+# Run PostgreSQL container with persistent storage
+docker run -d \
+  --name vsi-postgres-dev \
+  -e POSTGRES_DB=vsi_db \
+  -e POSTGRES_USER=vsi_user \
+  -e POSTGRES_PASSWORD=vsi_password \
+  -p 5432:5432 \
+  -v $(pwd)/data/postgres:/var/lib/postgresql/data \
+  -v $(pwd)/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql \
+  postgres:15-alpine
+
+# Check if container is running
+docker ps | grep vsi-postgres-dev
+
+# View logs
+docker logs vsi-postgres-dev
+```
+
+#### Option 3: Using Docker Compose Override for Development
+
+Create a `docker-compose.override.yml` file for development-specific settings:
+
+```yaml
+# docker-compose.override.yml
+version: '3.8'
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"  # Expose postgres port for external tools
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data  # Host directory mapping
+    environment:
+      - POSTGRES_PASSWORD=dev_password  # Different password for dev
+  
+  vsi-service:
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://vsi_user:dev_password@postgres:5432/vsi_db
+    volumes:
+      - .:/app  # Live code reloading
+    command: npm run dev  # Use nodemon for development
+```
+
+Then start with:
+```bash
+docker-compose up -d
+```
+
+### Database Connection Details
+
+For development, you can connect to the database using these credentials:
+
+- **Host**: `localhost`
+- **Port**: `5432`
+- **Database**: `vsi_db`
+- **Username**: `vsi_user`
+- **Password**: `vsi_password` (or your custom password)
+
+### Connecting with Database Tools
+
+You can use any PostgreSQL client to connect:
+
+```bash
+# Using psql command line
+docker exec -it vsi-postgres-dev psql -U vsi_user -d vsi_db
+
+# Or if you have psql installed locally
+psql -h localhost -p 5432 -U vsi_user -d vsi_db
+```
+
+### Environment Variables
+
+Copy the example environment file and customize for development:
+
+```bash
+cp .env.example .env
+```
+
+Key database-related variables:
+```bash
+# Database Configuration
+DATABASE_URL=postgresql://vsi_user:vsi_password@localhost:5432/vsi_db
+POSTGRES_PASSWORD=vsi_password
+
+# For development, you might want to enable these
+ALLOW_SELF_REGISTRATION=true
+ENABLE_USAGE_TRACKING=true
+ENABLE_TIER_LIMITS=false  # Disable limits during development
+```
+
+### Data Persistence
+
+The database data is stored in:
+- **Docker Volume**: Named volume `postgres-data` (recommended for production)
+- **Host Directory**: `./data/postgres` (better for development access)
+
+To backup your development data:
+```bash
+# Create a backup
+docker exec vsi-postgres-dev pg_dump -U vsi_user vsi_db > backup.sql
+
+# Restore from backup
+docker exec -i vsi-postgres-dev psql -U vsi_user -d vsi_db < backup.sql
+```
+
+### Troubleshooting
+
+**Container won't start:**
+```bash
+# Check if port 5432 is already in use
+sudo lsof -i :5432
+
+# Remove existing container and restart
+docker rm -f vsi-postgres-dev
+# Then run the docker run command again
+```
+
+**Migration issues:**
+```bash
+# View migration logs
+docker-compose logs vsi-service
+
+# Connect to database and check tables
+docker exec -it vsi-postgres-dev psql -U vsi_user -d vsi_db -c "\dt"
+```
+
+**Reset development database:**
+```bash
+# Stop and remove containers
+docker-compose down
+
+# Remove data volumes (WARNING: This deletes all data)
+docker volume rm vsi_postgres-data
+
+# Start fresh
+docker-compose up -d
+```
+
+### Admin Dashboard Access
+
+Once the system is running, you can access the admin dashboard at:
+- **URL**: `http://localhost:3000/admin/dashboard.html`
+- **Default Admin**: username `admin`, password `admin123`
+
+Make sure to change the default admin password in production!
+
 ## API Endpoints
 
 ### Authentication

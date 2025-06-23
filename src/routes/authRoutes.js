@@ -2,99 +2,46 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
-const { authenticateAdmin } = require('../middleware/auth');
+const { authenticateAdmin, authenticateToken } = require('../middleware/auth');
+const { UserService } = require('../services/userService');
+const { DatabaseService } = require('../services/databaseService');
+const { createUsageMiddleware } = require('../middleware/usageTracking');
+const { TIER_LIMITS } = require('../config/tiers');
 const router = express.Router();
 
-// File path for storing users
-const usersFilePath = path.join(__dirname, '..', '..', 'data', 'users.json');
-
-// Ensure data directory exists
-const dataDir = path.dirname(usersFilePath);
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// Initialize admin user if users file doesn't exist
-function initializeAdmin() {
-    const users = loadUsers();
-    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-    
-    if (!users[adminUsername]) {
-        users[adminUsername] = {
-            password: process.env.ADMIN_PASSWORD || 'admin123',
-            id: 1,
-            isAdmin: true,
-            createdAt: new Date().toISOString(),
-            createdBy: 'system'
-        };
-        saveUsers(users);
-        console.log(`✅ Admin user created: ${adminUsername}`);
-        console.log(`⚠️  Please change the default admin password!`);
-    }
-}
-
-// Load users from file or create empty object
-function loadUsers() {
-    try {
-        if (fs.existsSync(usersFilePath)) {
-            const data = fs.readFileSync(usersFilePath, 'utf8');
-            return JSON.parse(data);
-        }
-    } catch (error) {
-        console.error('Error loading users:', error);
-    }
-    return {};
-}
-
-// Save users to file
-function saveUsers(users) {
-    try {
-        fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
-    } catch (error) {
-        console.error('Error saving users:', error);
-    }
-}
-
-// Initialize admin on startup
-initializeAdmin();
+const userService = new UserService();
 
 // Register endpoint (now restricted)
-router.post('/register', async (req, res) => {
+router.post('/register', createUsageMiddleware('api_calls'), async (req, res) => {
     try {
-        // Check if self-registration is allowed
+        // Check if self-registration is allowed (existing logic)
         if (process.env.ALLOW_SELF_REGISTRATION !== 'true') {
             return res.status(403).json({ 
                 error: 'Self-registration is disabled. Please contact an administrator.' 
             });
         }
         
-        console.log('Registration attempt:', req.body);
-        const { username, password } = req.body;
+        const { username, password, email } = req.body;
         
         if (!username || !password) {
-            console.log('Missing username or password');
             return res.status(400).json({ error: 'Username and password required' });
         }
         
-        const users = loadUsers();
-        
-        if (users[username]) {
-            console.log('User already exists:', username);
+        // Check if user exists
+        const existingUser = await userService.getUser(username);
+        if (existingUser) {
             return res.status(400).json({ error: 'User already exists' });
         }
         
-        // In production, hash the password with bcrypt
-        users[username] = { 
-            password, 
-            id: Object.keys(users).length + 1,
-            isAdmin: false,
-            createdAt: new Date().toISOString(),
-            createdBy: 'self-registration'
-        };
+        // Create user with free tier
+        await userService.createUser({
+            username,
+            password,
+            email,
+            tier: 'free'
+        });
         
-        saveUsers(users);
         console.log('User registered successfully:', username);
-        
         res.json({ message: 'User created successfully' });
     } catch (error) {
         console.error('Registration error:', error);
@@ -106,36 +53,36 @@ router.post('/register', async (req, res) => {
 router.post('/admin/users', authenticateAdmin, async (req, res) => {
     try {
         console.log('Admin user creation attempt:', req.body);
-        const { username, password, isAdmin = false } = req.body;
+        const { username, password, isAdmin = false, tier = 'free' } = req.body;
         
         if (!username || !password) {
             return res.status(400).json({ error: 'Username and password required' });
         }
         
-        const users = loadUsers();
-        
-        if (users[username]) {
+        // Check if user exists
+        const existingUser = await userService.getUser(username);
+        if (existingUser) {
             return res.status(400).json({ error: 'User already exists' });
         }
         
-        // In production, hash the password with bcrypt
-        users[username] = { 
-            password, 
-            id: Object.keys(users).length + 1,
+        // Create user
+        const newUser = await userService.createUser({
+            username,
+            password,
             isAdmin: Boolean(isAdmin),
-            createdAt: new Date().toISOString(),
+            tier,
             createdBy: req.user.username
-        };
+        });
         
-        saveUsers(users);
         console.log('User created by admin:', username);
         
         res.json({ 
             message: 'User created successfully',
             user: {
-                username,
-                isAdmin: Boolean(isAdmin),
-                createdAt: users[username].createdAt
+                username: newUser.username,
+                isAdmin: newUser.is_admin,
+                tier: newUser.tier,
+                createdAt: newUser.created_at
             }
         });
     } catch (error) {
@@ -147,13 +94,14 @@ router.post('/admin/users', authenticateAdmin, async (req, res) => {
 // Admin list users endpoint
 router.get('/admin/users', authenticateAdmin, async (req, res) => {
     try {
-        const users = loadUsers();
-        const userList = Object.keys(users).map(username => ({
-            username,
-            id: users[username].id,
-            isAdmin: users[username].isAdmin,
-            createdAt: users[username].createdAt,
-            createdBy: users[username].createdBy
+        const users = await userService.db.getAllUsers();
+        const userList = users.map(user => ({
+            username: user.username,
+            id: user.id,
+            isAdmin: user.is_admin,
+            tier: user.tier,
+            createdAt: user.created_at,
+            createdBy: user.created_by
         }));
         
         res.json({ users: userList });
@@ -167,41 +115,36 @@ router.get('/admin/users', authenticateAdmin, async (req, res) => {
 router.put('/admin/users/:username', authenticateAdmin, async (req, res) => {
     try {
         const { username } = req.params;
-        const { password, isAdmin } = req.body;
+        const { password, isAdmin, tier } = req.body;
         
-        const users = loadUsers();
-        
-        if (!users[username]) {
+        const user = await userService.getUser(username);
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
         
         // Prevent removing admin status from the last admin
-        if (users[username].isAdmin && isAdmin === false) {
-            const adminCount = Object.values(users).filter(user => user.isAdmin).length;
+        if (user.is_admin && isAdmin === false) {
+            const allUsers = await userService.db.getAllUsers();
+            const adminCount = allUsers.filter(u => u.is_admin).length;
             if (adminCount <= 1) {
                 return res.status(400).json({ error: 'Cannot remove admin status from the last admin user' });
             }
         }
         
-        if (password) {
-            users[username].password = password;
-        }
+        const updates = {};
+        if (password) updates.password = password;
+        if (typeof isAdmin === 'boolean') updates.is_admin = isAdmin;
+        if (tier) updates.tier = tier;
         
-        if (typeof isAdmin === 'boolean') {
-            users[username].isAdmin = isAdmin;
-        }
-        
-        users[username].updatedAt = new Date().toISOString();
-        users[username].updatedBy = req.user.username;
-        
-        saveUsers(users);
+        const updatedUser = await userService.updateUser(username, updates);
         
         res.json({ 
             message: 'User updated successfully',
             user: {
-                username,
-                isAdmin: users[username].isAdmin,
-                updatedAt: users[username].updatedAt
+                username: updatedUser.username,
+                isAdmin: updatedUser.is_admin,
+                tier: updatedUser.tier,
+                updatedAt: updatedUser.updated_at
             }
         });
     } catch (error) {
@@ -214,15 +157,16 @@ router.put('/admin/users/:username', authenticateAdmin, async (req, res) => {
 router.delete('/admin/users/:username', authenticateAdmin, async (req, res) => {
     try {
         const { username } = req.params;
-        const users = loadUsers();
+        const user = await userService.getUser(username);
         
-        if (!users[username]) {
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
         
         // Prevent deleting the last admin
-        if (users[username].isAdmin) {
-            const adminCount = Object.values(users).filter(user => user.isAdmin).length;
+        if (user.is_admin) {
+            const allUsers = await userService.db.getAllUsers();
+            const adminCount = allUsers.filter(u => u.is_admin).length;
             if (adminCount <= 1) {
                 return res.status(400).json({ error: 'Cannot delete the last admin user' });
             }
@@ -233,8 +177,7 @@ router.delete('/admin/users/:username', authenticateAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Cannot delete your own account' });
         }
         
-        delete users[username];
-        saveUsers(users);
+        await userService.deleteUser(username);
         
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
@@ -244,50 +187,35 @@ router.delete('/admin/users/:username', authenticateAdmin, async (req, res) => {
 });
 
 // Login endpoint
-router.post('/login', async (req, res) => {
+router.post('/login', createUsageMiddleware('api_calls'), async (req, res) => {
     try {
-        console.log('Login attempt:', { username: req.body.username });
         const { username, password } = req.body;
         
         if (!username || !password) {
-            console.log('Missing username or password');
             return res.status(400).json({ error: 'Username and password required' });
         }
         
-        const users = loadUsers();
-        console.log('Available users:', Object.keys(users));
-        
-        const user = users[username];
-        if (!user) {
-            console.log('User not found:', username);
+        const user = await userService.getUser(username);
+        if (!user || user.password !== password) {
             return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        
-        if (user.password !== password) {
-            console.log('Invalid password for user:', username);
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        
-        if (!process.env.JWT_SECRET) {
-            console.error('JWT_SECRET not configured');
-            return res.status(500).json({ error: 'Server configuration error' });
         }
         
         const token = jwt.sign(
             { 
                 id: user.id, 
                 username,
-                isAdmin: user.isAdmin || false
+                isAdmin: user.is_admin || false,
+                tier: user.tier || 'free'
             },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
         
-        console.log('Login successful for user:', username);
         res.json({ 
             token, 
             username,
-            isAdmin: user.isAdmin || false
+            isAdmin: user.is_admin || false,
+            tier: user.tier || 'free'
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -296,16 +224,104 @@ router.post('/login', async (req, res) => {
 });
 
 // Get current user info
-router.get('/me', require('../middleware/auth').authenticateToken, (req, res) => {
-    res.json({
-        username: req.user.username,
-        isAdmin: req.user.isAdmin || false,
-        type: req.user.type || 'jwt',
-        ...(req.user.type === 'rapidapi' && {
-            rapidApiUser: req.user.rapidApiUser,
-            rapidApiHost: req.user.rapidApiHost
-        })
-    });
+router.get('/me', authenticateToken, async (req, res) => {
+    try {
+        const user = await userService.getUser(req.user.username);
+        const usage = {
+            documents: await userService.db.getCurrentUsage(req.user.id, 'documents'),
+            storage_bytes: await userService.db.getCurrentUsage(req.user.id, 'storage_bytes'),
+            api_calls: await userService.db.getCurrentUsage(req.user.id, 'api_calls'),
+            collections: await userService.db.getCurrentUsage(req.user.id, 'collections')
+        };
+        
+        res.json({
+            username: user.username,
+            email: user.email,
+            isAdmin: user.is_admin || false,
+            tier: user.tier || 'free',
+            usage,
+            limits: TIER_LIMITS[user.tier || 'free']
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get personal usage statistics
+router.get('/usage/personal', authenticateToken, async (req, res) => {
+    try {
+        const user = await userService.getUser(req.user.username);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const db = new DatabaseService();
+        
+        // Get current usage
+        const currentUsage = {
+            documents: await db.getCurrentUsage(req.user.id, 'documents'),
+            storage_bytes: await db.getCurrentUsage(req.user.id, 'storage_bytes'),
+            api_calls: await db.getCurrentUsage(req.user.id, 'api_calls'),
+            collections: await db.getCurrentUsage(req.user.id, 'collections')
+        };
+
+        // Get monthly API calls
+        const monthlyApiCalls = await db.pool.query(`
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM usage_tracking 
+            WHERE user_id = $1 
+                AND resource_type = 'api_calls'
+                AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)
+        `, [req.user.id]);
+
+        const limits = TIER_LIMITS[user.tier || 'free'];
+
+        // Calculate usage percentages
+        const usage = {
+            documentsPercent: limits.documents === Infinity ? 0 : Math.min((currentUsage.documents / limits.documents) * 100, 100),
+            storagePercent: limits.storage_bytes === Infinity ? 0 : Math.min((currentUsage.storage_bytes / limits.storage_bytes) * 100, 100),
+            apiCallsPercent: limits.api_calls === Infinity ? 0 : Math.min((parseInt(monthlyApiCalls.rows[0].total) / limits.api_calls) * 100, 100),
+            collectionsPercent: limits.collections === Infinity ? 0 : Math.min((currentUsage.collections / limits.collections) * 100, 100)
+        };
+
+        // Format storage sizes
+        const formatBytes = (bytes) => {
+            if (bytes === 0) return '0 B';
+            if (bytes === Infinity) return '∞';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
+        const formatted = {
+            storageUsed: formatBytes(currentUsage.storage_bytes),
+            storageLimit: limits.storage_bytes === Infinity ? '∞' : formatBytes(limits.storage_bytes),
+            maxFileSize: limits.max_file_size === Infinity ? '∞' : formatBytes(limits.max_file_size)
+        };
+
+        res.json({
+            tier: user.tier || 'free',
+            current: {
+                documents: currentUsage.documents,
+                storage_bytes: currentUsage.storage_bytes,
+                apiCallsThisMonth: parseInt(monthlyApiCalls.rows[0].total),
+                collections: currentUsage.collections
+            },
+            limits: {
+                documents: limits.documents,
+                storage_bytes: limits.storage_bytes,
+                apiCallsMonthly: limits.api_calls,
+                collections: limits.collections,
+                features: limits.features || ['Basic features']
+            },
+            usage,
+            formatted
+        });
+    } catch (error) {
+        console.error('Error loading personal usage:', error);
+        res.status(500).json({ error: 'Failed to load usage statistics' });
+    }
 });
 
 // Registration status endpoint
@@ -317,15 +333,17 @@ router.get('/registration-status', (req, res) => {
 });
 
 // Debug endpoint to list users (remove in production)
-router.get('/debug/users', (req, res) => {
-    const users = loadUsers();
-    const userList = Object.keys(users).map(username => ({
-        username,
-        id: users[username].id,
-        isAdmin: users[username].isAdmin,
-        createdAt: users[username].createdAt
-    }));
-    res.json({ users: userList });
+router.get('/debug/users', authenticateToken, async (req, res) => {
+    try {
+        if (!req.user.isAdmin) {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const users = await userService.loadUsers();
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 module.exports = router;

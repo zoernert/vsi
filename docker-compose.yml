@@ -1,6 +1,44 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: vsi-postgres
+    environment:
+      POSTGRES_DB: vsi_db
+      POSTGRES_USER: vsi_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vsi_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-READY", "pg_isready", "-U", "vsi_user", "-d", "vsi_db"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vsi-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vsi-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vsi-network
+
   qdrant:
     image: qdrant/qdrant:v1.7.4
     container_name: vsi-qdrant
@@ -8,7 +46,7 @@ services:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - ./data/qdrant:/qdrant/storage:Z
+      - qdrant-data:/qdrant/storage:Z
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
@@ -21,6 +59,11 @@ services:
     restart: unless-stopped
     networks:
       - vsi-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   vsi-service:
     build: .
@@ -29,9 +72,9 @@ services:
       - "3000:3000"
     volumes:
       # Mount uploads directory to host for file persistence and access
-      - ./uploads:/app/uploads:Z
+      - vsi-uploads:/app/uploads:Z
       # Mount user data directory to host for persistence
-      - ./data/users:/app/data:Z
+      - vsi-userdata:/app/data:Z
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -45,7 +88,15 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - BASE_URL=${BASE_URL:-http://localhost:3000}
+      - DATABASE_URL=postgresql://vsi_user:${POSTGRES_PASSWORD:-vsi_password}@postgres:5432/vsi_db
+      - REDIS_URL=redis://redis:6379
+      - ENABLE_USAGE_TRACKING=true
+      - ENABLE_TIER_LIMITS=true
     depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       qdrant:
         condition: service_healthy
     healthcheck:
@@ -68,4 +119,8 @@ volumes:
   vsi-uploads:
     driver: local
   vsi-userdata:
+    driver: local
+  postgres-data:
+    driver: local
+  redis-data:
     driver: local

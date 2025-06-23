@@ -51,6 +51,14 @@
                 </div>
             </div>
 
+            <!-- Personal Usage Statistics -->
+            <div class="card">
+                <h3>📊 Your Usage & Plan</h3>
+                <div id="usage-stats">
+                    <p style="text-align: center; color: #666; font-style: italic;">Loading usage statistics...</p>
+                </div>
+            </div>
+
             <!-- LLM Q&A Section -->
             <div class="card">
                 <h3>🤖 LLM Question & Answer</h3>
@@ -269,6 +277,99 @@ curl -X GET "${window.location.origin}/api/collections/my_docs/documents" \
             }
         }
 
+        // Load personal usage statistics
+        async function loadUsageStats() {
+            try {
+                const response = await fetch('/api/usage/personal', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('vsi_token')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    displayUsageStats(data);
+                } else {
+                    document.getElementById('usage-stats').innerHTML = 
+                        '<p style="color: #dc3545;">Unable to load usage statistics</p>';
+                }
+            } catch (error) {
+                console.error('Error loading usage stats:', error);
+                document.getElementById('usage-stats').innerHTML = 
+                    '<p style="color: #dc3545;">Error loading usage statistics</p>';
+            }
+        }
+
+        function displayUsageStats(data) {
+            const tierBadgeColors = {
+                free: '#6c757d',
+                starter: '#17a2b8',
+                professional: '#28a745',
+                enterprise: '#6f42c1',
+                unlimited: '#fd7e14'
+            };
+
+            const html = `
+                <div style="margin-bottom: 15px;">
+                    <span style="background: ${tierBadgeColors[data.tier]}; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; text-transform: uppercase; font-size: 0.8em;">
+                        ${data.tier} Plan
+                    </span>
+                </div>
+
+                <div class="usage-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div class="usage-item">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span>📄 Documents</span>
+                            <span>${data.current.documents} / ${data.limits.documents === Infinity ? '∞' : data.limits.documents}</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: ${data.usage.documentsPercent}%; background: ${data.usage.documentsPercent > 80 ? '#dc3545' : '#007bff'};"></div>
+                        </div>
+                    </div>
+
+                    <div class="usage-item">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span>💾 Storage</span>
+                            <span>${data.formatted.storageUsed} / ${data.formatted.storageLimit}</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: ${data.usage.storagePercent}%; background: ${data.usage.storagePercent > 80 ? '#dc3545' : '#28a745'};"></div>
+                        </div>
+                    </div>
+
+                    <div class="usage-item">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span>📞 API Calls (Month)</span>
+                            <span>${data.current.apiCallsThisMonth} / ${data.limits.apiCallsMonthly === Infinity ? '∞' : data.limits.apiCallsMonthly}</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: ${data.usage.apiCallsPercent}%; background: ${data.usage.apiCallsPercent > 80 ? '#dc3545' : '#ffc107'};"></div>
+                        </div>
+                    </div>
+
+                    <div class="usage-item">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span>📂 Collections</span>
+                            <span>${data.current.collections} / ${data.limits.collections === Infinity ? '∞' : data.limits.collections}</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: ${data.usage.collectionsPercent}%; background: ${data.usage.collectionsPercent > 80 ? '#dc3545' : '#17a2b8'};"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9em;">
+                    <strong>Plan Features:</strong>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        ${data.limits.features.map(feature => `<li>${feature.replace(/_/g, ' ')}</li>`).join('')}
+                    </ul>
+                    <strong>Max File Size:</strong> ${data.formatted.maxFileSize}
+                </div>
+            `;
+
+            document.getElementById('usage-stats').innerHTML = html;
+        }
+
         // LLM Q&A Functions
         async function askQuestion() {
             const question = document.getElementById('qa-question').value.trim();
@@ -444,6 +545,7 @@ curl -X GET "${window.location.origin}/api/collections/my_docs/documents" \
         // Load base URL on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadBaseUrl();
+            loadUsageStats();
         });
     </script>
 </body>
