@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { qdrantClient } = require('../config/qdrant');
+const qdrantClient = require('../config/qdrant'); // Remove destructuring - use direct import
 const { authenticateToken } = require('../middleware/auth');
 
 // Apply authentication to all routes
@@ -47,6 +47,9 @@ async function ensureCollectionExists(actualCollectionName, config = null) {
 // Get user's collections (filtered by user)
 router.get('/', async (req, res) => {
     try {
+        console.log('Getting collections for user:', req.user.username);
+        console.log('qdrantClient available methods:', Object.getOwnPropertyNames(qdrantClient).filter(name => typeof qdrantClient[name] === 'function').slice(0, 5));
+        
         const allCollections = await qdrantClient.getCollections();
         const username = req.user.username;
         const userPrefix = `user_${username}_`;
@@ -55,11 +58,21 @@ router.get('/', async (req, res) => {
         const userCollections = allCollections.collections
             .filter(collection => collection.name.startsWith(userPrefix))
             .map(collection => ({
-                name: getOriginalCollectionName(username, collection.name)
+                name: getOriginalCollectionName(username, collection.name),
+                actualName: collection.name,
+                vectors_count: collection.vectors_count || 0,
+                status: collection.status || 'green'
             }));
         
+        console.log(`Found ${userCollections.length} collections for user ${username}`);
         res.json({ collections: userCollections });
     } catch (error) {
+        console.error('Collections route error:', error);
+        console.error('Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        });
         res.status(500).json({ error: error.message });
     }
 });

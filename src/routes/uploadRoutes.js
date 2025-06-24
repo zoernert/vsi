@@ -10,6 +10,7 @@ const { createUsageMiddleware, createLimitMiddleware } = require('../middleware/
 const { TIER_LIMITS } = require('../config/tiers');
 const { DatabaseService } = require('../services/databaseService');
 const { FileService } = require('../services/fileService');
+const { processAndStoreFile } = require('../services/fileProcessor');
 
 const router = express.Router();
 
@@ -48,6 +49,11 @@ const checkFileSize = async (req, res, next) => {
     }
     next();
 };
+
+// Helper function to get user-specific collection name
+function getUserCollectionName(username, collectionName) {
+    return `user_${username}_${collectionName}`;
+}
 
 // Helper function to extract text from file buffer
 async function extractTextFromBuffer(buffer, originalName, mimeType) {
@@ -101,11 +107,12 @@ Be thorough and descriptive, as this will be used for searching and question ans
             const pdfParse = require('pdf-parse');
             const data = await pdfParse(buffer);
             
+            console.log(`PDF extraction successful: ${data.text.length} characters from ${originalName}`);
             // Return the extracted text from PDF
             return data.text || `Document: ${originalName}`;
         } catch (error) {
             console.error('Error extracting PDF text:', error);
-            return `Document: ${originalName}`;
+            return `Document: ${originalName} - PDF text extraction failed: ${error.message}`;
         }
     }
     
@@ -113,10 +120,11 @@ Be thorough and descriptive, as this will be used for searching and question ans
         try {
             const mammoth = require('mammoth');
             const result = await mammoth.extractRawText({ buffer: buffer });
+            console.log(`DOCX extraction successful: ${result.value.length} characters from ${originalName}`);
             return result.value || `Document: ${originalName}`;
         } catch (error) {
             console.error('Error extracting DOCX text:', error);
-            return `Document: ${originalName}`;
+            return `Document: ${originalName} - DOCX text extraction failed: ${error.message}`;
         }
     }
     
@@ -127,17 +135,19 @@ Be thorough and descriptive, as this will be used for searching and question ans
             let text = '';
             workbook.SheetNames.forEach(name => {
                 const sheet = workbook.Sheets[name];
+                text += `\n\n=== Sheet: ${name} ===\n`;
                 text += XLSX.utils.sheet_to_txt(sheet) + '\n';
             });
+            console.log(`Excel extraction successful: ${text.length} characters from ${originalName}`);
             return text || `Document: ${originalName}`;
         } catch (error) {
             console.error('Error extracting Excel text:', error);
-            return `Document: ${originalName}`;
+            return `Document: ${originalName} - Excel text extraction failed: ${error.message}`;
         }
     }
     
     // For other file types, return filename as fallback
-    return `Document: ${originalName}`;
+    return `Document: ${originalName} - File type ${mimeType} requires specific processing for text extraction.`;
 }
 
 // Helper function to generate embeddings
@@ -153,31 +163,24 @@ async function generateEmbedding(text) {
     }
 }
 
-// Helper function to get user-specific collection name
-function getUserCollectionName(username, collectionName) {
-    return `user_${username}_${collectionName}`;
-}
-
 // Enhanced helper function to ensure collection exists
 async function ensureCollectionExists(actualCollectionName, collectionDisplayName) {
     try {
-        await qdrantClient.getCollection(actualCollectionName);
-        return true; // Collection already exists
-    } catch (error) {
-        // Check if it's a 404 Not Found error (collection doesn't exist)
-        if (error.status === 404 || error.message.includes('Not found') || error.message.includes("doesn't exist")) {
-            console.log(`Auto-creating collection: ${collectionDisplayName} (${actualCollectionName})`);
-            await qdrantClient.createCollection(actualCollectionName, {
-                vectors: {
-                    size: 768,
-                    distance: 'Cosine'
-                }
-            });
+        const wasCreated = await qdrantClient.ensureCollection(actualCollectionName, {
+            size: 768,
+            distance: 'Cosine'
+        });
+        
+        if (wasCreated) {
             console.log(`✅ Collection created successfully: ${collectionDisplayName}`);
             return false; // Collection was just created
         } else {
-            throw error;
+            console.log(`Collection '${collectionDisplayName}' already exists.`);
+            return true; // Collection already exists
         }
+    } catch (error) {
+        console.error(`Error with collection ${actualCollectionName}:`, error);
+        throw new Error(`Failed to ensure collection exists: ${error.message}`);
     }
 }
 
@@ -193,7 +196,6 @@ router.post('/collections/:collection/upload',
             const { collection } = req.params;
             const file = req.file;
             const username = req.user.username;
-            const actualCollectionName = getUserCollectionName(username, collection);
             
             if (!file) {
                 return res.status(400).json({ error: 'No file uploaded' });
@@ -204,7 +206,7 @@ router.post('/collections/:collection/upload',
             // Generate UUID for file
             const fileUuid = uuidv4();
             
-            // Store file in database
+            // Store file in database first
             const storedFile = await fileService.storeFile(
                 fileUuid, 
                 file.originalname, 
@@ -215,64 +217,57 @@ router.post('/collections/:collection/upload',
             
             console.log(`File stored in database with UUID: ${fileUuid}`);
             
-            // Extract text from file buffer
-            const text = await extractTextFromBuffer(file.buffer, file.originalname, file.mimetype);
-            console.log(`Extracted text length: ${text.length} characters`);
+            // Save file temporarily for processing
+            const tempFilePath = path.join(__dirname, '../../uploads', `${fileUuid}_${file.originalname}`);
             
-            // Generate embedding
-            const embedding = await generateEmbedding(text);
-            
-            // Determine file type for better categorization
-            const ext = path.extname(file.originalname).toLowerCase();
-            const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'].includes(ext);
-            
-            // Create point for Qdrant
-            const point = {
-                id: uuidv4(), // Document ID (different from file UUID)
-                vector: embedding,
-                payload: {
-                    filename: file.originalname,
-                    fileUuid: fileUuid, // Store the file UUID for download links
-                    downloadUrl: `/api/files/${fileUuid}`,
-                    text: text, // Store the full extracted text/description
-                    fileType: isImage ? 'image' : 'document',
-                    mimeType: file.mimetype,
-                    uploadedBy: req.user.username,
-                    uploadedAt: new Date().toISOString(),
-                    type: 'file'
-                }
-            };
-            
-            // Auto-create collection if it doesn't exist
-            const wasExisting = await ensureCollectionExists(actualCollectionName, collection);
-            
-            // Upsert point to collection
-            await qdrantClient.upsert(actualCollectionName, {
-                points: [point]
-            });
-            
-            // Track usage after successful upload
-            if (req.user && req.user.id) {
-                const { usageTracker } = require('../middleware/usageTracking');
-                usageTracker.trackUsage(req.user.id, 'documents', 1);
-                usageTracker.trackUsage(req.user.id, 'storage_bytes', file.size);
+            // Ensure uploads directory exists
+            const uploadsDir = path.dirname(tempFilePath);
+            if (!require('fs').existsSync(uploadsDir)) {
+                require('fs').mkdirSync(uploadsDir, { recursive: true });
             }
             
-            const message = wasExisting 
-                ? `${isImage ? 'Image' : 'File'} uploaded and indexed successfully`
-                : `Collection created and ${isImage ? 'image' : 'file'} uploaded successfully`;
+            // Write buffer to temporary file
+            require('fs').writeFileSync(tempFilePath, file.buffer);
             
-            res.json({ 
-                message,
-                documentId: point.id,
-                fileUuid: fileUuid,
-                filename: file.originalname,
-                downloadUrl: `/api/files/${fileUuid}`,
-                fileInfoUrl: `/api/files/${fileUuid}/info`,
-                collectionCreated: !wasExisting,
-                fileType: isImage ? 'image' : 'document',
-                extractedTextLength: text.length
-            });
+            try {
+                // Use the file processor service to handle chunking and embedding
+                const result = await processAndStoreFile(
+                    tempFilePath,
+                    req.user.id, // Use user ID instead of username for consistency
+                    file.originalname,
+                    file.mimetype
+                );
+                
+                // Track usage after successful processing
+                if (req.user && req.user.id) {
+                    const { usageTracker } = require('../middleware/usageTracking');
+                    usageTracker.trackUsage(req.user.id, 'documents', 1);
+                    usageTracker.trackUsage(req.user.id, 'storage_bytes', file.size);
+                }
+                
+                res.json({ 
+                    message: result.message,
+                    fileUuid: fileUuid,
+                    filename: file.originalname,
+                    downloadUrl: `/api/files/${fileUuid}`,
+                    fileInfoUrl: `/api/files/${fileUuid}/info`,
+                    chunksStored: result.chunksStored,
+                    collectionName: result.collectionName
+                });
+                
+            } catch (processingError) {
+                console.error('File processing error:', processingError);
+                
+                // If processing fails, we should still keep the file in the database
+                // but inform the user that indexing failed
+                res.status(500).json({ 
+                    error: 'File uploaded but indexing failed',
+                    message: processingError.message,
+                    fileUuid: fileUuid,
+                    downloadUrl: `/api/files/${fileUuid}`,
+                    indexed: false
+                });
+            }
             
         } catch (error) {
             console.error('Upload error:', error);
@@ -404,8 +399,9 @@ router.post('/collections/:collection/upload-url',
             // Auto-create collection if it doesn't exist
             const wasExisting = await ensureCollectionExists(actualCollectionName, collection);
             
-            // Upsert point to collection
+            // Fix: Use correct upsert method with proper points format
             await qdrantClient.upsert(actualCollectionName, {
+                wait: true,
                 points: [point]
             });
             
@@ -476,8 +472,9 @@ router.post('/collections/:collection/create-text',
             // Auto-create collection if it doesn't exist
             const wasExisting = await ensureCollectionExists(actualCollectionName, collection);
 
-            // Upsert point to collection
+            // Fix: Use correct upsert method with proper points format
             await qdrantClient.upsert(actualCollectionName, {
+                wait: true,
                 points: [point]
             });
 

@@ -4,6 +4,7 @@ const { qdrantClient } = require('../config/qdrant');
 const { authenticateToken } = require('../middleware/auth');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { createUsageMiddleware } = require('../middleware/usageTracking');
+const { validateChunkForEmbedding } = require('../utils/textSplitter');
 
 const router = express.Router();
 
@@ -20,12 +21,24 @@ function getUserCollectionName(username, collectionName) {
 // Helper function to generate embeddings (same as in uploadRoutes)
 async function generateEmbedding(text) {
     try {
+        // Validate and truncate text size before sending to API
+        const validatedText = validateChunkForEmbedding(text);
+        
+        if (!validatedText || validatedText.length === 0) {
+            console.error('Text became empty after validation');
+            return new Array(768).fill(0);
+        }
+        
+        const textByteSize = Buffer.byteLength(validatedText, 'utf8');
+        console.log(`Generating embedding for text: ${validatedText.length} chars, ${textByteSize} bytes`);
+        
         const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
-        const result = await model.embedContent(text);
+        const result = await model.embedContent(validatedText);
         return result.embedding.values;
     } catch (error) {
         console.error('Error generating embedding:', error);
+        console.error(`Original text size: ${text.length} chars, ${Buffer.byteLength(text, 'utf8')} bytes`);
         // Return a zero vector as fallback
         return new Array(768).fill(0);
     }
@@ -51,6 +64,13 @@ router.post('/:collection/ask',
             const username = req.user.username;
             const actualCollectionName = getUserCollectionName(username, collection);
 
+            // Ensure collection exists before searching
+            try {
+                await qdrantClient.ensureCollection(actualCollectionName);
+            } catch (error) {
+                console.warn(`Collection ${actualCollectionName} doesn't exist, creating empty collection for search`);
+            }
+
             // Create vector service that uses your existing search functionality
             const vectorService = {
                 search: async (collectionName, query, limit) => {
@@ -71,22 +91,30 @@ router.post('/:collection/ask',
                         console.log(`Found ${searchResult.length} results from Qdrant`);
                         if (searchResult.length > 0) {
                             console.log('First result payload keys:', Object.keys(searchResult[0].payload));
-                            console.log('First result text preview:', searchResult[0].payload?.text?.substring(0, 100) + '...');
+                            // Check what content fields are available
+                            const firstPayload = searchResult[0].payload;
+                            const availableContentFields = ['text', 'content', 'chunkContent', 'markdown', 'chunk'].filter(field => firstPayload[field]);
+                            console.log('Available content fields:', availableContentFields);
                         }
 
                         // Transform results to extract actual content
                         return searchResult.map(result => {
-                            // Get the actual text content from the payload
+                            // Get the actual text content from the payload - try multiple field names
                             let content = result.payload?.text || 
                                          result.payload?.content || 
+                                         result.payload?.chunkContent ||
                                          result.payload?.markdown || 
                                          result.payload?.chunk ||
-                                         `Document: ${result.payload?.filename || 'Unknown'}`;
+                                         `Document: ${result.payload?.originalName || result.payload?.filename || 'Unknown'}`;
                             
-                            // If this is a file, prepend file information but keep the actual text content
-                            if (result.payload?.filename && result.payload?.downloadUrl) {
-                                const fileInfo = `📄 File: ${result.payload.filename}\nDownload: ${result.payload.downloadUrl}\n\nContent:\n`;
-                                content = fileInfo + content;
+                            // If this is a file result, add file metadata
+                            if (result.payload?.originalName) {
+                                const fileInfo = `📄 File: ${result.payload.originalName}`;
+                                if (result.payload.downloadUrl) {
+                                    content = `${fileInfo}\nDownload: ${result.payload.downloadUrl}\n\nContent:\n${content}`;
+                                } else {
+                                    content = `${fileInfo}\n\nContent:\n${content}`;
+                                }
                             }
                             
                             console.log(`Content length for result ${result.id}: ${content.length} characters`);

@@ -189,6 +189,20 @@
             border-bottom: none;
         }
         
+        .tier-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+        
+        .tier-free { background: rgba(59, 130, 246, 0.1); color: #1d4ed8; }
+        .tier-starter { background: rgba(139, 92, 246, 0.1); color: #7c3aed; }
+        .tier-professional { background: rgba(34, 197, 94, 0.1); color: #059669; }
+        .tier-enterprise { background: rgba(245, 158, 11, 0.1); color: #d97706; }
+        .tier-unlimited { background: rgba(236, 72, 153, 0.1); color: #be185d; }
+        
         .status-badge {
             padding: 4px 12px;
             border-radius: 16px;
@@ -204,50 +218,6 @@
             border: 1px solid rgba(34, 197, 94, 0.2);
         }
         
-        .tier-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: capitalize;
-        }
-        
-        .tier-free { background: rgba(59, 130, 246, 0.1); color: #1d4ed8; }
-        .tier-starter { background: rgba(139, 92, 246, 0.1); color: #7c3aed; }
-        .tier-professional { background: rgba(34, 197, 94, 0.1); color: #059669; }
-        .tier-enterprise { background: rgba(245, 158, 11, 0.1); color: #d97706; }
-        .tier-unlimited { background: rgba(236, 72, 153, 0.1); color: #be185d; }
-        
-        .admin-form-group {
-            margin-bottom: 20px;
-        }
-        
-        .admin-form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: var(--fiori-text-primary);
-            font-weight: 500;
-            font-size: 14px;
-        }
-        
-        .admin-form-group input,
-        .admin-form-group select {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid var(--fiori-border);
-            border-radius: 6px;
-            font-size: 14px;
-            background: var(--fiori-bg-primary);
-            transition: border-color 0.2s;
-        }
-        
-        .admin-form-group input:focus,
-        .admin-form-group select:focus {
-            outline: none;
-            border-color: var(--fiori-primary);
-            box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.1);
-        }
-        
         .admin-btn {
             padding: 12px 24px;
             border: none;
@@ -261,16 +231,6 @@
             gap: 8px;
         }
         
-        .admin-btn-primary {
-            background: var(--fiori-primary);
-            color: white;
-        }
-        
-        .admin-btn-primary:hover {
-            background: #0056b3;
-            box-shadow: var(--fiori-shadow-sm);
-        }
-        
         .admin-btn-secondary {
             background: var(--fiori-bg-tertiary);
             color: var(--fiori-text-primary);
@@ -281,92 +241,6 @@
             background: var(--fiori-border);
         }
         
-        .admin-btn-danger {
-            background: var(--fiori-danger);
-            color: white;
-        }
-        
-        .admin-btn-danger:hover {
-            background: #c82333;
-        }
-        
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal.active {
-            display: flex;
-        }
-        
-        .modal-content {
-            background-color: var(--fiori-bg-primary);
-            margin: 5% auto;
-            padding: 0;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: var(--fiori-shadow-lg);
-        }
-        
-        .modal-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--fiori-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--fiori-bg-secondary);
-            border-radius: 12px 12px 0 0;
-        }
-        
-        .modal-header h2 {
-            margin: 0;
-            color: var(--fiori-text-primary);
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .modal-body {
-            padding: 24px;
-        }
-        
-        .modal-footer {
-            padding: 16px 24px;
-            border-top: 1px solid var(--fiori-border);
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            background: var(--fiori-bg-secondary);
-            border-radius: 0 0 12px 12px;
-        }
-        
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 18px;
-            cursor: pointer;
-            color: var(--fiori-text-secondary);
-            padding: 8px;
-            border-radius: 4px;
-            transition: background-color 0.2s;
-        }
-        
-        .modal-close:hover {
-            background: var(--fiori-bg-tertiary);
-            color: var(--fiori-text-primary);
-        }
-        
         .admin-btn-small {
             padding: 6px 12px;
             font-size: 12px;
@@ -375,24 +249,6 @@
         .user-actions {
             display: flex;
             gap: 8px;
-        }
-        
-        .success-message {
-            background-color: rgba(34, 197, 94, 0.1);
-            color: #059669;
-            padding: 12px 16px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-            border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-        
-        .error-message {
-            background-color: rgba(220, 53, 69, 0.1);
-            color: #dc3545;
-            padding: 12px 16px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-            border: 1px solid rgba(220, 53, 69, 0.2);
         }
         
         @media (max-width: 768px) {
@@ -468,187 +324,148 @@
                                 <div class="stat-label">Active Users</div>
                             </div>
                             <div class="stat">
-                                <div class="stat-value" id="adminUsers">-</div>: none;"></div>
-                                <div class="stat-label">Admin Users</div>iv id="editErrorMessage" class="error-message" style="display: none;"></div>
+                                <div class="stat-value" id="adminUsers">-</div>
+                                <div class="stat-label">Admin Users</div>
                             </div>
                         </div>
                     </div>
                 </div>
-  <div class="admin-form-group">
-                <!-- Tier Distribution -->          <label for="editDisplayUsername">Username</label>
-                <div class="admin-card">              <input type="text" id="editDisplayUsername" disabled class="fiori-input">
-                    <div class="admin-card-header">                    </div>
-                        <h3><i class="fas fa-chart-pie"></i> Tier Distribution</h3>        
+
+                <!-- Tier Distribution -->
+                <div class="admin-card">
+                    <div class="admin-card-header">
+                        <h3><i class="fas fa-chart-pie"></i> Tier Distribution</h3>
                     </div>
-                    <div class="admin-card-content">"editPassword">New Password (leave blank to keep current)</label>
-                        <div class="chart-container">"password" id="editPassword" name="password" placeholder="Enter new password" class="fiori-input">
-                            <canvas id="tierChart"></canvas>
-                        </div>
-                    </div>     <div class="admin-form-group">te tab switching to use new classes
-                </div>            <label for="editTier">Tier</label>tion showTab(tabName) {
-me="tier" class="fiori-select">
-                <!-- Usage Overview -->
-                <div class="admin-card">ter">Starter</option>
-                    <div class="admin-card-header">             <option value="professional">Professional</option>
-                        <h3><i class="fas fa-activity"></i> Usage Overview</h3>                <option value="enterprise">Enterprise</option>
-                    </div>ion value="unlimited">Unlimited</option>ss from all tabs
                     <div class="admin-card-content">
                         <div class="chart-container">
-                            <canvas id="usageChart"></canvas>        });
-                        </div>-form-group">
-                    </div>fiori-checkbox">
-                </div><input type="checkbox" id="editIsAdmin" name="isAdmin">entById(tabName).classList.add('active');
-            </div>r privileges</span>');
+                            <canvas id="tierChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Usage Overview -->
+                <div class="admin-card">
+                    <div class="admin-card-header">
+                        <h3><i class="fas fa-activity"></i> Usage Overview</h3>
+                    </div>
+                    <div class="admin-card-content">
+                        <div class="chart-container">
+                            <canvas id="usageChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Recent Activity -->
             <div class="admin-card">
-                <div class="admin-card-header">/div>   loadUsers();
-                    <h3><i class="fas fa-clock"></i> Recent Activity</h3>   <div class="modal-footer">   } else if (tabName === 'system') {
-                </div>                <button type="button" class="admin-btn admin-btn-secondary" onclick="closeEditModal()">Cancel</button>                loadSystemHealth();
-                <div class="admin-card-content">ss="admin-btn admin-btn-danger" id="deleteUserBtn" onclick="deleteUser()">Delete User</button>tics') {
-                    <div class="admin-table-container">   <button type="submit" class="admin-btn admin-btn-primary" id="saveUserBtn" onclick="saveUser()">Save Changes</button>   loadAnalytics();
-                        <table class="admin-table" id="activityTable">     </div>     }
-                            <thead> </div> }
-                                <tr>    </div>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</html></body>    </script>        // ...existing JavaScript code...        }            }                loadAnalytics();            } else if (tabName === 'analytics') {                loadSystemHealth();            } else if (tabName === 'system') {                loadUsers();            if (tabName === 'users') {            // Load tab-specific data                        event.target.classList.add('active');            document.getElementById(tabName).classList.add('active');            // Show selected tab                        });                tab.classList.remove('active');            document.querySelectorAll('.admin-nav-tab').forEach(tab => {            // Remove active class from all tabs                        });                tab.classList.remove('active');            document.querySelectorAll('.tab-content').forEach(tab => {            // Hide all tab contents        function showTab(tabName) {        // Update tab switching to use new classes    <script>    </div>        </div>            </div>                <button type="submit" class="admin-btn admin-btn-primary" id="saveUserBtn" onclick="saveUser()">Save Changes</button>                <button type="button" class="admin-btn admin-btn-danger" id="deleteUserBtn" onclick="deleteUser()">Delete User</button>                <button type="button" class="admin-btn admin-btn-secondary" onclick="closeEditModal()">Cancel</button>            <div class="modal-footer">            </div>                <!-- ...existing modal content with admin-form-group classes... -->            <div class="modal-body">            </div>                </button>                    <i class="fas fa-times"></i>                <button class="modal-close" onclick="closeEditModal()">                <h2><i class="fas fa-user-edit"></i> Edit User</h2>            <div class="modal-header">        <div class="modal-content">    <div id="editUserModal" class="modal">    <!-- Edit User Modal with Fiori styling -->    </div>        </div>            <!-- ...existing system content with admin-card classes... -->        <div id="system" class="tab-content">        <!-- System Health Tab -->        </div>            <!-- ...existing analytics content with admin-card classes... -->        <div id="analytics" class="tab-content">        <!-- Analytics Tab -->        </div>            </div>                </div>                    </div>                        </table>                            </tbody>                                <!-- Populated by JavaScript -->                            <tbody>                            </thead>                                </tr>                                    <th>Actions</th>                                    <th>Created</th>                                    <th>Admin</th>                                    <th>Tier</th>                                    <th>Username</th>                                <tr>                            <thead>                        <table class="admin-table" id="usersTable">                    <div class="admin-table-container">                <div class="admin-card-content">                </div>                    <h3><i class="fas fa-users-cog"></i> User Management</h3>                <div class="admin-card-header">            <div class="admin-card">        <div id="users" class="tab-content">        <!-- Users Tab -->        </div>            </div>                </div>                    </div>                        </table>                            </tbody>                                <!-- Populated by JavaScript -->                            <tbody>                            </thead>                                </tr>                                    <th>Date</th>                                    <th>Usage</th>                                    <th>Resource</th>                                    <th>User</th>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</html></body>    </script>        // ...existing JavaScript code...        }            }                loadAnalytics();            } else if (tabName === 'analytics') {                loadSystemHealth();            } else if (tabName === 'system') {                loadUsers();            if (tabName === 'users') {            // Load tab-specific data                        event.target.classList.add('active');            document.getElementById(tabName).classList.add('active');            // Show selected tab                        });                tab.classList.remove('active');            document.querySelectorAll('.admin-nav-tab').forEach(tab => {            // Remove active class from all tabs                        });                tab.classList.remove('active');            document.querySelectorAll('.tab-content').forEach(tab => {            // Hide all tab contents        function showTab(tabName) {        // Update tab switching to use new classes    <script>        // Load dashboard data
+                <div class="admin-card-header">
+                    <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+                </div>
+                <div class="admin-card-content">
+                    <div class="admin-table-container">
+                        <table class="admin-table" id="activityTable">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Resource</th>
+                                    <th>Usage</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="users" class="tab-content">
+            <div class="admin-card">
+                <div class="admin-card-header">
+                    <h3><i class="fas fa-users-cog"></i> User Management</h3>
+                </div>
+                <div class="admin-card-content">
+                    <div class="admin-table-container">
+                        <table class="admin-table" id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Tier</th>
+                                    <th>Admin</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics" class="tab-content">
+            <div class="admin-card">
+                <div class="admin-card-header">
+                    <h3><i class="fas fa-chart-line"></i> Analytics</h3>
+                </div>
+                <div class="admin-card-content">
+                    <p>Analytics data loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health Tab -->
+        <div id="system" class="tab-content">
+            <div class="admin-card">
+                <div class="admin-card-header">
+                    <h3><i class="fas fa-server"></i> System Status</h3>
+                </div>
+                <div class="admin-card-content">
+                    <p>System health data loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let dashboardData = null;
+        let charts = {};
+        let currentEditingUser = null;
+
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.admin-nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            // Load tab-specific data
+            if (tabName === 'users') {
+                loadUsers();
+            } else if (tabName === 'system') {
+                loadSystemHealth();
+            } else if (tabName === 'analytics') {
+                loadAnalytics();
+            }
+        }
+
+        // Load dashboard data
         async function loadDashboard() {
             try {
                 const token = localStorage.getItem('token');
@@ -692,9 +509,9 @@ me="tier" class="fiori-select">
             } catch (error) {
                 console.error('Dashboard error:', error);
                 document.body.innerHTML = `
-                    <div class="error">
-                        Failed to load dashboard: ${error.message}
-                        <br><br>
+                    <div style="padding: 40px; text-align: center;">
+                        <h2>Failed to load dashboard</h2>
+                        <p>${error.message}</p>
                         <a href="/login.html">Please login again</a>
                     </div>
                 `;
@@ -768,344 +585,146 @@ me="tier" class="fiori-select">
                         data: usageData.map(u => u.total_usage),
                         backgroundColor: 'var(--fiori-primary)'
                     }]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</html></body>    </script>        document.addEventListener('DOMContentLoaded', loadDashboard);        // Initialize dashboard        }            }                closeEditModal();            if (event.target === modal) {            const modal = document.getElementById('editUserModal');        window.onclick = function(event) {        // Close modal when clicking outside        }            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];            const i = Math.floor(Math.log(bytes) / Math.log(k));            const sizes = ['Bytes', 'KB', 'MB', 'GB'];            const k = 1024;            if (bytes === 0) return '0 Bytes';        function formatBytes(bytes) {        }            return new Intl.NumberFormat().format(num);        function formatNumber(num) {        // Utility functions        }            }                deleteBtn.textContent = originalText;                deleteBtn.disabled = false;            } finally {                alert('Error: ' + error.message);                console.error('Error deleting user:', error);            } catch (error) {                                }                    throw new Error(result.error || 'Failed to delete user');                } else {                    loadUsers(); // Refresh users table                    closeEditModal();                    alert('User deleted successfully');                if (response.ok) {                                const result = await response.json();                                });                    }                        'Authorization': `Bearer ${token}`                    headers: {                    method: 'DELETE',                const response = await fetch(`/api/auth/admin/users/${currentEditingUser}`, {                                deleteBtn.textContent = 'Deleting...';                deleteBtn.disabled = true;            try {                        const originalText = deleteBtn.textContent;            const deleteBtn = document.getElementById('deleteUserBtn');            const token = localStorage.getItem('token');                        }                return;            if (!confirm(`Are you sure you want to delete user "${currentEditingUser}"? This action cannot be undone.`)) {                        if (!currentEditingUser) return;        async function deleteUser() {        // Delete user        }            }                saveBtn.textContent = originalText;                saveBtn.disabled = false;            } finally {                alert('Error: ' + error.message);                console.error('Error updating user:', error);            } catch (error) {                                }                    throw new Error(result.error || 'Failed to update user');                } else {                    loadUsers(); // Refresh users table                    closeEditModal();                    alert('User updated successfully!');                if (response.ok) {                                const result = await response.json();                                });                    body: JSON.stringify(updateData)                    },                        'Content-Type': 'application/json'                        'Authorization': `Bearer ${token}`,                    headers: {                    method: 'PUT',                const response = await fetch(`/api/auth/admin/users/${currentEditingUser}`, {                                saveBtn.textContent = 'Saving...';                saveBtn.disabled = true;            try {                        const originalText = saveBtn.textContent;            const saveBtn = document.getElementById('saveUserBtn');                        }                updateData.password = password.trim();            if (password && password.trim()) {            const password = document.getElementById('editPassword').value;            // Only include password if it's provided                        };                isAdmin: document.getElementById('editIsAdmin').checked                tier: document.getElementById('editTier').value,            const updateData = {            const token = localStorage.getItem('token');                        if (!currentEditingUser) return;        async function saveUser() {        // Save user changes        }            currentEditingUser = null;            document.getElementById('editUserModal').style.display = 'none';        function closeEditModal() {        // Close edit modal        }            });                alert('Failed to load user data');                console.error('Error loading user data:', error);            .catch(error => {            })                }                    document.getElementById('editUserModal').style.display = 'block';                    // Show modal                                        document.getElementById('editIsAdmin').checked = user.isAdmin;                    document.getElementById('editTier').value = user.tier;                    document.getElementById('editPassword').value = '';                    document.getElementById('editDisplayUsername').value = user.username;                    document.getElementById('editUsername').value = user.username;                    // Populate form                if (user) {                const user = data.users.find(u => u.username === username);            .then(data => {            .then(response => response.json())            })                }                    'Authorization': `Bearer ${token}`                headers: {            fetch('/api/auth/admin/users', {                        const token = localStorage.getItem('token');            // Find user data                        currentEditingUser = username;        function editUser(username) {        // Edit user functionality        }            }                `;                    </div>                        </div>                            <div class="error">Failed to load analytics</div>                        <div class="admin-card-content">                    <div class="admin-card">                analyticsTab.innerHTML = `                console.error('Analytics error:', error);            } catch (error) {                                }, 1000);                    `;                        </div>                            </div>                                </div>                                    <p>Analytics features coming soon...</p>                                <div class="admin-card-content">                                </div>
-                                    <h3><i class="fas fa-chart-line"></i> Analytics</h3>                                <div class="admin-card-header">
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                            <div class="admin-card">                        <div class="admin-cards-grid">                    analyticsTab.innerHTML = `                setTimeout(() => {                // For now, show placeholder                // You can add specific analytics endpoints here                                const token = localStorage.getItem('token');            try {                        `;                </div>                    </div>                        </div>                            <p>Analytics data loading...</p>                        <div class="admin-card-content">                        </div>                            <h3><i class="fas fa-chart-line"></i> Analytics</h3>                        <div class="admin-card-header">                    <div class="admin-card">                <div class="admin-cards-grid">            analyticsTab.innerHTML = `            const analyticsTab = document.getElementById('analytics');        async function loadAnalytics() {        // Load analytics data        }            `;                </div>                    </div>                        </div>                            </div>                                <div class="stat-label">Users with Storage</div>                                <div class="stat-value">${health.storage.usersWithStorage}</div>                            <div class="stat">                            </div>                                <div class="stat-label">Total Storage</div>                                <div class="stat-value">${formatBytes(health.storage.totalBytes)}</div>                            <div class="stat">                        <div class="admin-card-content">                        </div>                            <h3><i class="fas fa-hdd"></i> Storage Info</h3>                        <div class="admin-card-header">                    <div class="admin-card">                    </div>                        </div>                            </div>                                <div class="stat-label">Events (24h)</div>                                <div class="stat-value">${health.usageTracking.events24h}</div>                            <div class="stat">                            </div>                                <div>Last Check: ${new Date(health.database.lastCheck).toLocaleString()}</div>                                <div class="status-badge status-healthy">Database: ${health.database.status}</div>                            <div class="stat">                        <div class="admin-card-content">                        </div>                            <h3><i class="fas fa-server"></i> System Status</h3>                        <div class="admin-card-header">                    <div class="admin-card">                <div class="admin-cards-grid">            systemTab.innerHTML = `            const systemTab = document.getElementById('system');        function updateSystemHealth(health) {        // Update system health display        }            }                    '<div class="admin-card"><div class="admin-card-content">Failed to load system health</div></div>';                document.getElementById('system').innerHTML =                 console.error('System health error:', error);            } catch (error) {                                updateSystemHealth(data);                const data = await response.json();                                if (!response.ok) throw new Error('Failed to load system health');                });                    }                        'Authorization': `Bearer ${token}`                    headers: {                const response = await fetch('/api/admin/system/health', {                const token = localStorage.getItem('token');            try {        async function loadSystemHealth() {        // Load system health        }            `).join('');                </tr>                    </td>                        </div>                            </button>                                <i class="fas fa-edit"></i> Edit                            <button class="admin-btn admin-btn-secondary admin-btn-small" onclick="editUser('${user.username}')">                        <div class="user-actions">                    <td>                    <td>${new Date(user.createdAt).toLocaleDateString()}</td>                    <td>${user.isAdmin ? '✅' : '❌'}</td>                    <td><span class="tier-badge tier-${user.tier}">${user.tier}</span></td>                    <td>${user.username}</td>                <tr>            tbody.innerHTML = users.map(user => `            const tbody = document.querySelector('#usersTable tbody');        function updateUsersTable(users) {        // Update users table        }            }                    '<tr><td colspan="5">Failed to load users</td></tr>';                document.querySelector('#usersTable tbody').innerHTML =                 console.error('Users error:', error);            } catch (error) {                                updateUsersTable(data.users);                const data = await response.json();                                if (!response.ok) throw new Error('Failed to load users');                });                    }                        'Authorization': `Bearer ${token}`                    headers: {                const response = await fetch('/api/auth/admin/users', {
-
-
-
-
-
-
-
-
-
-                const token = localStorage.getItem('token');            try {        async function loadUsers() {
-
-        // Load users        }            `).join('');                </tr>                    <td>${new Date(activity.activity_date).toLocaleDateString()}</td>
-
-
-                    <td>${formatNumber(activity.total)}</td>                    <td>${activity.resource_type.replace('_', ' ')}</td>
-
-
-                    <td>${activity.username}</td>                <tr>            tbody.innerHTML = activities.map(activity => `
-
-
-
-
-            const tbody = document.querySelector('#activityTable tbody');        function updateActivityTable(activities) {
-
-
-
-        // Update activity table        }            });                }                    }                        }                            beginAtZero: true
-
-                        y: {                    scales: {                    },                        }                            display: false                        legend: {                    plugins: {                },
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update activity table
+        function updateActivityTable(activities) {
+            const tbody = document.querySelector('#activityTable tbody');
+            tbody.innerHTML = activities.map(activity => `
+                <tr>
+                    <td>${activity.username}</td>
+                    <td>${activity.resource_type.replace('_', ' ')}</td>
+                    <td>${formatNumber(activity.total)}</td>
+                    <td>${new Date(activity.activity_date).toLocaleDateString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Load users
+        async function loadUsers() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/auth/admin/users', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load users');
+                
+                const data = await response.json();
+                updateUsersTable(data.users);
+                
+            } catch (error) {
+                console.error('Users error:', error);
+                document.querySelector('#usersTable tbody').innerHTML = 
+                    '<tr><td colspan="5">Failed to load users</td></tr>';
+            }
+        }
+
+        // Update users table
+        function updateUsersTable(users) {
+            const tbody = document.querySelector('#usersTable tbody');
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>${user.username}</td>
+                    <td><span class="tier-badge tier-${user.tier}">${user.tier}</span></td>
+                    <td>${user.isAdmin ? '✅' : '❌'}</td>
+                    <td>${new Date(user.createdAt).toLocaleDateString()}</td>
+                    <td>
+                        <div class="user-actions">
+                            <button class="admin-btn admin-btn-secondary admin-btn-small" onclick="editUser('${user.username}')">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Load system health
+        async function loadSystemHealth() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/admin/system/health', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load system health');
+                
+                const data = await response.json();
+                updateSystemHealth(data);
+                
+            } catch (error) {
+                console.error('System health error:', error);
+                document.getElementById('system').innerHTML = 
+                    '<div class="admin-card"><div class="admin-card-content">Failed to load system health</div></div>';
+            }
+        }
+
+        // Update system health display
+        function updateSystemHealth(health) {
+            const systemTab = document.getElementById('system');
+            systemTab.innerHTML = `
+                <div class="admin-card">
+                    <div class="admin-card-header">
+                        <h3><i class="fas fa-server"></i> System Status</h3>
+                    </div>
+                    <div class="admin-card-content">
+                        <div class="stat">
+                            <div class="status-badge status-healthy">Database: ${health.database.status}</div>
+                            <div>Last Check: ${new Date(health.database.lastCheck).toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Load analytics data
+        async function loadAnalytics() {
+            const analyticsTab = document.getElementById('analytics');
+            analyticsTab.innerHTML = `
+                <div class="admin-card">
+                    <div class="admin-card-header">
+                        <h3><i class="fas fa-chart-line"></i> Analytics</h3>
+                    </div>
+                    <div class="admin-card-content">
+                        <p>Analytics features coming soon...</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Edit user functionality (placeholder)
+        function editUser(username) {
+            alert(`Edit user: ${username} (functionality coming soon)`);
+        }
+
+        // Utility functions
+        function formatNumber(num) {
+            return new Intl.NumberFormat().format(num);
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+</body>
+</html>

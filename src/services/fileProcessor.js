@@ -3,7 +3,7 @@ const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const qdrantClient = require('../config/qdrant');
 const { embeddingModel, generativeModel } = require('../config/gemini');
-const { splitTextIntoChunks } = require('../utils/textSplitter');
+const { splitTextIntoChunks, validateChunkForEmbedding } = require('../utils/textSplitter');
 
 // Function to convert image to base64
 function fileToGenerativePart(filePath, mimeType) {
@@ -31,21 +31,62 @@ async function processImageWithLLM(imagePath, mimeType) {
     }
 }
 
-// Placeholder for document conversion
+// Improved document conversion with actual PDF parsing
 async function convertDocumentToMarkdown(filePath, mimeType) {
-    console.log(`Simulating conversion of ${mimeType} file: ${filePath}`);
+    console.log(`Converting ${mimeType} file: ${filePath}`);
     let content = '';
     try {
         // For text files, read directly
         if (mimeType.startsWith('text/')) {
             content = await fs.readFile(filePath, 'utf8');
+        } else if (mimeType === 'application/pdf') {
+            // Use pdf-parse to extract text from PDF
+            try {
+                const pdfParse = require('pdf-parse');
+                const buffer = await fs.readFile(filePath);
+                const data = await pdfParse(buffer);
+                content = data.text || `PDF file: ${path.basename(filePath)} - text extraction failed`;
+                console.log(`PDF text extraction successful: ${content.length} characters`);
+            } catch (pdfError) {
+                console.error('PDF parsing error:', pdfError);
+                content = `PDF file: ${path.basename(filePath)} - Could not extract text content. Error: ${pdfError.message}`;
+            }
+        } else if (mimeType.includes('officedocument.wordprocessingml') || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+            // Use mammoth to extract text from DOCX
+            try {
+                const mammoth = require('mammoth');
+                const buffer = await fs.readFile(filePath);
+                const result = await mammoth.extractRawText({ buffer: buffer });
+                content = result.value || `DOCX file: ${path.basename(filePath)} - text extraction failed`;
+                console.log(`DOCX text extraction successful: ${content.length} characters`);
+            } catch (docxError) {
+                console.error('DOCX parsing error:', docxError);
+                content = `DOCX file: ${path.basename(filePath)} - Could not extract text content. Error: ${docxError.message}`;
+            }
+        } else if (mimeType.includes('spreadsheetml') || mimeType.includes('excel')) {
+            // Use xlsx to extract text from Excel files
+            try {
+                const XLSX = require('xlsx');
+                const workbook = XLSX.readFile(filePath);
+                let allText = '';
+                workbook.SheetNames.forEach(sheetName => {
+                    const sheet = workbook.Sheets[sheetName];
+                    const sheetText = XLSX.utils.sheet_to_txt(sheet);
+                    allText += `\n\n=== Sheet: ${sheetName} ===\n${sheetText}`;
+                });
+                content = allText || `Excel file: ${path.basename(filePath)} - text extraction failed`;
+                console.log(`Excel text extraction successful: ${content.length} characters`);
+            } catch (xlsxError) {
+                console.error('Excel parsing error:', xlsxError);
+                content = `Excel file: ${path.basename(filePath)} - Could not extract text content. Error: ${xlsxError.message}`;
+            }
         } else {
-            // For other document types (PDF, DOCX), simulate conversion
-            content = `This is markdown content converted from a ${mimeType} file located at ${path.basename(filePath)}. Actual conversion logic for this file type would be implemented here.`;
+            // For other document types, provide a fallback message
+            content = `Document file: ${path.basename(filePath)} (${mimeType}) - This file type requires specific conversion logic to extract text content. Current implementation provides basic file information only.`;
         }
     } catch (error) {
-        console.error(`Error reading or simulating conversion for ${filePath}:`, error);
-        content = `Error converting file ${path.basename(filePath)} to markdown.`;
+        console.error(`Error reading or converting ${filePath}:`, error);
+        content = `Error converting file ${path.basename(filePath)} to markdown: ${error.message}`;
     }
     return content;
 }
@@ -93,92 +134,158 @@ async function processAndStoreFile(filePath, userId, filename, mimeType) {
             markdownContent = markdownContent.substring(0, 10000000);
         }
 
+        // Clean and preprocess text before chunking
+        markdownContent = preprocessText(markdownContent);
+
         console.log(`Extracted text length: ${markdownContent.length} characters`);
 
-        // Split text with reasonable chunk size
-        const chunks = splitTextIntoChunks(markdownContent, 1000, 100);
+        // Use recursive text splitter with larger chunks for better semantic coherence
+        // Large chunk size (7000 chars) with 25% overlap (1750 chars) for optimal content preservation
+        const chunks = splitTextIntoChunks(markdownContent, 7000, 1750);
         
         if (chunks.length === 0) {
             throw new Error('No text chunks created from file');
         }
 
-        console.log(`Created ${chunks.length} text chunks`);
+        console.log(`Created ${chunks.length} text chunks using recursive splitter`);
+        
+        // Log chunk size distribution for debugging - including byte counts
+        const chunkSizes = chunks.map(c => c.length);
+        const chunkBytes = chunks.map(c => Buffer.byteLength(c, 'utf8'));
+        const avgSize = chunkSizes.reduce((a, b) => a + b, 0) / chunkSizes.length;
+        const avgBytes = chunkBytes.reduce((a, b) => a + b, 0) / chunkBytes.length;
+        const maxSize = Math.max(...chunkSizes);
+        const maxBytes = Math.max(...chunkBytes);
+        const minSize = Math.min(...chunkSizes);
+        const minBytes = Math.min(...chunkBytes);
+        console.log(`Chunk stats - Avg: ${Math.round(avgSize)} chars (${Math.round(avgBytes)} bytes)`);
+        console.log(`Chunk stats - Min: ${minSize} chars (${minBytes} bytes), Max: ${maxSize} chars (${maxBytes} bytes)`);
+        
+        // Validate that no chunks exceed the byte limit after processing
+        const oversizedChunks = chunkBytes.filter(bytes => bytes > 30000);
+        if (oversizedChunks.length > 0) {
+            console.warn(`Found ${oversizedChunks.length} chunks that exceed 30KB limit but should be handled by validation`);
+        }
 
-        const collectionName = `user-${userId}-collections`; // Collection name for the user
+        // Use consistent collection naming pattern with LLM controller
+        const collectionName = `user_${userId}_collections`;
 
         // Ensure the collection exists before upserting points
         try {
-            const { collections } = await qdrantClient.getCollections();
-            const collectionExists = collections.some(col => col.name === collectionName);
-            if (!collectionExists) {
-                await qdrantClient.createCollection(collectionName, {
-                    vectors: { size: 768, distance: 'Cosine' }, // text-embedding-004 produces 768-dimensional embeddings
-                });
-                console.log(`Collection '${collectionName}' created on the fly for user ${userId}.`);
+            // Use the helper function from qdrant config
+            const wasCreated = await qdrantClient.ensureCollection(collectionName, {
+                size: 768, 
+                distance: 'Cosine'
+            });
+            
+            if (wasCreated) {
+                console.log(`Collection '${collectionName}' created for user ${userId}.`);
+            } else {
+                console.log(`Collection '${collectionName}' already exists for user ${userId}.`);
             }
         } catch (error) {
             console.error(`Error ensuring Qdrant collection exists for user ${userId}:`, error);
-            throw new Error('Failed to ensure Qdrant collection exists.');
+            throw new Error(`Failed to ensure Qdrant collection exists: ${error.message}`);
         }
 
         const points = [];
+        let successfulChunks = 0;
+        let skippedChunks = 0;
 
-        for (const chunk of chunks) {
-            const chunkId = uuidv4(); // Unique ID for each chunk
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            const chunkId = uuidv4();
+            
+            // Validate and potentially truncate chunk before embedding
+            const validatedChunk = validateChunkForEmbedding(chunk);
+            
+            if (!validatedChunk || validatedChunk.length === 0) {
+                console.warn(`Chunk ${i} became empty after validation, skipping`);
+                skippedChunks++;
+                continue;
+            }
+            
+            // Double-check chunk size before embedding
+            const chunkByteSize = Buffer.byteLength(validatedChunk, 'utf8');
+            if (chunkByteSize > 30000) {
+                console.error(`Chunk ${i} is still ${chunkByteSize} bytes after validation, skipping`);
+                skippedChunks++;
+                continue; // Skip this chunk
+            }
+            
             let embedding;
             try {
                 // Use embedContent method for the embedding model
-                const result = await embeddingModel.embedContent(chunk);
+                const result = await embeddingModel.embedContent(validatedChunk);
                 embedding = result.embedding.values;
+                console.log(`Successfully generated embedding for chunk ${i + 1}/${chunks.length} (${validatedChunk.length} chars, ${chunkByteSize} bytes)`);
+                successfulChunks++;
             } catch (error) {
-                console.error(`Error generating embedding for chunk:`, error);
-                console.error(`Chunk content preview: ${chunk.substring(0, 100)}...`);
-                throw new Error(`Failed to generate embedding: ${error.message}`);
+                console.error(`Error generating embedding for chunk ${i}:`, error);
+                console.error(`Chunk content preview: ${validatedChunk.substring(0, 100)}...`);
+                console.error(`Chunk size: ${validatedChunk.length} chars, ${chunkByteSize} bytes`);
+                
+                // Skip this chunk instead of failing the entire file
+                console.warn(`Skipping chunk ${i} due to embedding error`);
+                skippedChunks++;
+                continue;
             }
 
             // Validate embedding
             if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
-                throw new Error('Invalid embedding generated - empty or malformed');
+                console.warn(`Invalid embedding for chunk ${i}, skipping`);
+                skippedChunks++;
+                continue;
             }
 
             points.push({
                 id: chunkId,
                 vector: embedding,
                 payload: {
-                    fileId: uuidv4(), // Original file ID (can be the same for all chunks of one file)
+                    fileId: uuidv4(),
                     userId: userId,
                     originalName: filename,
                     mimeType: mimeType,
                     description: fileDescription,
-                    chunkContent: chunk, // Store the chunk content
+                    chunkContent: validatedChunk,
+                    text: validatedChunk,
+                    content: validatedChunk,
                     uploadDate: new Date().toISOString(),
+                    chunkIndex: i, // Add chunk index for debugging
                 },
             });
         }
 
+        if (points.length === 0) {
+            throw new Error('No valid chunks could be processed for embedding');
+        }
+
+        console.log(`Successfully processed ${successfulChunks} chunks, skipped ${skippedChunks} chunks out of ${chunks.length} total`);
+
         try {
+            // Fix: Use the correct Qdrant client upsert method with proper points format
             await qdrantClient.upsert(collectionName, {
                 wait: true,
-                batch: {
-                    ids: points.map(p => p.id),
-                    vectors: points.map(p => p.vector),
-                    payloads: points.map(p => p.payload),
-                },
+                points: points
             });
+            
             console.log(`File ${filename} processed, split into ${chunks.length} chunks, and stored in Qdrant collection '${collectionName}'.`);
             return {
                 success: true,
-                message: `File processed and ${chunks.length} chunks stored.`,
-                chunksStored: chunks.length,
+                message: `File processed and ${points.length} chunks stored (${skippedChunks} chunks skipped).`,
+                chunksStored: points.length,
+                chunksSkipped: skippedChunks,
+                totalChunks: chunks.length,
                 collectionName: collectionName,
             };
         } catch (error) {
             console.error(`Error storing file chunks in Qdrant:`, error);
             throw new Error('Failed to store file content chunks in vector store.');
         } finally {
-            // Clean up the uploaded file after processing
+            // Fix: Clean up the uploaded file after processing with proper async/await
             try {
-                await fs.unlink(filePath);
+                const fsSync = require('fs');
+                fsSync.unlinkSync(filePath); // Use sync version to avoid callback issues
                 console.log(`Deleted temporary file: ${filePath}`);
             } catch (cleanupError) {
                 console.error(`Error deleting temporary file ${filePath}:`, cleanupError);
@@ -188,6 +295,36 @@ async function processAndStoreFile(filePath, userId, filename, mimeType) {
         console.error('Error in processAndStoreFile:', error.message);
         throw error;
     }
+}
+
+/**
+ * Preprocess text to clean and normalize it before chunking
+ */
+function preprocessText(text) {
+    if (!text || typeof text !== 'string') {
+        return '';
+    }
+
+    // Remove excessive whitespace and normalize line endings
+    text = text.replace(/\r\n/g, '\n'); // Normalize Windows line endings
+    text = text.replace(/\r/g, '\n');   // Normalize Mac line endings
+    
+    // Remove excessive empty lines (more than 2 consecutive)
+    text = text.replace(/\n{3,}/g, '\n\n');
+    
+    // Remove trailing spaces from lines
+    text = text.replace(/[ \t]+$/gm, '');
+    
+    // Normalize multiple spaces to single space (but preserve intentional formatting)
+    text = text.replace(/[ \t]{2,}/g, ' ');
+    
+    // Remove null characters and other control characters except newlines and tabs
+    text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    
+    // Trim overall text
+    text = text.trim();
+    
+    return text;
 }
 
 module.exports = {
