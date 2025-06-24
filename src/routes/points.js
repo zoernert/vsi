@@ -7,8 +7,8 @@ const { authenticateToken } = require('../middleware/auth');
 router.use(authenticateToken);
 
 // Helper function to get user-specific collection name
-function getUserCollectionName(username, collectionName) {
-    return `user_${username}_${collectionName}`;
+function getUserCollectionName(userId, collectionName) {
+    return `user_${userId}_${collectionName}`;
 }
 
 // Helper function to ensure collection exists
@@ -38,8 +38,8 @@ router.post('/:collection/points/search', async (req, res) => {
     try {
         const { collection } = req.params;
         const { vector, limit = 10, with_payload = true, with_vector = false, filter } = req.body;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
         
         // Ensure collection exists before searching
         await ensureCollectionExists(actualCollectionName);
@@ -63,8 +63,8 @@ router.put('/:collection/points', async (req, res) => {
     try {
         const { collection } = req.params;
         const { points } = req.body;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
         
         // Auto-create collection if it doesn't exist
         await ensureCollectionExists(actualCollectionName);
@@ -84,8 +84,8 @@ router.post('/:collection/points', async (req, res) => {
     try {
         const { collection } = req.params;
         const { ids, with_payload = true, with_vector = false } = req.body;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
         
         // Ensure collection exists before retrieving points
         await ensureCollectionExists(actualCollectionName);
@@ -107,8 +107,8 @@ router.post('/:collection/points/delete', async (req, res) => {
     try {
         const { collection } = req.params;
         const { points, filter } = req.body;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
         
         // Ensure collection exists before deleting points
         await ensureCollectionExists(actualCollectionName);

@@ -48,9 +48,10 @@ async function ensureCollection(collectionName, vectorConfig = { size: 768, dist
 }
 
 // Export the client directly with helper functions
-module.exports = qdrantClient;
-module.exports.collectionExists = collectionExists;
-module.exports.ensureCollection = ensureCollection;
+module.exports = Object.assign(qdrantClient, {
+    collectionExists,
+    ensureCollection
+});
 
 console.log('Qdrant client exported with methods:', 
     Object.getOwnPropertyNames(module.exports).filter(name => typeof module.exports[name] === 'function').slice(0, 10)

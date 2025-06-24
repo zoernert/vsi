@@ -91,9 +91,30 @@ async function convertDocumentToMarkdown(filePath, mimeType) {
     return content;
 }
 
-async function processAndStoreFile(filePath, userId, filename, mimeType) {
+async function processAndStoreFile(filePath, userId, filename, mimeType, username, collectionName) {
     try {
-        console.log(`Processing file: ${filename} (${mimeType})`);
+        // Log all received parameters for debugging
+        console.log(`processAndStoreFile called with parameters:`, {
+            filePath,
+            userId,
+            filename,
+            mimeType,
+            username,
+            collectionName
+        });
+        
+        // Validate required parameters
+        if (!collectionName || collectionName === 'collections') {
+            console.error(`Invalid collection name received: "${collectionName}". Expected actual collection name.`);
+            throw new Error('Collection name is required and cannot be the default "collections"');
+        }
+        
+        if (!username) {
+            console.error(`Username is undefined. userId: ${userId}`);
+            throw new Error('Username is required');
+        }
+        
+        console.log(`Processing file: ${filename} (${mimeType}) for user: ${username} (ID: ${userId}) in collection: ${collectionName}`);
         
         // Check file size before processing
         const fs = require('fs');
@@ -167,24 +188,24 @@ async function processAndStoreFile(filePath, userId, filename, mimeType) {
             console.warn(`Found ${oversizedChunks.length} chunks that exceed 30KB limit but should be handled by validation`);
         }
 
-        // Use consistent collection naming pattern with LLM controller
-        const collectionName = `user_${userId}_collections`;
+        // Use consistent collection naming pattern with LLM controller - using userId
+        const actualCollectionName = `user_${userId}_${collectionName}`;
 
         // Ensure the collection exists before upserting points
         try {
             // Use the helper function from qdrant config
-            const wasCreated = await qdrantClient.ensureCollection(collectionName, {
+            const wasCreated = await qdrantClient.ensureCollection(actualCollectionName, {
                 size: 768, 
                 distance: 'Cosine'
             });
             
             if (wasCreated) {
-                console.log(`Collection '${collectionName}' created for user ${userId}.`);
+                console.log(`Collection '${actualCollectionName}' created for user ${username} (ID: ${userId}).`);
             } else {
-                console.log(`Collection '${collectionName}' already exists for user ${userId}.`);
+                console.log(`Collection '${actualCollectionName}' already exists for user ${username} (ID: ${userId}).`);
             }
         } catch (error) {
-            console.error(`Error ensuring Qdrant collection exists for user ${userId}:`, error);
+            console.error(`Error ensuring Qdrant collection exists for user ${username} (ID: ${userId}):`, error);
             throw new Error(`Failed to ensure Qdrant collection exists: ${error.message}`);
         }
 
@@ -244,6 +265,7 @@ async function processAndStoreFile(filePath, userId, filename, mimeType) {
                 payload: {
                     fileId: uuidv4(),
                     userId: userId,
+                    username: username, // Add username to payload for consistency
                     originalName: filename,
                     mimeType: mimeType,
                     description: fileDescription,
@@ -264,19 +286,19 @@ async function processAndStoreFile(filePath, userId, filename, mimeType) {
 
         try {
             // Fix: Use the correct Qdrant client upsert method with proper points format
-            await qdrantClient.upsert(collectionName, {
+            await qdrantClient.upsert(actualCollectionName, {
                 wait: true,
                 points: points
             });
             
-            console.log(`File ${filename} processed, split into ${chunks.length} chunks, and stored in Qdrant collection '${collectionName}'.`);
+            console.log(`File ${filename} processed, split into ${chunks.length} chunks, and stored in Qdrant collection '${actualCollectionName}' for user ${username} (ID: ${userId}).`);
             return {
                 success: true,
                 message: `File processed and ${points.length} chunks stored (${skippedChunks} chunks skipped).`,
                 chunksStored: points.length,
                 chunksSkipped: skippedChunks,
                 totalChunks: chunks.length,
-                collectionName: collectionName,
+                collectionName: actualCollectionName,
             };
         } catch (error) {
             console.error(`Error storing file chunks in Qdrant:`, error);

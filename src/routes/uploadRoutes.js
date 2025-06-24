@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { qdrantClient } = require('../config/qdrant');
+const qdrantClient = require('../config/qdrant');
 const { authenticateToken } = require('../middleware/auth');
 const { createUsageMiddleware, createLimitMiddleware } = require('../middleware/usageTracking');
 const { TIER_LIMITS } = require('../config/tiers');
@@ -51,8 +51,8 @@ const checkFileSize = async (req, res, next) => {
 };
 
 // Helper function to get user-specific collection name
-function getUserCollectionName(username, collectionName) {
-    return `user_${username}_${collectionName}`;
+function getUserCollectionName(userId, collectionName) {
+    return `user_${userId}_${collectionName}`;
 }
 
 // Helper function to extract text from file buffer
@@ -195,7 +195,9 @@ router.post('/collections/:collection/upload',
         try {
             const { collection } = req.params;
             const file = req.file;
+            const userId = req.user.id;
             const username = req.user.username;
+            const actualCollectionName = getUserCollectionName(userId, collection);
             
             if (!file) {
                 return res.status(400).json({ error: 'No file uploaded' });
@@ -230,12 +232,14 @@ router.post('/collections/:collection/upload',
             require('fs').writeFileSync(tempFilePath, file.buffer);
             
             try {
-                // Use the file processor service to handle chunking and embedding
+                // Fix: Pass username and collection as arguments
                 const result = await processAndStoreFile(
                     tempFilePath,
-                    req.user.id, // Use user ID instead of username for consistency
+                    req.user.id,
                     file.originalname,
-                    file.mimetype
+                    file.mimetype,
+                    req.user.username,
+                    collection
                 );
                 
                 // Track usage after successful processing
@@ -285,8 +289,8 @@ router.post('/collections/:collection/upload-url',
         try {
             const { collection } = req.params;
             const { url, filename } = req.body;
-            const username = req.user.username;
-            const actualCollectionName = getUserCollectionName(username, collection);
+            const userId = req.user.id;
+            const actualCollectionName = getUserCollectionName(userId, collection);
             
             if (!url) {
                 return res.status(400).json({ error: 'URL is required' });
@@ -442,8 +446,8 @@ router.post('/collections/:collection/create-text',
         try {
             const { collection } = req.params;
             const { title, content } = req.body;
-            const username = req.user.username;
-            const actualCollectionName = getUserCollectionName(username, collection);
+            const userId = req.user.id;
+            const actualCollectionName = getUserCollectionName(userId, collection);
 
             if (!title || !content) {
                 return res.status(400).json({ error: 'Title and content are required' });
@@ -507,8 +511,8 @@ router.post('/collections/:collection/create-text',
 router.post('/collections/:collection/reindex', async (req, res) => {
     try {
         const { collection } = req.params;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
 
         console.log(`Reindexing collection ${actualCollectionName}`);
         
@@ -529,8 +533,8 @@ router.post('/collections/:collection/search', async (req, res) => {
     try {
         const { collection } = req.params;
         const { query, limit = 10, filter } = req.body;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
            
         if (!query) {
             return res.status(400).json({ error: 'Search query is required' });
@@ -576,8 +580,8 @@ router.post('/collections/:collection/search', async (req, res) => {
 router.get('/collections/:collection/documents/:id', async (req, res) => {
     try {
         const { collection, id } = req.params;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
         
         console.log(`Retrieving document ${id} from collection ${actualCollectionName}`);
         
@@ -607,8 +611,8 @@ router.get('/collections/:collection/documents', async (req, res) => {
     try {
         const { collection } = req.params;
         const { limit = 50, offset = 0 } = req.query;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
         
         console.log(`Listing documents in collection ${actualCollectionName}`);
         
@@ -641,8 +645,8 @@ router.get('/collections/:collection/documents', async (req, res) => {
 router.delete('/collections/:collection/documents/:id', async (req, res) => {
     try {
         const { collection, id } = req.params;
-        const username = req.user.username;
-        const actualCollectionName = getUserCollectionName(username, collection);
+        const userId = req.user.id;
+        const actualCollectionName = getUserCollectionName(userId, collection);
         
         console.log(`Deleting document ${id} from collection ${actualCollectionName}`);
         

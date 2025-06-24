@@ -1,6 +1,6 @@
 const express = require('express');
 const { LlmQaService } = require('../services/llm-qa.service');
-const { qdrantClient } = require('../config/qdrant');
+const qdrantClient = require('../config/qdrant');
 const { authenticateToken } = require('../middleware/auth');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { createUsageMiddleware } = require('../middleware/usageTracking');
@@ -14,8 +14,8 @@ console.log('LLM Q&A controller loaded');
 router.use(authenticateToken);
 
 // Helper function to get user-specific collection name
-function getUserCollectionName(username, collectionName) {
-    return `user_${username}_${collectionName}`;
+function getUserCollectionName(userId, collectionName) {
+    return `user_${userId}_${collectionName}`;
 }
 
 // Helper function to generate embeddings (same as in uploadRoutes)
@@ -61,14 +61,21 @@ router.post('/:collection/ask',
             }
 
             // Get user-specific collection name
-            const username = req.user.username;
-            const actualCollectionName = getUserCollectionName(username, collection);
+            const userId = req.user.id;
+            const actualCollectionName = getUserCollectionName(userId, collection);
 
             // Ensure collection exists before searching
             try {
-                await qdrantClient.ensureCollection(actualCollectionName);
+                // Use getCollection to check existence, do not create if already exists
+                await qdrantClient.getCollection(actualCollectionName);
             } catch (error) {
-                console.warn(`Collection ${actualCollectionName} doesn't exist, creating empty collection for search`);
+                if (error.status === 404 || error.message.includes('Not found') || error.message.includes("doesn't exist")) {
+                    console.warn(`Collection ${actualCollectionName} doesn't exist, creating empty collection for search`);
+                    await qdrantClient.ensureCollection(actualCollectionName);
+                } else {
+                    // If another error, rethrow
+                    throw error;
+                }
             }
 
             // Create vector service that uses your existing search functionality

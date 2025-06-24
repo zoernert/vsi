@@ -39,6 +39,7 @@ const webRoutes = require('./routes/webRoutes');
 const llmQaRoutes = require('./controllers/llm-qa.controller');
 const mcpRoutes = require('./routes/mcpRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const usageRoutes = require('./routes/usageRoutes');
 
 // Make vector service available to routes (you'll need to import your VectorService)
 // const { VectorService } = require('./services/vector.service');
@@ -54,6 +55,7 @@ app.use('/', webRoutes);
 // API routes (require authentication)
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/usage', usageRoutes);
 app.use('/api', collectionRoutes);
 app.use('/api', uploadRoutes);
 app.use('/api/collections', llmQaRoutes); // Add LLM Q&A routes
