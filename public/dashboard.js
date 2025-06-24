@@ -38,6 +38,32 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     loadCollections();
     loadUsageStats();
+
+    // Clipboard paste handler for files and text
+    document.addEventListener('paste', async function(event) {
+        const collection = document.getElementById('upload-collection')?.value;
+        if (!collection) {
+            // Optionally, show a toast or alert
+            // alert('Please select a collection before pasting files or text.');
+            return;
+        }
+
+        // Handle pasted files (images, pdf, office, etc.)
+        if (event.clipboardData && event.clipboardData.files && event.clipboardData.files.length > 0) {
+            for (const file of event.clipboardData.files) {
+                await uploadPastedFile(file, collection);
+            }
+            event.preventDefault();
+            return;
+        }
+
+        // Handle pasted text (create text document)
+        const text = event.clipboardData?.getData('text/plain');
+        if (text && text.trim().length > 0) {
+            await uploadPastedText(text, collection);
+            event.preventDefault();
+        }
+    });
 });
 
 async function loadServerConfig() {
@@ -893,6 +919,75 @@ async function deleteDocument(collection, documentId) {
     } catch (error) {
         console.error('Delete document error:', error);
         alert('Error deleting document. Please try again.');
+    }
+}
+
+// Upload a pasted file (image, pdf, office, etc.)
+async function uploadPastedFile(file, collection) {
+    const progressDiv = document.getElementById('upload-progress');
+    progressDiv.innerHTML = '<div class="progress"><div class="progress-bar" style="width: 50%"></div></div><p>Uploading pasted file...</p>';
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`/api/collections/${collection}/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            progressDiv.innerHTML = `
+                <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 15px; margin-top: 10px;">
+                    <strong><i class="fas fa-check-circle"></i> Pasted file uploaded!</strong><br>
+                    <small>${result.filename} indexed. <a href="${result.downloadUrl}" target="_blank">Download</a></small>
+                </div>
+            `;
+            setTimeout(() => { progressDiv.innerHTML = ''; }, 5000);
+        } else {
+            const error = await response.json();
+            progressDiv.innerHTML = `<div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24;">❌ Upload failed: ${error.error || 'Unknown error'}</div>`;
+            setTimeout(() => { progressDiv.innerHTML = ''; }, 5000);
+        }
+    } catch (error) {
+        progressDiv.innerHTML = `<div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24;">❌ Upload failed.</div>`;
+        setTimeout(() => { progressDiv.innerHTML = ''; }, 5000);
+    }
+}
+
+// Upload pasted text as a text document
+async function uploadPastedText(text, collection) {
+    const progressDiv = document.getElementById('upload-progress');
+    progressDiv.innerHTML = '<div class="progress"><div class="progress-bar" style="width: 50%"></div></div><p>Uploading pasted text...</p>';
+
+    try {
+        const response = await apiCall(`/api/collections/${collection}/create-text`, {
+            method: 'POST',
+            body: JSON.stringify({
+                title: 'Pasted Text',
+                content: text
+            })
+        });
+
+        if (response && response.ok) {
+            progressDiv.innerHTML = `
+                <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 15px; margin-top: 10px;">
+                    <strong><i class="fas fa-check-circle"></i> Pasted text indexed!</strong>
+                </div>
+            `;
+            setTimeout(() => { progressDiv.innerHTML = ''; }, 5000);
+        } else if (response) {
+            const error = await response.json();
+            progressDiv.innerHTML = `<div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24;">❌ Indexing failed: ${error.error || 'Unknown error'}</div>`;
+            setTimeout(() => { progressDiv.innerHTML = ''; }, 5000);
+        }
+    } catch (error) {
+        progressDiv.innerHTML = `<div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px; color: #721c24;">❌ Indexing failed.</div>`;
+        setTimeout(() => { progressDiv.innerHTML = ''; }, 5000);
     }
 }
 
