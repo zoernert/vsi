@@ -1,7 +1,7 @@
 {
-  "name": "vsi-vector-store-service",
+  "name": "tydids",
   "version": "1.0.0",
-  "description": "VSI Vector Store - Document search and retrieval system with AI-powered semantic search",
+  "description": "Turn documents into intelligence. Tydids - Because your documents have stories to tell.",
   "main": "server.js",
   "scripts": {
     "start": "node src/index.js",
@@ -31,12 +31,13 @@
     "semantic-search",
     "ai",
     "embeddings",
-    "postgresql",
+    "tydids",
+    "document-intelligence",
     "nodejs",
     "express",
     "rest-api"
   ],
-  "author": "VSI Team",
+  "author": "STROMDAO GmbH",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0",
@@ -83,10 +84,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/vsi-team/vector-store.git"
+    "url": "https://github.com/stromdao/tydids.git"
   },
   "bugs": {
-    "url": "https://github.com/vsi-team/vector-store/issues"
+    "url": "https://github.com/stromdao/tydids/issues"
   },
-  "homepage": "https://github.com/vsi-team/vector-store#readme"
+  "homepage": "https://github.com/stromdao/tydids#readme"
 }

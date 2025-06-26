@@ -1,6 +1,16 @@
-# VSI Vector Store
+# tydids
+
+**Turn documents into intelligence**  
+*Tydids - Because your documents have stories to tell*
 
 A complete Qdrant-compatible vector database with AI-powered document processing and search capabilities. Features a modern web interface, multi-user support, and comprehensive admin tools.
+
+## 🎨 Branding
+
+- **Primary color:** `#147a50`
+- **Secondary color:** `#e6b41e`
+- **Accent color 1:** `#28aa6e`
+- **Accent color 2:** `#ee7f4b`
 
 ## ✅ Complete Implementation Status
 
@@ -42,8 +52,8 @@ A complete Qdrant-compatible vector database with AI-powered document processing
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/your-repo/vsi-vector-store.git
-cd vsi-vector-store
+git clone https://github.com/your-repo/tydids.git
+cd tydids
 ```
 
 2. **Install dependencies**
@@ -144,7 +154,7 @@ PORT=3001
 NODE_ENV=development
 
 # Database
-DATABASE_URL=./vsi.db
+DATABASE_URL=./tydids.db
 
 # Qdrant Vector Database
 QDRANT_URL=http://localhost:6333
@@ -225,7 +235,8 @@ npm run test:search
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.  
+Copyright © STROMDAO GmbH
 
 ## 🆘 Support
 

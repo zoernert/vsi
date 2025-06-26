@@ -23,6 +23,7 @@ db.initialize().catch(console.error);
 
 console.log('📋 Registering POST /upload/:collection route...');
 
+// Add progress tracking for chunk processing
 router.post('/upload/:collection', (req, res, next) => {
     console.log(`\n🚀 UPLOAD ROUTE HIT!`);
     console.log(`Collection param: ${req.params.collection}`);
@@ -31,168 +32,202 @@ router.post('/upload/:collection', (req, res, next) => {
     console.log(`File present: ${!!req.file}`);
     next();
 }, auth, upload.single('file'), async (req, res) => {
-    const collectionId = req.params.collection;
-    console.log(`\n📤 PROCESSING UPLOAD:`);
-    console.log(`Collection ID: ${collectionId}`);
-    console.log(`User ID: ${req.user?.id}`);
-    console.log(`File info:`, req.file ? {
-        originalname: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-        path: req.file.path
-    } : 'NO FILE');
+    const startTime = Date.now();
+    console.log(`📤 Upload request received for collection ${req.params.collection}`);
     
+    // Set up Server-Sent Events for progress tracking
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+
+    // Helper function to send progress updates
+    const sendProgress = (data) => {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
     try {
-        // Ensure user owns the collection
-        const result = await db.query(
+        const collectionId = parseInt(req.params.collection);
+        
+        if (!req.file) {
+            sendProgress({ 
+                type: 'error', 
+                message: 'No file uploaded' 
+            });
+            return res.end();
+        }
+
+        sendProgress({
+            type: 'progress',
+            stage: 'validation',
+            message: 'Validating file and collection...',
+            progress: 5
+        });
+
+        // Verify user owns the collection
+        const collectionResult = await db.query(
             'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [parseInt(collectionId), req.user.id]
+            [collectionId, req.user.id]
         );
         
-        if (result.rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: `Collection with ID ${collectionId} not found or access denied` 
+        if (collectionResult.rows.length === 0) {
+            sendProgress({
+                type: 'error',
+                message: 'Collection not found or access denied'
             });
+            return res.end();
         }
-        const collection = result.rows[0];
-
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No file uploaded' });
-        }
-
-        console.log(`File uploaded: ${req.file.originalname}, size: ${req.file.size}`);
-
-        // Extract text content from file with enhanced support checking
-        let extractedText = '';
-        let chunksStored = 0;
-        let chunksSkipped = 0;
-
-        // Use enhanced support checking that considers both extension and MIME type
-        const isSupported = processor.isSupportedAdvanced(req.file.path, req.file.mimetype);
         
-        if (isSupported) {
-            try {
-                console.log(`🔄 Attempting text extraction from supported file type...`);
-                extractedText = await processor.extractText(req.file.path, req.file.mimetype);
-                console.log(`✅ Successfully extracted ${extractedText.length} characters from document`);
-                
-                // Analyze document structure
-                const analysis = processor.analyzeDocumentStructure(extractedText);
-                console.log(`📊 Document analysis:`, analysis);
-                
-            } catch (extractError) {
-                console.error('❌ Failed to extract text:', extractError.message);
-                console.error('❌ Extract error stack:', extractError.stack);
-                extractedText = `Content extraction failed for file: ${req.file.originalname}. Error: ${extractError.message}`;
+        const collection = collectionResult.rows[0];
+        
+        sendProgress({
+            type: 'progress',
+            stage: 'processing',
+            message: 'Processing file content...',
+            progress: 10
+        });
+
+        // Extract text from file
+        let extractedText = '';
+        const fileExtension = path.extname(req.file.originalname).toLowerCase();
+        
+        try {
+            if (fileExtension === '.pdf') {
+                const pdfData = await processor.extractText(req.file.path, req.file.mimetype);
+                extractedText = pdfData;
+            } else if (fileExtension === '.docx') {
+                const result = await processor.extractText(req.file.path, req.file.mimetype);
+                extractedText = result;
+            } else if (['.txt', '.md'].includes(fileExtension)) {
+                extractedText = fs.readFileSync(req.file.path, 'utf-8');
+            } else {
+                sendProgress({
+                    type: 'error',
+                    message: `Unsupported file type: ${fileExtension}`
+                });
+                return res.end();
             }
-        } else {
-            console.log(`⚠️  Unsupported file type, storing metadata only`);
-            console.log(`   File extension: ${path.extname(req.file.originalname)}`);
-            console.log(`   MIME type: ${req.file.mimetype}`);
-            extractedText = `Uploaded file: ${req.file.originalname} (unsupported type)`;
+        } catch (extractError) {
+            sendProgress({
+                type: 'error',
+                message: `Failed to extract text: ${extractError.message}`
+            });
+            return res.end();
         }
 
-        // Create chunks using recursive chunking for large documents
+        sendProgress({
+            type: 'progress',
+            stage: 'chunking',
+            message: 'Creating text chunks...',
+            progress: 20
+        });
+
+        // Create chunks
         let chunks;
         if (extractedText.length > 10000) {
-            console.log(`📚 Large document detected (${extractedText.length} chars), using recursive chunking`);
             chunks = embeddings.recursiveChunkText(extractedText, 4000, 1000);
         } else {
-            console.log(`📄 Standard document, using regular chunking`);
             chunks = embeddings.chunkText(extractedText, 4000, 1000);
         }
-        
-        console.log(`📝 Created ${chunks.length} text chunks with 4000 char size and 1000 char overlap`);
 
-        // Get the correct vector size for the embedding model
-        const vectorSize = await embeddings.getVectorSize();
-        console.log(`📏 Using vector size: ${vectorSize} for collection creation`);
+        sendProgress({
+            type: 'progress',
+            stage: 'embedding',
+            message: `Generating embeddings for ${chunks.length} chunks...`,
+            progress: 30,
+            totalChunks: chunks.length
+        });
 
-        // Ensure Qdrant collection exists with correct vector size
-        try {
-            const collectionResult = await qdrant.createCollection(collection.qdrant_collection_name, vectorSize);
-            console.log(`📁 Collection creation result:`, collectionResult);
-        } catch (collectionError) {
-            console.error('❌ Failed to create/verify Qdrant collection:', collectionError.message);
-            return res.status(500).json({
-                success: false,
-                message: 'Failed to create vector collection',
-                error: collectionError.message
+        // Process chunks with progress updates
+        const batchSize = 5;
+        const allPoints = [];
+        let processedChunks = 0;
+
+        for (let i = 0; i < chunks.length; i += batchSize) {
+            const batchChunks = chunks.slice(i, i + batchSize);
+            const batchNumber = Math.floor(i / batchSize) + 1;
+            const totalBatches = Math.ceil(chunks.length / batchSize);
+            
+            sendProgress({
+                type: 'progress',
+                stage: 'embedding',
+                message: `Processing batch ${batchNumber}/${totalBatches}...`,
+                progress: 30 + (40 * (i / chunks.length)),
+                currentBatch: batchNumber,
+                totalBatches: totalBatches,
+                processedChunks: processedChunks,
+                totalChunks: chunks.length
             });
-        }
 
-        // Generate embeddings and store in Qdrant with batch processing
-        if (chunks.length > 0) {
             try {
-                console.log(`🧮 Generating embeddings for ${chunks.length} chunks...`);
+                const chunkEmbeddings = await embeddings.generateEmbeddings(batchChunks);
                 
-                // Process in batches to avoid memory issues and rate limits
-                const batchSize = 5; // Reduced batch size for Gemini API
-                const allPoints = [];
+                const batchPoints = batchChunks.map((chunk, batchIndex) => ({
+                    id: uuidv4(),
+                    vector: chunkEmbeddings[batchIndex],
+                    payload: {
+                        text: chunk,
+                        filename: req.file.originalname,
+                        collection_id: collection.id,
+                        chunk_index: i + batchIndex,
+                        chunk_total: chunks.length,
+                        file_type: fileExtension.substring(1),
+                        chunk_size: chunk.length,
+                        created_at: new Date().toISOString(),
+                        document_type: 'file_upload'
+                    }
+                }));
                 
-                for (let i = 0; i < chunks.length; i += batchSize) {
-                    const batchChunks = chunks.slice(i, i + batchSize);
-                    console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(chunks.length/batchSize)}: ${batchChunks.length} chunks`);
-                    
-                    const chunkEmbeddings = await embeddings.generateEmbeddings(batchChunks);
-                    
-                    // Verify embedding dimensions
-                    if (chunkEmbeddings.length > 0) {
-                        const embeddingSize = chunkEmbeddings[0].length;
-                        console.log(`✅ Generated embeddings with ${embeddingSize} dimensions`);
-                        
-                        if (embeddingSize !== vectorSize) {
-                            console.warn(`⚠️  Warning: Embedding size (${embeddingSize}) doesn't match expected vector size (${vectorSize})`);
-                        }
-                    }
-                    
-                    // Prepare points for this batch
-                    const batchPoints = batchChunks.map((chunk, batchIndex) => ({
-                        id: uuidv4(),
-                        vector: chunkEmbeddings[batchIndex],
-                        payload: {
-                            text: chunk,
-                            filename: req.file.originalname,
-                            collection_id: collection.id,
-                            chunk_index: i + batchIndex,
-                            chunk_total: chunks.length,
-                            file_type: path.extname(req.file.originalname).replace('.', '').toLowerCase(),
-                            chunk_size: chunk.length,
-                            created_at: new Date().toISOString()
-                        }
-                    }));
-                    
-                    allPoints.push(...batchPoints);
-                    
-                    // Longer delay between batches for Gemini rate limiting
-                    if (i + batchSize < chunks.length) {
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    }
+                allPoints.push(...batchPoints);
+                processedChunks += batchChunks.length;
+                
+                // Small delay between batches for rate limiting
+                if (i + batchSize < chunks.length) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
-
-                // Store all points in Qdrant
-                console.log(`📤 Storing ${allPoints.length} points in Qdrant...`);
-                try {
-                    await qdrant.upsertPoints(collection.qdrant_collection_name, allPoints);
-                    chunksStored = allPoints.length;
-                    console.log(`✅ Stored ${chunksStored} chunks in Qdrant with enhanced metadata`);
-                } catch (upsertError) {
-                    console.error('❌ Failed to store points in Qdrant:', upsertError.message);
-                    console.error('❌ Upsert error details:', upsertError.response?.data);
-                    chunksSkipped = chunks.length;
-                    
-                    // Continue with document creation even if vector storage fails
-                    console.log('⚠️  Continuing with document creation despite vector storage failure');
-                }
+                
             } catch (embeddingError) {
-                console.error('❌ Failed to process embeddings:', embeddingError.message);
-                console.error('❌ Embedding error stack:', embeddingError.stack);
-                chunksSkipped = chunks.length;
+                sendProgress({
+                    type: 'warning',
+                    message: `Failed to process batch ${batchNumber}: ${embeddingError.message}`
+                });
             }
         }
 
-        // Insert file metadata as a document
+        sendProgress({
+            type: 'progress',
+            stage: 'storing',
+            message: 'Storing vectors in database...',
+            progress: 75
+        });
+
+        // Store all points in Qdrant
+        let chunksStored = 0;
+        try {
+            await qdrant.upsertPoints(collection.qdrant_collection_name, allPoints);
+            chunksStored = allPoints.length;
+        } catch (upsertError) {
+            sendProgress({
+                type: 'warning',
+                message: `Vector storage warning: ${upsertError.message}`
+            });
+        }
+
+        sendProgress({
+            type: 'progress',
+            stage: 'finalizing',
+            message: 'Saving document metadata...',
+            progress: 90
+        });
+
+        // Insert document metadata
+        const preview = extractedText.length > 500 
+            ? extractedText.substring(0, 500) + '...' 
+            : extractedText;
+
         const insertResult = await db.query(
             `INSERT INTO documents 
                 (filename, file_type, collection_id, created_at, updated_at, content_preview, content) 
@@ -200,44 +235,48 @@ router.post('/upload/:collection', (req, res, next) => {
              RETURNING id, filename, file_type, collection_id, created_at, updated_at`,
             [
                 req.file.originalname,
-                path.extname(req.file.originalname).replace('.', '').toLowerCase(),
+                fileExtension.substring(1),
                 collection.id,
-                processor.generatePreview(extractedText),
+                preview,
                 extractedText
             ]
         );
-        const doc = insertResult.rows[0];
 
-        // Clean up uploaded file
-        try {
-            fs.unlinkSync(req.file.path);
-        } catch (cleanupError) {
-            console.warn('Failed to cleanup uploaded file:', cleanupError.message);
-        }
+        const document = insertResult.rows[0];
+        const processingTime = Date.now() - startTime;
 
-        console.log(`Document created with ID: ${doc.id}`);
-
-        res.json({
-            success: true,
-            message: 'File uploaded and processed successfully',
-            document: doc,
-            collection: collection.name,
-            chunksStored,
-            chunksSkipped,
-            totalChunks: chunks.length,
-            chunkSize: 4000,
-            chunkOverlap: 1000,
-            processingMethod: extractedText.length > 10000 ? 'recursive' : 'standard',
-            extractedLength: extractedText.length,
-            extractionSuccessful: isSupported && extractedText.length > 100
+        sendProgress({
+            type: 'complete',
+            message: 'Upload completed successfully!',
+            progress: 100,
+            data: {
+                success: true,
+                document: {
+                    id: document.id,
+                    filename: document.filename,
+                    fileType: document.file_type,
+                    contentPreview: preview,
+                    collectionId: document.collection_id,
+                    createdAt: document.created_at,
+                    updatedAt: document.updated_at
+                },
+                collection: collection.name,
+                chunksStored,
+                totalChunks: chunks.length,
+                processingTimeMs: processingTime,
+                contentLength: extractedText.length
+            }
         });
-    } catch (err) {
-        console.error('❌ Upload error:', err);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Internal server error',
-            error: err.message 
+
+        res.end();
+
+    } catch (error) {
+        console.error('❌ Upload error:', error);
+        sendProgress({
+            type: 'error',
+            message: `Upload failed: ${error.message}`
         });
+        res.end();
     }
 });
 
