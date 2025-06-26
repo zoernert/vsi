@@ -21,16 +21,37 @@
             color: white;
         }
         
-        .nav-link {
+        .sidebar .nav-link {
             color: rgba(255, 255, 255, 0.8) !important;
             border-radius: 8px;
             margin: 2px 0;
             transition: all 0.2s;
         }
         
-        .nav-link:hover, .nav-link.active {
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
             color: white !important;
             background: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Tab navigation links in main content area */
+        .nav-tabs .nav-link {
+            color: #374151 !important;
+            border: 1px solid transparent;
+            border-radius: 8px 8px 0 0;
+            margin-right: 4px;
+            transition: all 0.2s;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            color: var(--primary-color) !important;
+            border-color: #e5e7eb;
+            background: #f9fafb;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: var(--primary-color) !important;
+            background: white;
+            border-color: #e5e7eb #e5e7eb white #e5e7eb;
         }
         
         .card {
@@ -88,24 +109,81 @@
             border-radius: 12px;
             padding: 1rem;
             background: #fafafa;
+            scroll-behavior: smooth;
         }
         
         .message {
             margin-bottom: 1rem;
             padding: 0.75rem 1rem;
-            border-radius: 8px;
+            border-radius: 12px;
+            animation: fadeInUp 0.3s ease;
         }
         
         .message.user {
             background: var(--primary-color);
             color: white;
             margin-left: 2rem;
+            border-bottom-right-radius: 4px;
         }
         
         .message.assistant {
             background: white;
             border: 1px solid #e2e8f0;
             margin-right: 2rem;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .message-sources {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .source-item {
+            padding: 0.25rem 0;
+            border-left: 3px solid var(--primary-color);
+            padding-left: 0.5rem;
+            margin: 0.25rem 0;
+            background: rgba(37, 99, 235, 0.05);
+            border-radius: 4px;
+        }
+        
+        .message-time {
+            opacity: 0.7;
+            font-size: 0.75rem;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .chat-input-container {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 0.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .chat-settings-card {
+            /* Remove fixed height constraints and allow natural height */
+            /* Only constrain height on very small screens */
+        }
+        
+        /* Only apply height limit on smaller screens where space is constrained */
+        @media (max-height: 768px) {
+            .chat-settings-card {
+                max-height: 300px;
+                overflow-y: auto;
+            }
         }
         
         .hidden {
@@ -496,44 +574,98 @@
                         <div id="chatTab" class="hidden">
                             <div class="row">
                                 <div class="col-md-8">
+                                    <div class="mb-3">
+                                        <h5>
+                                            <i class="fas fa-robot me-2"></i>
+                                            AI Assistant for "<span id="chatCollectionName">Collection</span>"
+                                        </h5>
+                                        <p class="text-muted small">Ask questions about your documents and get intelligent responses with source attribution.</p>
+                                    </div>
+                                    
                                     <div class="chat-container" id="chatMessages">
                                         <div class="text-center text-muted p-4">
                                             <i class="fas fa-comments fa-2x mb-3"></i>
                                             <p>Start a conversation about your documents!</p>
+                                            <div class="mt-3">
+                                                <small class="text-muted">Try asking:</small>
+                                                <ul class="list-unstyled small text-muted mt-2">
+                                                    <li>• "What are the main topics in these documents?"</li>
+                                                    <li>• "Summarize the key findings"</li>
+                                                    <li>• "What does the document say about [topic]?"</li>
+                                                </ul>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="input-group mt-3">
-                                        <input type="text" class="form-control" id="chatInput" 
-                                               placeholder="Ask questions about your documents...">
-                                        <button class="btn btn-primary" onclick="app.sendChatMessage()" id="chatSendBtn">
-                                            <i class="fas fa-paper-plane"></i>
-                                        </button>
+                                    
+                                    <div class="chat-input-container mt-3">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control border-0" id="chatInput" 
+                                                   placeholder="Ask a question about your documents..." 
+                                                   style="box-shadow: none;">
+                                            <button class="btn btn-primary" onclick="app.sendChatMessage()" id="chatSendBtn">
+                                                <i class="fas fa-paper-plane"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-2 text-center">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Responses are generated using Google Gemini AI based on your documents
+                                        </small>
                                     </div>
                                 </div>
+                                
                                 <div class="col-md-4">
-                                    <div class="card">
+                                    <div class="card chat-settings-card">
                                         <div class="card-header">
                                             <h6><i class="fas fa-cog me-2"></i>Chat Settings</h6>
                                         </div>
                                         <div class="card-body">
                                             <div class="mb-3">
-                                                <label class="form-label">Max Results</label>
+                                                <label class="form-label">Max Sources</label>
                                                 <select class="form-select" id="chatMaxResults">
                                                     <option value="3">3 sources</option>
                                                     <option value="5" selected>5 sources</option>
                                                     <option value="10">10 sources</option>
+                                                    <option value="15">15 sources</option>
                                                 </select>
+                                                <small class="text-muted">Number of document chunks to use for context</small>
                                             </div>
+                                            
                                             <div class="mb-3">
-                                                <label class="form-label">System Prompt</label>
-                                                <textarea class="form-control" id="chatSystemPrompt" rows="3" 
-                                                          placeholder="Optional custom instructions..."></textarea>
+                                                <label class="form-label">Custom Instructions</label>
+                                                <textarea class="form-control" id="chatSystemPrompt" rows="4" 
+                                                          placeholder="Optional: Customize how the AI should respond (e.g., 'Be concise', 'Focus on technical details', etc.)"></textarea>
+                                                <small class="text-muted">Leave empty for default behavior</small>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <label class="form-label">Quick Actions</label>
+                                                <div class="d-grid gap-2">
+                                                    <button class="btn btn-outline-primary btn-sm" onclick="app.insertQuickPrompt('Summarize the main points')">
+                                                        <i class="fas fa-list me-1"></i>Summarize
+                                                    </button>
+                                                    <button class="btn btn-outline-primary btn-sm" onclick="app.insertQuickPrompt('What are the key takeaways?')">
+                                                        <i class="fas fa-key me-1"></i>Key Points
+                                                    </button>
+                                                    <button class="btn btn-outline-primary btn-sm" onclick="app.insertQuickPrompt('Explain this in simple terms')">
+                                                        <i class="fas fa-lightbulb me-1"></i>Simplify
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="text-center">
+                                                <button class="btn btn-outline-secondary btn-sm" onclick="app.clearChatHistory()">
+                                                    <i class="fas fa-trash me-1"></i>Clear Chat
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
                     </div>
 
                     <!-- Admin View -->

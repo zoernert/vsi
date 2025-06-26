@@ -22,6 +22,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const { QdrantService } = require('./services/qdrantService');
 const { EmbeddingService } = require('./services/embeddingService');
 const { GeminiService } = require('./services/geminiService');
+const { v4: uuidv4 } = require('uuid');
 
 // Initialize services
 const db = new DatabaseService();
@@ -522,6 +523,341 @@ app.post('/api/collections', auth, async (req, res) => {
     }
 });
 
+// Collection deletion endpoint
+app.delete('/api/collections/:id', auth, async (req, res) => {
+    console.log(`🗑️ Delete collection request for ID: ${req.params.id}`);
+    try {
+        const collectionId = parseInt(req.params.id);
+        
+        // Verify user owns the collection
+        const collectionResult = await db.query(
+            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
+            [collectionId, req.user.id]
+        );
+        
+        if (collectionResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Collection not found' });
+        }
+        
+        const collection = collectionResult.rows[0];
+        
+        try {
+            // Delete the Qdrant collection
+            await qdrant.deleteCollection(collection.qdrant_collection_name);
+            console.log(`✅ Deleted Qdrant collection: ${collection.qdrant_collection_name}`);
+        } catch (qdrantError) {
+            console.warn(`⚠️ Failed to delete Qdrant collection: ${qdrantError.message}`);
+            // Continue with database deletion even if Qdrant fails
+        }
+        
+        // Delete all documents in the collection (cascade should handle this, but be explicit)
+        await db.query('DELETE FROM documents WHERE collection_id = $1', [collectionId]);
+        
+        // Delete the collection from database
+        await db.query('DELETE FROM collections WHERE id = $1', [collectionId]);
+        
+        console.log(`✅ Deleted collection ${collection.name} (ID: ${collectionId})`);
+        
+        res.json({
+            success: true,
+            message: 'Collection deleted successfully'
+        });
+    } catch (error) {
+        console.error('Collection deletion error:', error);
+        res.status(500).json({ success: false, message: 'Failed to delete collection' });
+    }
+});
+
+// Document deletion endpoint
+app.delete('/api/collections/:collectionId/documents/:documentId', auth, async (req, res) => {
+    console.log(`🗑️ Delete document request: Collection ${req.params.collectionId}, Document ${req.params.documentId}`);
+    try {
+        const collectionId = parseInt(req.params.collectionId);
+        const documentId = parseInt(req.params.documentId);
+        
+        // Verify user owns the collection
+        const collectionResult = await db.query(
+            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
+            [collectionId, req.user.id]
+        );
+        
+        if (collectionResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Collection not found' });
+        }
+        
+        // Get document info
+        const documentResult = await db.query(
+            'SELECT * FROM documents WHERE id = $1 AND collection_id = $2',
+            [documentId, collectionId]
+        );
+        
+        if (documentResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Document not found' });
+        }
+        
+        const document = documentResult.rows[0];
+        const collection = collectionResult.rows[0];
+        
+        // Delete related vector points from Qdrant
+        try {
+            // Search for all points related to this document
+            const queryEmbedding = await embeddingService.generateEmbedding(document.filename);
+            const relatedPoints = await qdrant.searchPoints(
+                collection.qdrant_collection_name,
+                queryEmbedding,
+                100, // Get more results to find all chunks
+                0.0  // Very low threshold to get all chunks
+            );
+            
+            // Filter points that belong to this specific document
+            const documentPoints = relatedPoints.filter(point => 
+                point.payload.filename === document.filename
+            );
+            
+            if (documentPoints.length > 0) {
+                console.log(`🗑️ Found ${documentPoints.length} vector points to delete for document ${document.filename}`);
+                
+                // Delete each point individually (Qdrant doesn't have batch delete by filter)
+                for (const point of documentPoints) {
+                    try {
+                        await qdrant.client.delete(`/collections/${collection.qdrant_collection_name}/points/${point.id}`);
+                    } catch (deleteError) {
+                        console.warn(`⚠️ Failed to delete vector point ${point.id}:`, deleteError.message);
+                    }
+                }
+            }
+        } catch (qdrantError) {
+            console.warn(`⚠️ Failed to delete vector data for document: ${qdrantError.message}`);
+            // Continue with database deletion even if Qdrant fails
+        }
+        
+        // Delete document from database
+        await db.query('DELETE FROM documents WHERE id = $1', [documentId]);
+        
+        console.log(`✅ Deleted document ${document.filename} (ID: ${documentId})`);
+        
+        res.json({
+            success: true,
+            message: 'Document deleted successfully'
+        });
+    } catch (error) {
+        console.error('Document deletion error:', error);
+        res.status(500).json({ success: false, message: 'Failed to delete document' });
+    }
+});
+
+// Create text document endpoint
+app.post('/api/collections/:id/documents/create-text', auth, async (req, res) => {
+    console.log(`📝 Create text document request for collection ${req.params.id}`);
+    try {
+        const collectionId = parseInt(req.params.id);
+        const { title, content, type = 'txt' } = req.body;
+        
+        if (!title || !content) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Title and content are required' 
+            });
+        }
+        
+        // Verify user owns the collection
+        const collectionResult = await db.query(
+            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
+            [collectionId, req.user.id]
+        );
+        
+        if (collectionResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Collection not found' });
+        }
+        
+        const collection = collectionResult.rows[0];
+        
+        // Create filename from title
+        const filename = `${title.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_')}.${type}`;
+        
+        // Process the text content for vector storage
+        let chunksStored = 0;
+        let chunksSkipped = 0;
+        
+        // Create chunks from the text
+        let chunks;
+        if (content.length > 10000) {
+            console.log(`📚 Large text document (${content.length} chars), using recursive chunking`);
+            chunks = embeddingService.recursiveChunkText(content, 4000, 1000);
+        } else {
+            console.log(`📄 Standard text document, using regular chunking`);
+            chunks = embeddingService.chunkText(content, 4000, 1000);
+        }
+        
+        console.log(`📝 Created ${chunks.length} text chunks`);
+        
+        // Get the correct vector size for the embedding model
+        const vectorSize = await embeddingService.getVectorSize();
+        
+        // Ensure Qdrant collection exists with correct vector size
+        try {
+            const collectionResult = await qdrant.createCollection(collection.qdrant_collection_name, vectorSize);
+            console.log(`📁 Collection creation result:`, collectionResult);
+        } catch (collectionError) {
+            console.error('❌ Failed to create/verify Qdrant collection:', collectionError.message);
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to create vector collection',
+                error: collectionError.message
+            });
+        }
+        
+        // Generate embeddings and store in Qdrant
+        if (chunks.length > 0) {
+            try {
+                console.log(`🧮 Generating embeddings for ${chunks.length} chunks...`);
+                
+                // Process in batches
+                const batchSize = 5;
+                const allPoints = [];
+                
+                for (let i = 0; i < chunks.length; i += batchSize) {
+                    const batchChunks = chunks.slice(i, i + batchSize);
+                    console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(chunks.length/batchSize)}: ${batchChunks.length} chunks`);
+                    
+                    const chunkEmbeddings = await embeddingService.generateEmbeddings(batchChunks);
+                    
+                    // Prepare points for this batch
+                    const batchPoints = batchChunks.map((chunk, batchIndex) => ({
+                        id: uuidv4(),
+                        vector: chunkEmbeddings[batchIndex],
+                        payload: {
+                            text: chunk,
+                            filename: filename,
+                            collection_id: collection.id,
+                            chunk_index: i + batchIndex,
+                            chunk_total: chunks.length,
+                            file_type: type,
+                            chunk_size: chunk.length,
+                            created_at: new Date().toISOString(),
+                            document_type: 'text_created'
+                        }
+                    }));
+                    
+                    allPoints.push(...batchPoints);
+                    
+                    // Delay between batches for rate limiting
+                    if (i + batchSize < chunks.length) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+                
+                // Store all points in Qdrant
+                console.log(`📤 Storing ${allPoints.length} points in Qdrant...`);
+                try {
+                    await qdrant.upsertPoints(collection.qdrant_collection_name, allPoints);
+                    chunksStored = allPoints.length;
+                    console.log(`✅ Stored ${chunksStored} chunks in Qdrant`);
+                } catch (upsertError) {
+                    console.error('❌ Failed to store points in Qdrant:', upsertError.message);
+                    chunksSkipped = chunks.length;
+                    console.log('⚠️  Continuing with document creation despite vector storage failure');
+                }
+            } catch (embeddingError) {
+                console.error('❌ Failed to process embeddings:', embeddingError.message);
+                chunksSkipped = chunks.length;
+            }
+        }
+        
+        // Generate preview from content
+        const preview = content.length > 500 
+            ? content.substring(0, 500) + '...' 
+            : content;
+        
+        // Insert document metadata into database
+        const insertResult = await db.query(
+            `INSERT INTO documents 
+                (filename, file_type, collection_id, created_at, updated_at, content_preview, content) 
+             VALUES ($1, $2, $3, NOW(), NOW(), $4, $5)
+             RETURNING id, filename, file_type, collection_id, created_at, updated_at`,
+            [
+                filename,
+                type,
+                collection.id,
+                preview,
+                content
+            ]
+        );
+        
+        const document = insertResult.rows[0];
+        
+        console.log(`✅ Created text document with ID: ${document.id}`);
+        
+        res.json({
+            success: true,
+            message: 'Text document created successfully',
+            document: {
+                id: document.id,
+                filename: document.filename,
+                fileType: document.file_type,
+                contentPreview: preview,
+                collectionId: document.collection_id,
+                createdAt: document.created_at,
+                updatedAt: document.updated_at
+            },
+            collection: collection.name,
+            chunksStored,
+            chunksSkipped,
+            totalChunks: chunks.length,
+            processingMethod: content.length > 10000 ? 'recursive' : 'standard',
+            contentLength: content.length
+        });
+    } catch (error) {
+        console.error('❌ Create text document error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to create text document',
+            error: error.message 
+        });
+    }
+});
+
+// Upload URL endpoint
+app.post('/api/collections/:id/documents/upload-url', auth, async (req, res) => {
+    console.log(`🌐 Upload from URL request for collection ${req.params.id}`);
+    try {
+        const collectionId = parseInt(req.params.id);
+        const { url } = req.body;
+        
+        if (!url) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'URL is required' 
+            });
+        }
+        
+        // Verify user owns the collection
+        const collectionResult = await db.query(
+            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
+            [collectionId, req.user.id]
+        );
+        
+        if (collectionResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Collection not found' });
+        }
+        
+        // For now, return a placeholder response
+        // In a full implementation, you would fetch the URL content and process it
+        res.json({
+            success: false,
+            message: 'URL upload functionality not yet implemented',
+            note: 'This feature requires additional implementation for fetching and processing remote content'
+        });
+    } catch (error) {
+        console.error('❌ Upload URL error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to upload from URL',
+            error: error.message 
+        });
+    }
+});
+
 // Upload routes - Add debugging before registration
 console.log('📁 Registering upload routes...');
 app.use('/api', (req, res, next) => {
@@ -577,5 +913,3 @@ initializeApp().then(() => {
     console.error('Failed to start server:', error);
     process.exit(1);
 });
-
-

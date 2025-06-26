@@ -102,6 +102,43 @@ class QdrantService {
         }
     }
 
+    async deletePoints(collectionName, pointIds) {
+        try {
+            console.log(`🗑️ Deleting ${pointIds.length} points from ${collectionName}`);
+            
+            const response = await this.client.post(`/collections/${collectionName}/points/delete`, {
+                points: pointIds
+            });
+            
+            console.log(`✅ Deleted ${pointIds.length} points from Qdrant`);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Error deleting points from Qdrant:', error.message);
+            
+            if (error.response?.data) {
+                console.error('❌ Qdrant delete response details:', error.response.data);
+            }
+            
+            throw error;
+        }
+    }
+
+    async deletePoint(collectionName, pointId) {
+        try {
+            console.log(`🗑️ Deleting point ${pointId} from ${collectionName}`);
+            
+            const response = await this.client.post(`/collections/${collectionName}/points/delete`, {
+                points: [pointId]
+            });
+            
+            console.log(`✅ Deleted point ${pointId} from Qdrant`);
+            return response.data;
+        } catch (error) {
+            console.error(`❌ Error deleting point ${pointId} from Qdrant:`, error.message);
+            throw error;
+        }
+    }
+
     async getCollectionInfo(collectionName) {
         try {
             const response = await this.client.get(`/collections/${collectionName}`);
