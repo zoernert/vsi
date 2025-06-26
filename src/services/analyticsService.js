@@ -82,13 +82,24 @@ class AnalyticsService {
 
     async getCollectionStats() {
         try {
-            // This would require querying Qdrant for collection info
-            // For now, return mock data since we don't have direct collection document counts
-            return [
-                { name: 'documents', documentCount: 0 },
-                { name: 'images', documentCount: 0 },
-                { name: 'research', documentCount: 0 }
-            ];
+            // Get actual collection stats from database
+            const query = `
+                SELECT 
+                    c.name,
+                    COUNT(d.id) as document_count
+                FROM collections c
+                LEFT JOIN documents d ON c.id = d.collection_id
+                GROUP BY c.id, c.name
+                ORDER BY document_count DESC
+                LIMIT 10
+            `;
+            
+            const result = await this.db.pool.query(query);
+            
+            return result.rows.map(row => ({
+                name: row.name,
+                documentCount: parseInt(row.document_count) || 0
+            }));
             
         } catch (error) {
             console.error('Error getting collection stats:', error);

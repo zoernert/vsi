@@ -7,7 +7,24 @@ const { authenticateToken } = require('../middleware/auth');
 router.use(authenticateToken);
 
 // Helper function to get user-specific collection name
-function getUserCollectionName(userId, collectionName) {
+async function getUserCollectionName(userId, collectionName) {
+    // Import database service
+    const { DatabaseService } = require('../services/databaseService');
+    const db = new DatabaseService();
+    if (!db.pool) await db.initialize();
+    
+    // If collectionName is numeric, get the Qdrant collection name from database
+    if (!isNaN(collectionName)) {
+        const result = await db.pool.query(
+            'SELECT qdrant_collection_name FROM collections WHERE id = $1 AND user_id = $2',
+            [parseInt(collectionName), userId]
+        );
+        if (result.rows.length > 0) {
+            return result.rows[0].qdrant_collection_name;
+        }
+    }
+    
+    // Fallback to old naming scheme
     return `user_${userId}_${collectionName}`;
 }
 
@@ -47,55 +64,33 @@ async function ensureCollectionExists(actualCollectionName, config = null) {
 // Get user's collections (filtered by user)
 router.get('/', async (req, res) => {
     try {
-        console.log('Getting collections for user:', req.user.id);
-        console.log('qdrantClient available methods:', Object.getOwnPropertyNames(qdrantClient).filter(name => typeof qdrantClient[name] === 'function').slice(0, 5));
+        const { VectorService } = require('../services/vector.service');
+        const vectorService = new VectorService();
         
-        const allCollections = await qdrantClient.getCollections();
-        const userId = req.user.id;
-        const userPrefix = `user_${userId}_`;
+        const collections = await vectorService.getUserCollections(req.user.id, true);
         
-        // Filter collections that belong to this user
-        const userCollections = allCollections.collections
-            .filter(collection => collection.name.startsWith(userPrefix))
-            .map(collection => ({
-                name: getOriginalCollectionName(userId, collection.name),
-                actualName: collection.name,
-                vectors_count: collection.vectors_count || 0,
-                status: collection.status || 'green'
-            }));
-        
-        console.log(`Found ${userCollections.length} collections for user ${userId}`);
-        res.json({ collections: userCollections });
+        console.log(`Found ${collections.length} collections for user ${req.user.id}`);
+        res.json({ collections });
     } catch (error) {
         console.error('Collections route error:', error);
-        console.error('Error details:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-        });
         res.status(500).json({ error: error.message });
     }
 });
 
 // Create collection
-router.put('/:name', async (req, res) => {
+router.post('/', async (req, res) => {
     try {
-        const { name } = req.params;
-        const { vectors } = req.body;
+        const { name, description } = req.body;
         const userId = req.user.id;
         
-        // Create user-specific collection name
-        const actualCollectionName = getUserCollectionName(userId, name);
+        const { VectorService } = require('../services/vector.service');
+        const vectorService = new VectorService();
         
-        await ensureCollectionExists(actualCollectionName, {
-            vectors: vectors || {
-                size: 768,
-                distance: 'Cosine'
-            }
-        });
+        const collection = await vectorService.createCollection(userId, name, description);
         
-        res.json({ result: true });
+        res.json({ result: true, collection });
     } catch (error) {
+        console.error('Create collection error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -105,7 +100,7 @@ router.get('/:name', async (req, res) => {
     try {
         const { name } = req.params;
         const userId = req.user.id;
-        const actualCollectionName = getUserCollectionName(userId, name);
+        const actualCollectionName = await getUserCollectionName(userId, name);
         
         await ensureCollectionExists(actualCollectionName);
         const info = await qdrantClient.getCollection(actualCollectionName);
@@ -120,7 +115,7 @@ router.delete('/:name', async (req, res) => {
     try {
         const { name } = req.params;
         const userId = req.user.id;
-        const actualCollectionName = getUserCollectionName(userId, name);
+        const actualCollectionName = await getUserCollectionName(userId, name);
         
         await qdrantClient.deleteCollection(actualCollectionName);
         res.json({ result: true });

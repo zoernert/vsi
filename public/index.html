@@ -3,294 +3,662 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VSI Vector Store - Welcome</title>
-    <link rel="stylesheet" href="fiori-styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>VSI Vector Store</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        .hero-section {
-            background: linear-gradient(135deg, var(--fiori-primary) 0%, #0056b3 100%);
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #059669;
+            --danger-color: #dc2626;
+            --warning-color: #d97706;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--primary-color), #1e40af);
             color: white;
-            padding: 80px 20px;
-            text-align: center;
-            margin-bottom: 40px;
         }
         
-        .hero-title {
-            font-size: 3rem;
-            font-weight: 700;
-            margin-bottom: 16px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .hero-subtitle {
-            font-size: 1.2rem;
-            opacity: 0.95;
-            margin-bottom: 32px;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        
-        .hero-actions {
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        .hero-btn {
-            padding: 16px 32px;
-            font-size: 16px;
-            font-weight: 600;
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8) !important;
             border-radius: 8px;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            transition: all 0.3s ease;
-            box-shadow: var(--fiori-shadow-sm);
+            margin: 2px 0;
+            transition: all 0.2s;
         }
         
-        .hero-btn.primary {
-            background: white;
-            color: var(--fiori-primary);
+        .nav-link:hover, .nav-link.active {
+            color: white !important;
+            background: rgba(255, 255, 255, 0.1);
         }
         
-        .hero-btn.primary:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--fiori-shadow-md);
-        }
-        
-        .hero-btn.secondary {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            border: 2px solid rgba(255,255,255,0.3);
-        }
-        
-        .hero-btn.secondary:hover {
-            background: rgba(255,255,255,0.2);
-            border-color: rgba(255,255,255,0.5);
-        }
-        
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 24px;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
-        
-        .feature-card {
-            background: var(--fiori-bg-primary);
-            border: 1px solid var(--fiori-border);
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             border-radius: 12px;
-            padding: 32px;
-            box-shadow: var(--fiori-shadow-sm);
-            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .search-container {
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .collection-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        
+        .collection-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border-radius: 12px;
+        }
+        
+        .upload-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 3rem;
             text-align: center;
+            background: #f8fafc;
+            transition: all 0.2s;
         }
         
-        .feature-card:hover {
-            box-shadow: var(--fiori-shadow-md);
-            transform: translateY(-4px);
+        .upload-zone:hover {
+            border-color: var(--primary-color);
+            background: #f1f5f9;
         }
         
-        .feature-icon {
-            font-size: 3rem;
-            margin-bottom: 20px;
-            display: block;
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1rem;
+            background: #fafafa;
         }
         
-        .feature-icon.primary { color: var(--fiori-primary); }
-        .feature-icon.success { color: var(--fiori-success); }
-        .feature-icon.info { color: var(--fiori-info); }
-        .feature-icon.warning { color: var(--fiori-warning); }
-        
-        .feature-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 16px;
-            color: var(--fiori-text-primary);
-        }
-        
-        .feature-description {
-            color: var(--fiori-text-secondary);
-            line-height: 1.6;
-            margin-bottom: 24px;
-        }
-        
-        .stats-section {
-            background: var(--fiori-bg-secondary);
-            padding: 60px 20px;
-            margin: 60px 0;
-        }
-        
-        .stats-container {
-            max-width: 800px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        
-        .stats-title {
-            font-size: 2rem;
-            font-weight: 600;
-            margin-bottom: 40px;
-            color: var(--fiori-text-primary);
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 24px;
-        }
-        
-        .stat-item {
-            background: var(--fiori-bg-primary);
-            padding: 24px;
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
             border-radius: 8px;
-            box-shadow: var(--fiori-shadow-sm);
         }
         
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--fiori-primary);
-            margin-bottom: 8px;
+        .message.user {
+            background: var(--primary-color);
+            color: white;
+            margin-left: 2rem;
         }
         
-        .stat-label {
-            color: var(--fiori-text-secondary);
-            font-weight: 500;
+        .message.assistant {
+            background: white;
+            border: 1px solid #e2e8f0;
+            margin-right: 2rem;
         }
         
-        @media (max-width: 768px) {
-            .hero-title {
-                font-size: 2rem;
-            }
-            
-            .hero-actions {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .features-grid {
-                grid-template-columns: 1fr;
-                padding: 0 16px;
-            }
-            
-            .feature-card {
-                padding: 24px;
-            }
+        .hidden {
+            display: none !important;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <!-- Hero Section -->
-    <div class="hero-section">
-        <h1 class="hero-title">
-            <i class="fas fa-rocket"></i>
-            VSI Vector Store
-        </h1>
-        <p class="hero-subtitle">
-            Qdrant-compatible vector database with AI-powered document processing, 
-            semantic search, and intelligent Q&A capabilities.
-        </p>
-        <div class="hero-actions">
-            <a href="/dashboard.html" class="hero-btn primary">
-                <i class="fas fa-tachometer-alt"></i>
-                Open Dashboard
-            </a>
-            <a href="/login.html" class="hero-btn secondary">
-                <i class="fas fa-sign-in-alt"></i>
-                Login / Register
-            </a>
-        </div>
-    </div>
-
-    <!-- Features Section -->
-    <div class="features-grid">
-        <div class="feature-card">
-            <i class="fas fa-upload feature-icon primary"></i>
-            <h3 class="feature-title">Smart Document Upload</h3>
-            <p class="feature-description">
-                Upload PDFs, Word docs, Excel files, images, and text files. 
-                Our AI automatically extracts and indexes content for semantic search.
-            </p>
-            <a href="/dashboard.html" class="fiori-btn primary">
-                <i class="fas fa-arrow-right"></i>
-                Start Uploading
-            </a>
-        </div>
-
-        <div class="feature-card">
-            <i class="fas fa-brain feature-icon success"></i>
-            <h3 class="feature-title">AI-Powered Q&A</h3>
-            <p class="feature-description">
-                Ask questions about your documents in natural language. 
-                Get intelligent answers with source references and context.
-            </p>
-            <a href="/dashboard.html" class="fiori-btn secondary">
-                <i class="fas fa-comments"></i>
-                Try Q&A
-            </a>
-        </div>
-
-        <div class="feature-card">
-            <i class="fas fa-database feature-icon info"></i>
-            <h3 class="feature-title">Vector Database</h3>
-            <p class="feature-description">
-                Built on Qdrant with full API compatibility. 
-                Store and search millions of vectors with high performance.
-            </p>
-            <a href="/dashboard.html" class="fiori-btn secondary">
-                <i class="fas fa-code"></i>
-                View API
-            </a>
-        </div>
-
-        <div class="feature-card">
-            <i class="fas fa-search feature-icon warning"></i>
-            <h3 class="feature-title">Semantic Search</h3>
-            <p class="feature-description">
-                Find documents by meaning, not just keywords. 
-                Our embeddings understand context and relationships.
-            </p>
-            <a href="/dashboard.html" class="fiori-btn secondary">
-                <i class="fas fa-search"></i>
-                Search Now
-            </a>
-        </div>
-    </div>
-
-    <!-- Stats Section -->
-    <div class="stats-section">
-        <div class="stats-container">
-            <h2 class="stats-title">Powerful & Scalable</h2>
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <div class="stat-number">768</div>
-                    <div class="stat-label">Vector Dimensions</div>
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Login to VSI Vector Store</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-number">10+</div>
-                    <div class="stat-label">File Types Supported</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">∞</div>
-                    <div class="stat-label">Documents</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">99.9%</div>
-                    <div class="stat-label">Uptime</div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" id="loginUsername" required 
+                                   placeholder="Try: stromdao">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-control" id="loginPassword" required
+                                   placeholder="Try: Maus12Rad">
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Login</button>
+                    </form>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            Default admin from .env: username=stromdao, password=Maus12Rad
+                        </small>
+                    </div>
+                    <hr>
+                    <p class="text-center mb-0">
+                        Don't have an account? 
+                        <a href="#" onclick="showRegister()">Register here</a>
+                    </p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Footer -->
-    <div style="text-align: center; padding: 40px 20px; color: var(--fiori-text-secondary);">
-        <p>© 2024 VSI Vector Store. Built with ❤️ for intelligent document management.</p>
+    <!-- Register Modal -->
+    <div class="modal fade" id="registerModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Register for VSI Vector Store</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" id="registerUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-control" id="registerPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="confirmPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Register</button>
+                    </form>
+                    <hr>
+                    <p class="text-center mb-0">
+                        Already have an account? 
+                        <a href="#" onclick="showLogin()">Login here</a>
+                    </p>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <!-- Main App -->
+    <div id="app" class="hidden">
+        <div class="row g-0">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar">
+                <div class="p-3">
+                    <h4 class="mb-4">
+                        <i class="fas fa-database me-2"></i>
+                        VSI Vector Store
+                    </h4>
+                    <nav class="nav flex-column">
+                        <a class="nav-link active" href="#" onclick="showDashboard()">
+                            <i class="fas fa-home me-2"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="#" onclick="showCollections()">
+                            <i class="fas fa-folder me-2"></i> Collections
+                        </a>
+                        <a class="nav-link" href="#" onclick="showSearch()">
+                            <i class="fas fa-search me-2"></i> Search
+                        </a>
+                        <a class="nav-link" href="#" onclick="showUsage()">
+                            <i class="fas fa-chart-bar me-2"></i> Usage
+                        </a>
+                        <div id="adminNav" class="hidden">
+                            <hr class="text-light">
+                            <a class="nav-link" href="#" onclick="showAdmin()">
+                                <i class="fas fa-cog me-2"></i> Admin
+                            </a>
+                        </div>
+                        <hr class="text-light">
+                        <a class="nav-link" href="#" onclick="logout()">
+                            <i class="fas fa-sign-out-alt me-2"></i> Logout
+                        </a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10">
+                <div class="p-4">
+                    <div id="userInfo" class="d-flex justify-content-between align-items-center mb-4">
+                        <h2 id="pageTitle">Dashboard</h2>
+                        <div>
+                            <span class="text-muted">Welcome, </span>
+                            <strong id="currentUser"></strong>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard View -->
+                    <div id="dashboardView">
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card stats-card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-folder fa-2x mb-2"></i>
+                                        <h3 id="collectionsCount">-</h3>
+                                        <p class="mb-0">Collections</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stats-card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-file fa-2x mb-2"></i>
+                                        <h3 id="documentsCount">-</h3>
+                                        <p class="mb-0">Documents</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stats-card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-search fa-2x mb-2"></i>
+                                        <h3 id="searchesCount">-</h3>
+                                        <p class="mb-0">Searches</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stats-card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                                        <h3 id="uploadsCount">-</h3>
+                                        <p class="mb-0">Uploads</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="search-container">
+                            <h4><i class="fas fa-search me-2"></i>Quick Search</h4>
+                            <div class="input-group">
+                                <input type="text" class="form-control form-control-lg" id="quickSearch" 
+                                       placeholder="Search across all your collections...">
+                                <button class="btn btn-primary" onclick="performQuickSearch()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="fas fa-folder me-2"></i>Recent Collections</h5>
+                                    </div>
+                                    <div class="card-body" id="recentCollections">
+                                        <!-- Recent collections will be loaded here -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="fas fa-clock me-2"></i>Recent Activity</h5>
+                                    </div>
+                                    <div class="card-body" id="recentActivity">
+                                        <!-- Recent activity will be loaded here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Collections View -->
+                    <div id="collectionsView" class="hidden">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h3>My Collections</h3>
+                            <button class="btn btn-primary" onclick="showCreateCollection()">
+                                <i class="fas fa-plus me-2"></i>Create Collection
+                            </button>
+                        </div>
+                        <div id="collectionsGrid" class="row">
+                            <!-- Collections will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Search View -->
+                    <div id="searchView" class="hidden">
+                        <div class="search-container">
+                            <h3><i class="fas fa-search me-2"></i>Global Search</h3>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control form-control-lg" id="globalSearchInput" 
+                                       placeholder="Search across all collections...">
+                                <button class="btn btn-primary" onclick="performGlobalSearch()">
+                                    <i class="fas fa-search"></i> Search
+                                </button>
+                            </div>
+                        </div>
+                        <div id="searchResults">
+                            <!-- Search results will be displayed here -->
+                        </div>
+                    </div>
+
+                    <!-- Usage View -->
+                    <div id="usageView" class="hidden">
+                        <h3>Usage Statistics</h3>
+                        <div id="usageStats">
+                            <!-- Usage statistics will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Collection Detail View -->
+                    <div id="collectionDetailView" class="hidden">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div>
+                                <button class="btn btn-outline-secondary me-3" onclick="showCollections()">
+                                    <i class="fas fa-arrow-left me-2"></i>Back to Collections
+                                </button>
+                                <h3 id="collectionDetailTitle">Collection Details</h3>
+                            </div>
+                            <div>
+                                <button class="btn btn-outline-primary me-2" onclick="app.showUploadModal()">
+                                    <i class="fas fa-upload me-2"></i>Upload Files
+                                </button>
+                                <button class="btn btn-outline-info me-2" onclick="app.showCreateTextModal()">
+                                    <i class="fas fa-plus me-2"></i>Create Text
+                                </button>
+                                <button class="btn btn-danger" onclick="app.deleteCurrentCollection()">
+                                    <i class="fas fa-trash me-2"></i>Delete Collection
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Collection Stats -->
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card stats-card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-file fa-2x mb-2"></i>
+                                        <h3 id="collectionDocuments">-</h3>
+                                        <p class="mb-0">Documents</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stats-card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-cube fa-2x mb-2"></i>
+                                        <h3 id="collectionChunks">-</h3>
+                                        <p class="mb-0">Chunks</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stats-card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-database fa-2x mb-2"></i>
+                                        <h3 id="collectionSize">-</h3>
+                                        <p class="mb-0">Size</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card stats-card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-clock fa-2x mb-2"></i>
+                                        <h3 id="collectionUpdated">-</h3>
+                                        <p class="mb-0">Last Updated</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabs -->
+                        <ul class="nav nav-tabs mb-4">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="#" onclick="app.showCollectionTab('documents')">
+                                    <i class="fas fa-file me-2"></i>Documents
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="app.showCollectionTab('search')">
+                                    <i class="fas fa-search me-2"></i>Search
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="app.showCollectionTab('chat')">
+                                    <i class="fas fa-comments me-2"></i>AI Chat
+                                </a>
+                            </li>
+                        </ul>
+
+                        <!-- Documents Tab -->
+                        <div id="documentsTab">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5>Documents</h5>
+                                <div>
+                                    <select class="form-select d-inline-block w-auto me-2" id="documentTypeFilter">
+                                        <option value="">All Types</option>
+                                        <option value="pdf">PDF</option>
+                                        <option value="docx">Word</option>
+                                        <option value="txt">Text</option>
+                                        <option value="md">Markdown</option>
+                                    </select>
+                                    <button class="btn btn-outline-secondary" onclick="app.loadCollectionDocuments()">
+                                        <i class="fas fa-refresh"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="documentsGrid" class="row">
+                                <!-- Documents will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Search Tab -->
+                        <div id="searchTab" class="hidden">
+                            <div class="search-container">
+                                <h5><i class="fas fa-search me-2"></i>Search in Collection</h5>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control form-control-lg" id="collectionSearchInput" 
+                                           placeholder="Search documents in this collection...">
+                                    <button class="btn btn-primary" onclick="app.performCollectionSearch()">
+                                        <i class="fas fa-search"></i> Search
+                                    </button>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Results Limit</label>
+                                        <select class="form-select" id="searchLimit">
+                                            <option value="5">5 results</option>
+                                            <option value="10" selected>10 results</option>
+                                            <option value="20">20 results</option>
+                                            <option value="50">50 results</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Similarity Threshold</label>
+                                        <select class="form-select" id="searchThreshold">
+                                            <option value="0.3">Low (30%)</option>
+                                            <option value="0.5" selected>Medium (50%)</option>
+                                            <option value="0.7">High (70%)</option>
+                                            <option value="0.9">Very High (90%)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="collectionSearchResults">
+                                <!-- Search results will be displayed here -->
+                            </div>
+                        </div>
+
+                        <!-- Chat Tab -->
+                        <div id="chatTab" class="hidden">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="chat-container" id="chatMessages">
+                                        <div class="text-center text-muted p-4">
+                                            <i class="fas fa-comments fa-2x mb-3"></i>
+                                            <p>Start a conversation about your documents!</p>
+                                        </div>
+                                    </div>
+                                    <div class="input-group mt-3">
+                                        <input type="text" class="form-control" id="chatInput" 
+                                               placeholder="Ask questions about your documents...">
+                                        <button class="btn btn-primary" onclick="app.sendChatMessage()" id="chatSendBtn">
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6><i class="fas fa-cog me-2"></i>Chat Settings</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Max Results</label>
+                                                <select class="form-select" id="chatMaxResults">
+                                                    <option value="3">3 sources</option>
+                                                    <option value="5" selected>5 sources</option>
+                                                    <option value="10">10 sources</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">System Prompt</label>
+                                                <textarea class="form-control" id="chatSystemPrompt" rows="3" 
+                                                          placeholder="Optional custom instructions..."></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Admin View -->
+                    <div id="adminView" class="hidden">
+                        <h3>Admin Dashboard</h3>
+                        <div id="adminContent">
+                            <!-- Admin content will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload Files</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-zone" id="uploadZone">
+                        <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
+                        <h5>Drop files here or click to browse</h5>
+                        <p class="text-muted">Supports: PDF, Word, Text, Markdown, Images</p>
+                        <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.md,.jpg,.jpeg,.png" style="display: none;">
+                        <button class="btn btn-outline-primary">
+                            Choose Files
+                        </button>                      
+                    </div>
+                    <div id="uploadProgress" class="hidden mt-3">
+                        <div class="progress">
+                            <div class="progress-bar" id="uploadProgressBar" style="width: 0%"></div>
+                        </div>
+                        <div id="uploadStatus" class="mt-2"></div>
+                    </div>
+                    <hr>
+                    <h6>Upload from URL</h6>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="urlInput" placeholder="https://example.com/document.pdf">
+                        <button class="btn btn-outline-primary" onclick="app.uploadFromUrl()">
+                            Upload URL
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Text Modal -->
+    <div class="modal fade" id="createTextModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Text Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createTextForm">
+                        <div class="mb-3">
+                            <label class="form-label">Document Title</label>
+                            <input type="text" class="form-control" id="textTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Content Type</label>
+                            <select class="form-select" id="textType">
+                                <option value="txt">Plain Text</option>
+                                <option value="md">Markdown</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Content</label>
+                            <textarea class="form-control" id="textContent" rows="10" required 
+                                      placeholder="Enter your text content here..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Create Document
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Profile Modal -->
+    <div class="modal fade" id="profileModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">User Profile</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="profileForm">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" id="profileUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="profileEmail">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Profile</button>
+                    </form>
+                    <hr>
+                    <h6>Change Password</h6>
+                    <form id="passwordForm">
+                        <div class="mb-3">
+                            <label class="form-label">Current Password</label>
+                            <input type="password" class="form-control" id="currentPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">New Password</label>
+                            <input type="password" class="form-control" id="newPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-warning">Change Password</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

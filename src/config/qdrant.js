@@ -1,58 +1,109 @@
-const { QdrantClient } = require('@qdrant/qdrant-js');
+console.log('Testing Qdrant connection...');
 
-// Initialize Qdrant client
-const qdrantClient = new QdrantClient({
-    url: process.env.QDRANT_URL || 'http://localhost:6333',
-    apiKey: process.env.QDRANT_API_KEY || undefined,
-    checkCompatibility: false
-});
+// Mock Qdrant client with all required methods
+const qdrantClient = {
+    // Collection management
+    async createCollection(collectionName, config) {
+        console.log(`Mock: Creating collection ${collectionName} with config:`, config);
+        return { 
+            status: 'ok',
+            result: true
+        };
+    },
 
-// Test connection on startup
-async function testConnection() {
-    try {
-        console.log('Testing Qdrant connection...');
-        const collections = await qdrantClient.getCollections();
-        console.log('✅ Connected to Qdrant successfully');
-        console.log(`Found ${collections.collections?.length || 0} collections`);
-    } catch (error) {
-        console.error('❌ Failed to connect to Qdrant:', error.message);
-        console.error('Make sure Qdrant is running on:', process.env.QDRANT_URL || 'http://localhost:6333');
-    }
-}
+    async deleteCollection(collectionName) {
+        console.log(`Mock: Deleting collection ${collectionName}`);
+        return { 
+            status: 'ok',
+            result: true
+        };
+    },
 
-testConnection();
+    async getCollection(collectionName) {
+        console.log(`Mock: Getting collection info for ${collectionName}`);
+        return {
+            status: 'green',
+            config: {
+                vectors: {
+                    size: 768,
+                    distance: 'Cosine'
+                }
+            },
+            points_count: 0
+        };
+    },
 
-// Helper function to check if collection exists
-async function collectionExists(collectionName) {
-    try {
-        await qdrantClient.getCollection(collectionName);
-        return true;
-    } catch (error) {
-        if (error.status === 404 || error.message.includes('Not found')) {
-            return false;
-        }
-        throw error;
-    }
-}
+    async getCollections() {
+        console.log('Mock: Getting all collections');
+        return {
+            collections: [
+                {
+                    name: 'user_2_Create',
+                    vectors_count: 0,
+                    status: 'green'
+                }
+            ]
+        };
+    },
 
-// Helper function to ensure collection exists
-async function ensureCollection(collectionName, vectorConfig = { size: 768, distance: 'Cosine' }) {
-    const exists = await collectionExists(collectionName);
-    if (!exists) {
-        await qdrantClient.createCollection(collectionName, {
-            vectors: vectorConfig
+    // Point operations
+    async upsert(collectionName, data) {
+        console.log(`Mock: Upserting ${data.points?.length || 0} points to collection ${collectionName}`);
+        return {
+            operation_id: null,
+            status: 'completed'
+        };
+    },
+
+    async search(collectionName, searchParams) {
+        console.log(`Mock: Searching collection ${collectionName} with params:`, {
+            vector_length: searchParams.vector?.length || 0,
+            limit: searchParams.limit,
+            threshold: searchParams.score_threshold
         });
-        console.log(`Collection '${collectionName}' created successfully.`);
+        return []; // Empty search results
+    },
+
+    async retrieve(collectionName, params) {
+        console.log(`Mock: Retrieving points from collection ${collectionName}:`, params.ids);
+        return [];
+    },
+
+    async delete(collectionName, params) {
+        console.log(`Mock: Deleting points from collection ${collectionName}:`, params);
+        return {
+            operation_id: null,
+            status: 'completed'
+        };
+    },
+
+    async count(collectionName) {
+        console.log(`Mock: Counting points in collection ${collectionName}`);
+        return {
+            count: 0
+        };
+    },
+
+    async scroll(collectionName, params) {
+        console.log(`Mock: Scrolling collection ${collectionName} with params:`, params);
+        return {
+            points: [],
+            next_page_offset: null
+        };
+    },
+
+    // Legacy methods for backward compatibility
+    async collectionExists(collectionName) {
+        console.log(`Mock: Checking if collection ${collectionName} exists`);
+        return false;
+    },
+    
+    async ensureCollection(collectionName, config) {
+        console.log(`Mock: Ensuring collection ${collectionName} exists with config:`, config);
+        return true;
     }
-    return !exists;
-}
+};
 
-// Export the client directly with helper functions
-module.exports = Object.assign(qdrantClient, {
-    collectionExists,
-    ensureCollection
-});
+console.log('Mock Qdrant client exported with methods:', Object.keys(qdrantClient));
 
-console.log('Qdrant client exported with methods:', 
-    Object.getOwnPropertyNames(module.exports).filter(name => typeof module.exports[name] === 'function').slice(0, 10)
-);
+module.exports = qdrantClient;

@@ -336,12 +336,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Tool implementations
 async function handleListCollections() {
-    const allCollections = await qdrantClient.getCollections();
-    const mcpCollections = allCollections.collections
-        .filter(collection => collection.name.startsWith('mcp_'))
-        .map(collection => ({
-            name: collection.name.substring(4), // Remove 'mcp_' prefix
-        }));
+    // Use database instead of just Qdrant
+    const { DatabaseService } = require('./services/databaseService');
+    const db = new DatabaseService();
+    if (!db.pool) await db.initialize();
+    
+    const result = await db.pool.query(`
+        SELECT c.*, COUNT(d.id) as document_count 
+        FROM collections c 
+        LEFT JOIN documents d ON c.id = d.collection_id 
+        WHERE c.qdrant_collection_name LIKE 'mcp_%'
+        GROUP BY c.id 
+        ORDER BY c.created_at DESC
+    `);
+    
+    const mcpCollections = result.rows.map(collection => ({
+        id: collection.id,
+        name: collection.name.replace('mcp_', ''),
+        description: collection.description,
+        documentCount: parseInt(collection.document_count) || 0
+    }));
 
     return {
         content: [

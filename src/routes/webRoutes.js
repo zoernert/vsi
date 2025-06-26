@@ -117,14 +117,14 @@ curl -H "Authorization: Bearer YOUR_TOKEN" ${baseUrl}/api/collections
 curl -H "Authorization: Bearer YOUR_TOKEN" ${baseUrl}/api/collections
 
 # Create collection
-curl -X PUT -H "Authorization: Bearer YOUR_TOKEN" \\
+curl -X POST -H "Authorization: Bearer YOUR_TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d '{"name":"my-collection"}' \\
-  ${baseUrl}/api/collections/my-collection
+  -d '{"name":"my-collection","description":"My collection"}' \\
+  ${baseUrl}/api/collections
 
 # Delete collection
 curl -X DELETE -H "Authorization: Bearer YOUR_TOKEN" \\
-  ${baseUrl}/api/collections/my-collection
+  ${baseUrl}/api/collections/{collection-id}
 \`\`\`
 
 ### Document Operations

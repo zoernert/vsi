@@ -14,7 +14,24 @@ console.log('LLM Q&A controller loaded');
 router.use(authenticateToken);
 
 // Helper function to get user-specific collection name
-function getUserCollectionName(userId, collectionName) {
+async function getUserCollectionName(userId, collectionName) {
+    // Import database service
+    const { DatabaseService } = require('../services/databaseService');
+    const db = new DatabaseService();
+    if (!db.pool) await db.initialize();
+    
+    // If collectionName is numeric, get the Qdrant collection name from database
+    if (!isNaN(collectionName)) {
+        const result = await db.pool.query(
+            'SELECT qdrant_collection_name FROM collections WHERE id = $1 AND user_id = $2',
+            [parseInt(collectionName), userId]
+        );
+        if (result.rows.length > 0) {
+            return result.rows[0].qdrant_collection_name;
+        }
+    }
+    
+    // Fallback to old naming scheme
     return `user_${userId}_${collectionName}`;
 }
 
@@ -31,6 +48,11 @@ async function generateEmbedding(text) {
         
         const textByteSize = Buffer.byteLength(validatedText, 'utf8');
         console.log(`Generating embedding for text: ${validatedText.length} chars, ${textByteSize} bytes`);
+        
+        if (!process.env.GOOGLE_AI_API_KEY) {
+            console.error('Google AI API key not configured');
+            return new Array(768).fill(0);
+        }
         
         const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
@@ -62,7 +84,7 @@ router.post('/:collection/ask',
 
             // Get user-specific collection name
             const userId = req.user.id;
-            const actualCollectionName = getUserCollectionName(userId, collection);
+            const actualCollectionName = await getUserCollectionName(userId, collection);
 
             // Ensure collection exists before searching
             try {
@@ -96,44 +118,56 @@ router.post('/:collection/ask',
                         });
 
                         console.log(`Found ${searchResult.length} results from Qdrant`);
+                        
+                        // Get document metadata from PostgreSQL for each Qdrant result
                         if (searchResult.length > 0) {
-                            console.log('First result payload keys:', Object.keys(searchResult[0].payload));
-                            // Check what content fields are available
-                            const firstPayload = searchResult[0].payload;
-                            const availableContentFields = ['text', 'content', 'chunkContent', 'markdown', 'chunk'].filter(field => firstPayload[field]);
-                            console.log('Available content fields:', availableContentFields);
-                        }
-
-                        // Transform results to extract actual content
-                        return searchResult.map(result => {
-                            // Get the actual text content from the payload - try multiple field names
-                            let content = result.payload?.text || 
-                                         result.payload?.content || 
-                                         result.payload?.chunkContent ||
-                                         result.payload?.markdown || 
-                                         result.payload?.chunk ||
-                                         `Document: ${result.payload?.originalName || result.payload?.filename || 'Unknown'}`;
+                            const { DatabaseService } = require('../services/databaseService');
+                            const db = new DatabaseService();
+                            if (!db.pool) await db.initialize();
                             
-                            // If this is a file result, add file metadata
-                            if (result.payload?.originalName) {
-                                const fileInfo = `📄 File: ${result.payload.originalName}`;
-                                if (result.payload.downloadUrl) {
-                                    content = `${fileInfo}\nDownload: ${result.payload.downloadUrl}\n\nContent:\n${content}`;
-                                } else {
-                                    content = `${fileInfo}\n\nContent:\n${content}`;
+                            const pointIds = searchResult.map(hit => hit.id);
+                            const documentsResult = await db.pool.query(
+                                `SELECT * FROM documents WHERE qdrant_point_id = ANY($1)`,
+                                [pointIds]
+                            );
+                            
+                            // Combine Qdrant payload with PostgreSQL metadata
+                            return searchResult.map(result => {
+                                const dbDoc = documentsResult.rows.find(d => d.qdrant_point_id === result.id);
+                                
+                                // Get content from Qdrant payload or PostgreSQL
+                                let content = result.payload?.text || 
+                                             result.payload?.content || 
+                                             result.payload?.chunkContent ||
+                                             result.payload?.markdown || 
+                                             result.payload?.chunk ||
+                                             dbDoc?.content ||
+                                             `Document: ${result.payload?.filename || dbDoc?.filename || 'Unknown'}`;
+                                
+                                // If this is a file result, add file metadata
+                                if (result.payload?.filename || dbDoc?.filename) {
+                                    const filename = result.payload?.filename || dbDoc?.filename;
+                                    const fileInfo = `📄 File: ${filename}`;
+                                    if (result.payload?.downloadUrl) {
+                                        content = `${fileInfo}\nDownload: ${result.payload.downloadUrl}\n\nContent:\n${content}`;
+                                    } else {
+                                        content = `${fileInfo}\n\nContent:\n${content}`;
+                                    }
                                 }
-                            }
-                            
-                            console.log(`Content length for result ${result.id}: ${content.length} characters`);
-                            
-                            return {
-                                metadata: {
-                                    content: content
-                                },
-                                score: result.score,
-                                id: result.id
-                            };
-                        });
+                                
+                                console.log(`Content length for result ${result.id}: ${content.length} characters`);
+                                
+                                return {
+                                    metadata: {
+                                        content: content
+                                    },
+                                    score: result.score,
+                                    id: result.id
+                                };
+                            });
+                        }
+                        
+                        return [];
                         
                     } catch (error) {
                         console.error(`Vector search failed for query "${query}" in collection "${actualCollectionName}":`, error);

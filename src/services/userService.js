@@ -1,8 +1,9 @@
 const { DatabaseService } = require('./databaseService');
+const databaseConfig = require('../config/database');
 
 class UserService {
     constructor() {
-        this.db = new DatabaseService();
+        this.db = new DatabaseService(databaseConfig);
     }
 
     // Maintain exact same interface as before for backward compatibility

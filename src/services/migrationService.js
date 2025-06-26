@@ -7,259 +7,340 @@ class MigrationService {
         this.db = new DatabaseService();
     }
 
-    async createUsersTable() {
+    async runMigrations() {
         try {
-            console.log('Creating users table...');
+            console.log('Running database migrations...');
             
-            const createUsersTable = `
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    username VARCHAR(255) UNIQUE NOT NULL,
-                    password VARCHAR(255) NOT NULL,
-                    email VARCHAR(255),
-                    is_admin BOOLEAN DEFAULT FALSE,
-                    tier VARCHAR(50) DEFAULT 'free',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    created_by VARCHAR(255)
-                );
-            `;
-            
-            await this.db.pool.query(createUsersTable);
-            
-            // Create indexes
-            const createIndexes = `
-                CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-                CREATE INDEX IF NOT EXISTS idx_users_is_admin ON users(is_admin);
-                CREATE INDEX IF NOT EXISTS idx_users_tier ON users(tier);
-            `;
-            
-            await this.db.pool.query(createIndexes);
-            
-            console.log('✅ Users table created successfully');
-        } catch (error) {
-            console.error('❌ Error creating users table:', error);
-            throw error;
-        }
-    }
-
-    async createUsageTrackingTable() {
-        try {
-            console.log('Creating usage_tracking table...');
-            
-            const createUsageTable = `
-                CREATE TABLE IF NOT EXISTS usage_tracking (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                    resource_type VARCHAR(50) NOT NULL,
-                    amount INTEGER NOT NULL DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            `;
-            
-            await this.db.pool.query(createUsageTable);
-            
-            // Create indexes
-            const createIndexes = `
-                CREATE INDEX IF NOT EXISTS idx_usage_user_id ON usage_tracking(user_id);
-                CREATE INDEX IF NOT EXISTS idx_usage_resource_type ON usage_tracking(resource_type);
-                CREATE INDEX IF NOT EXISTS idx_usage_created_at ON usage_tracking(created_at);
-            `;
-            
-            await this.db.pool.query(createIndexes);
-            
-            console.log('✅ Usage tracking table created successfully');
-        } catch (error) {
-            console.error('❌ Error creating usage tracking table:', error);
-            throw error;
-        }
-    }
-
-    async createFilesTable() {
-        try {
-            console.log('Creating files table...');
-            
-            const createFilesTable = `
-                CREATE TABLE IF NOT EXISTS files (
-                    id SERIAL PRIMARY KEY,
-                    uuid VARCHAR(255) UNIQUE NOT NULL,
-                    original_name VARCHAR(255) NOT NULL,
-                    mime_type VARCHAR(100) NOT NULL,
-                    file_data BYTEA NOT NULL,
-                    file_size BIGINT NOT NULL,
-                    uploaded_by VARCHAR(255) NOT NULL,
-                    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            `;
-            
-            await this.db.pool.query(createFilesTable);
-            
-            // Create indexes
-            const createIndexes = `
-                CREATE INDEX IF NOT EXISTS idx_files_uuid ON files(uuid);
-                CREATE INDEX IF NOT EXISTS idx_files_uploaded_by ON files(uploaded_by);
-                CREATE INDEX IF NOT EXISTS idx_files_uploaded_at ON files(uploaded_at);
-            `;
-            
-            await this.db.pool.query(createIndexes);
-            
-            console.log('✅ Files table created successfully');
-        } catch (error) {
-            console.error('❌ Error creating files table:', error);
-            throw error;
-        }
-    }
-
-    async migrateUsersFromJson() {
-        try {
-            const usersFilePath = path.join(__dirname, '..', '..', 'data', 'users.json');
-            
-            if (!fs.existsSync(usersFilePath)) {
-                console.log('No users.json file found, skipping migration');
-                return;
+            // Initialize database connection if not already done
+            if (!this.db.pool) {
+                await this.db.initialize();
             }
 
-            console.log('Migrating users from JSON...');
-            const usersData = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
-            
-            for (const [username, userData] of Object.entries(usersData)) {
-                await this.db.pool.query(`
-                    INSERT INTO users (username, password, is_admin, created_at, created_by, tier)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (username) DO NOTHING
-                `, [
-                    username,
-                    userData.password,
-                    userData.isAdmin || false,
-                    userData.createdAt || new Date().toISOString(),
-                    userData.createdBy || 'migration',
-                    'unlimited' // Existing users get unlimited access
-                ]);
-            }
-
-            console.log('✅ User migration completed successfully');
-            
-            // Backup original file
-            fs.renameSync(usersFilePath, `${usersFilePath}.backup`);
-            
-        } catch (error) {
-            console.error('❌ User migration failed:', error);
-            throw error;
-        }
-    }
-
-    async ensureAdminUser() {
-        try {
-            console.log('Ensuring admin user exists...');
-            
-            const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-            const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-
+            // Create migrations table if it doesn't exist
             await this.db.pool.query(`
-                INSERT INTO users (username, password, is_admin, created_by, tier)
-                VALUES ($1, $2, true, 'system', 'unlimited')
-                ON CONFLICT (username) DO UPDATE SET
-                    is_admin = true,
-                    tier = 'unlimited'
-            `, [adminUsername, adminPassword]);
+                CREATE TABLE IF NOT EXISTS migrations (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL UNIQUE,
+                    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
 
-            console.log('✅ Admin user ensured');
+            // Create users table if it doesn't exist
+            await this.createUsersTable();
+            
+            // Create collections table if it doesn't exist
+            await this.createCollectionsTable();
+
+            // Create usage tracking table
+            await this.createUsageTrackingTable();
+
+            // Create files table for file storage
+            await this.createFilesTable();
+
+            console.log('✅ All migrations completed successfully');
         } catch (error) {
-            console.error('❌ Error ensuring admin user:', error);
+            console.error('❌ Migration failed:', error);
             throw error;
         }
     }
 
-    async migrateFilesFromFilesystem() {
+    async createUsersTable() {
+        const migrationName = 'create_users_table';
+        
         try {
-            const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+            // First, check if the users table exists at all
+            const tableExists = await this.db.pool.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'users'
+                );
+            `);
             
-            if (!fs.existsSync(uploadsDir)) {
-                console.log('No uploads directory found, skipping file migration');
-                return;
-            }
-            
-            console.log('Migrating files from filesystem to database...');
-            
-            // Import FileService here to avoid circular dependency
-            const { FileService } = require('./fileService');
-            const fileService = new FileService();
-            
-            const files = fs.readdirSync(uploadsDir);
-            let migratedCount = 0;
-            
-            for (const filename of files) {
-                try {
-                    const filePath = path.join(uploadsDir, filename);
-                    const stats = fs.statSync(filePath);
+            if (!tableExists.rows[0].exists) {
+                console.log('Users table does not exist, creating it...');
+                
+                // Create users table with proper structure for PostgreSQL
+                await this.db.pool.query(`
+                    CREATE TABLE users (
+                        id SERIAL PRIMARY KEY,
+                        username VARCHAR(255) NOT NULL UNIQUE,
+                        password_hash VARCHAR(255) NOT NULL,
+                        email VARCHAR(255),
+                        is_admin BOOLEAN DEFAULT FALSE,
+                        tier VARCHAR(50) DEFAULT 'free',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_login TIMESTAMP
+                    );
                     
-                    if (stats.isFile()) {
-                        const fileUuid = path.parse(filename).name;
-                        const ext = path.extname(filename);
-                        
-                        // Check if file already exists in database
-                        const existingFile = await fileService.getFileInfo(fileUuid);
-                        if (existingFile) {
-                            console.log(`File ${filename} already migrated, skipping`);
-                            continue;
-                        }
-                        
-                        // Read file data
-                        const fileBuffer = fs.readFileSync(filePath);
-                        
-                        // Determine mime type based on extension
-                        const mimeTypes = {
-                            '.pdf': 'application/pdf',
-                            '.txt': 'text/plain',
-                            '.md': 'text/markdown',
-                            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            '.doc': 'application/msword',
-                            '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            '.xls': 'application/vnd.ms-excel',
-                            '.jpg': 'image/jpeg',
-                            '.jpeg': 'image/jpeg',
-                            '.png': 'image/png',
-                            '.gif': 'image/gif',
-                            '.bmp': 'image/bmp',
-                            '.webp': 'image/webp'
-                        };
-                        
-                        const mimeType = mimeTypes[ext.toLowerCase()] || 'application/octet-stream';
-                        
-                        // Store in database (use 'system' as uploaded_by for migrated files)
-                        await fileService.storeFile(fileUuid, filename, mimeType, fileBuffer, 'system');
-                        
-                        migratedCount++;
-                        console.log(`✅ Migrated ${filename} to database`);
+                    -- Create indices for better performance
+                    CREATE INDEX idx_users_username ON users(username);
+                    CREATE INDEX idx_users_email ON users(email);
+                    CREATE INDEX idx_users_tier ON users(tier);
+                `);
+                
+                console.log('✅ Users table created successfully with indices');
+            } else {
+                console.log('Users table exists, checking structure...');
+                
+                // Check if password_hash column exists
+                const columnExists = await this.db.pool.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_name = 'users' 
+                        AND column_name = 'password_hash'
+                    );
+                `);
+                
+                if (!columnExists.rows[0].exists) {
+                    console.log('password_hash column missing, adding it...');
+                    
+                    // Check if there's a 'password' column instead
+                    const passwordColumnExists = await this.db.pool.query(`
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.columns 
+                            WHERE table_name = 'users' 
+                            AND column_name = 'password'
+                        );
+                    `);
+                    
+                    if (passwordColumnExists.rows[0].exists) {
+                        // Rename password column to password_hash
+                        await this.db.pool.query('ALTER TABLE users RENAME COLUMN password TO password_hash');
+                        console.log('✅ Renamed password column to password_hash');
+                    } else {
+                        // Add password_hash column
+                        await this.db.pool.query('ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)');
+                        console.log('✅ Added password_hash column');
                     }
-                } catch (error) {
-                    console.error(`❌ Error migrating file ${filename}:`, error);
+                }
+
+                // Ensure last_login column exists
+                const lastLoginColumn = await this.db.pool.query(`
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns 
+                        WHERE table_name = 'users' 
+                        AND column_name = 'last_login'
+                    );
+                `);
+                if (!lastLoginColumn.rows[0].exists) {
+                    await this.db.pool.query('ALTER TABLE users ADD COLUMN last_login TIMESTAMP');
+                    console.log('✅ Added last_login column to users table');
                 }
             }
             
-            console.log(`✅ File migration completed. Migrated ${migratedCount} files`);
+            // Check if migration already ran
+            const existingMigration = await this.db.pool.query(
+                'SELECT * FROM migrations WHERE name = $1',
+                [migrationName]
+            );
+
+            if (existingMigration.rows.length === 0) {
+                // Record migration
+                await this.db.pool.query(
+                    'INSERT INTO migrations (name) VALUES ($1)',
+                    [migrationName]
+                );
+                console.log(`✅ Migration ${migrationName} recorded`);
+            }
+            
+            // Verify final table structure
+            const finalStructure = await this.db.pool.query(`
+                SELECT column_name, data_type, is_nullable 
+                FROM information_schema.columns 
+                WHERE table_name = 'users'
+                ORDER BY ordinal_position
+            `);
+            
+            console.log('Final users table structure:', finalStructure.rows.map(row => `${row.column_name}: ${row.data_type}`));
             
         } catch (error) {
-            console.error('❌ Error during file migration:', error);
+            console.error(`Failed to execute migration ${migrationName}:`, error);
             throw error;
         }
     }
 
-    async runMigrations() {
-        console.log('🔄 Running database migrations...');
+    async createCollectionsTable() {
+        const migrationName = 'create_collections_table';
         
-        // Create tables in order (users first, then dependent tables)
-        await this.createUsersTable();
-        await this.createUsageTrackingTable();
-        await this.createFilesTable();
+        // Check if migration already ran
+        const existingMigration = await this.db.pool.query(
+            'SELECT * FROM migrations WHERE name = $1',
+            [migrationName]
+        );
+
+        if (existingMigration.rows.length > 0) {
+            console.log(`Migration ${migrationName} already executed`);
+            // Still check if we need to add the documents table
+            await this.createDocumentsTable();
+            return;
+        }
+
+        // Create collections table
+        await this.db.pool.query(`
+            CREATE TABLE IF NOT EXISTS collections (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                qdrant_collection_name VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, name)
+            )
+        `);
+
+        // Create documents table
+        await this.createDocumentsTable();
+
+        // Record migration
+        await this.db.pool.query(
+            'INSERT INTO migrations (name) VALUES ($1)',
+            [migrationName]
+        );
+
+        console.log(`✅ Migration ${migrationName} completed`);
+    }
+
+    async createDocumentsTable() {
+        const migrationName = 'create_documents_table';
         
-        // Migrate data
-        await this.migrateUsersFromJson();
-        await this.ensureAdminUser();
-        await this.migrateFilesFromFilesystem();
+        // Check if migration already ran
+        const existingMigration = await this.db.pool.query(
+            'SELECT * FROM migrations WHERE name = $1',
+            [migrationName]
+        );
+
+        if (existingMigration.rows.length > 0) {
+            console.log(`Migration ${migrationName} already executed`);
+            return;
+        }
+
+        // Create documents table WITHOUT vector embeddings (those go to Qdrant)
+        console.log('Creating documents table with metadata only (vectors stored in Qdrant)...');
+        await this.db.pool.query(`
+            CREATE TABLE IF NOT EXISTS documents (
+                id SERIAL PRIMARY KEY,
+                filename VARCHAR(255) NOT NULL,
+                content TEXT,
+                content_preview TEXT,
+                file_type VARCHAR(100),
+                collection_id INTEGER REFERENCES collections(id) ON DELETE CASCADE,
+                qdrant_point_id VARCHAR(255), -- Reference to Qdrant point ID
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(qdrant_point_id)
+            )
+        `);
+
+        // Create index on qdrant_point_id for fast lookups
+        await this.db.pool.query(`
+            CREATE INDEX IF NOT EXISTS documents_qdrant_point_id_idx 
+            ON documents (qdrant_point_id)
+        `);
+
+        // Record migration
+        await this.db.pool.query(
+            'INSERT INTO migrations (name) VALUES ($1)',
+            [migrationName]
+        );
+
+        console.log(`✅ Migration ${migrationName} completed`);
+        console.log('Note: Vector embeddings are stored in Qdrant, not PostgreSQL');
+    }
+
+    async createUsageTrackingTable() {
+        const migrationName = 'create_usage_tracking_table';
         
-        console.log('✅ All migrations completed successfully');
+        // Check if migration already ran
+        const existingMigration = await this.db.pool.query(
+            'SELECT * FROM migrations WHERE name = $1',
+            [migrationName]
+        );
+
+        if (existingMigration.rows.length > 0) {
+            console.log(`Migration ${migrationName} already executed`);
+            return;
+        }
+
+        // Create usage tracking table
+        await this.db.pool.query(`
+            CREATE TABLE IF NOT EXISTS usage_tracking (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                resource_type VARCHAR(50) NOT NULL,
+                amount INTEGER DEFAULT 1,
+                endpoint VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Create indices for performance
+        await this.db.pool.query(`
+            CREATE INDEX IF NOT EXISTS usage_tracking_user_resource_date_idx 
+            ON usage_tracking (user_id, resource_type, created_at)
+        `);
+
+        await this.db.pool.query(`
+            CREATE INDEX IF NOT EXISTS usage_tracking_user_date_idx 
+            ON usage_tracking (user_id, created_at)
+        `);
+
+        // Record migration
+        await this.db.pool.query(
+            'INSERT INTO migrations (name) VALUES ($1)',
+            [migrationName]
+        );
+
+        console.log(`✅ Migration ${migrationName} completed`);
+    }
+
+    async createFilesTable() {
+        const migrationName = 'create_files_table';
+        
+        // Check if migration already ran
+        const existingMigration = await this.db.pool.query(
+            'SELECT * FROM migrations WHERE name = $1',
+            [migrationName]
+        );
+
+        if (existingMigration.rows.length > 0) {
+            console.log(`Migration ${migrationName} already executed`);
+            return;
+        }
+
+        // Create files table for file storage
+        await this.db.pool.query(`
+            CREATE TABLE IF NOT EXISTS files (
+                id SERIAL PRIMARY KEY,
+                uuid VARCHAR(255) NOT NULL UNIQUE,
+                original_name VARCHAR(255) NOT NULL,
+                mime_type VARCHAR(100),
+                file_data BYTEA,
+                file_size INTEGER,
+                uploaded_by VARCHAR(255),
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Create index on UUID for fast lookups
+        await this.db.pool.query(`
+            CREATE INDEX IF NOT EXISTS files_uuid_idx ON files (uuid)
+        `);
+
+        // Record migration
+        await this.db.pool.query(
+            'INSERT INTO migrations (name) VALUES ($1)',
+            [migrationName]
+        );
+
+        console.log(`✅ Migration ${migrationName} completed`);
+    }
+
+    async checkVectorTypeExists() {
+        // No longer needed since we're not storing vectors in PostgreSQL
+        return false;
     }
 }
 

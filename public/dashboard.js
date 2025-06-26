@@ -1,7 +1,7 @@
 let token = localStorage.getItem('token');
 let username = localStorage.getItem('username');
 let isAdmin = localStorage.getItem('isAdmin') === 'true';
-let baseUrl = window.location.origin; // Default fallback
+const API_BASE_URL = '/api/v1';
 
 document.addEventListener('DOMContentLoaded', async function() {
     if (!token) {
@@ -20,9 +20,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         apiKeyElement.value = token;
     }
     
-    // Load server configuration including base URL
-    await loadServerConfig();
-    
     // Update API examples with actual token and base URL
     updateApiExamples();
     
@@ -37,14 +34,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     
     loadCollections();
-    loadUsageStats();
 
     // Clipboard paste handler for files and text
     document.addEventListener('paste', async function(event) {
         const collection = document.getElementById('upload-collection')?.value;
         if (!collection) {
-            // Optionally, show a toast or alert
-            // alert('Please select a collection before pasting files or text.');
             return;
         }
 
@@ -66,21 +60,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 });
 
-async function loadServerConfig() {
-    try {
-        const response = await fetch('/api/config');
-        if (response.ok) {
-            const config = await response.json();
-            baseUrl = config.baseUrl;
-            console.log('Loaded server config:', config);
-        }
-    } catch (error) {
-        console.error('Error loading server config:', error);
-        // Fallback to current origin
-        baseUrl = window.location.origin;
-    }
-}
-
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('username');
@@ -88,18 +67,19 @@ function logout() {
 }
 
 function updateApiExamples() {
+    const fullBaseUrl = `${window.location.origin}${API_BASE_URL}`;
     // Update HTTP examples
     const httpExamples = document.getElementById('http-examples');
     if (httpExamples) {
         httpExamples.textContent = `// Using fetch
-fetch('${baseUrl}/collections', {
+fetch('${fullBaseUrl}/collections', {
   headers: {
     'Authorization': 'Bearer ${token}'
   }
 });
 
 // Using axios
-axios.get('${baseUrl}/collections', {
+axios.get('${fullBaseUrl}/collections', {
   headers: {
     'Authorization': 'Bearer ${token}'
   }
@@ -110,23 +90,23 @@ axios.get('${baseUrl}/collections', {
     const qdrantExamples = document.getElementById('qdrant-examples');
     if (qdrantExamples) {
         qdrantExamples.textContent = `# List collections
-curl -X GET "${baseUrl}/collections" \\
+curl -X GET "${fullBaseUrl}/collections" \\
   -H "Authorization: Bearer ${token}"
 
 # Create collection
-curl -X PUT "${baseUrl}/collections/my_docs" \\
+curl -X PUT "${fullBaseUrl}/collections/my_docs" \\
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"vectors":{"size":768,"distance":"Cosine"}}'
 
 # Search vectors
-curl -X POST "${baseUrl}/collections/my_docs/points/search" \\
+curl -X POST "${fullBaseUrl}/collections/my_docs/points/search" \\
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"vector":[0.1,0.2,0.3],"limit":5,"with_payload":true}'
 
 # Upsert points
-curl -X PUT "${baseUrl}/collections/my_docs/points" \\
+curl -X PUT "${fullBaseUrl}/collections/my_docs/points" \\
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"points":[{"id":"doc1","vector":[0.1,0.2,0.3],"payload":{"text":"Hello"}}]}'`;
@@ -136,24 +116,24 @@ curl -X PUT "${baseUrl}/collections/my_docs/points" \\
     const vsiExamples = document.getElementById('vsi-examples');
     if (vsiExamples) {
         vsiExamples.textContent = `# Upload file
-curl -X POST "${baseUrl}/api/collections/my_docs/upload" \\
+curl -X POST "${fullBaseUrl}/collections/my_docs/documents/upload" \\
   -H "Authorization: Bearer ${token}" \\
   -F "file=@document.txt"
 
 # Create text document
-curl -X POST "${baseUrl}/api/collections/my_docs/create-text" \\
+curl -X POST "${fullBaseUrl}/collections/my_docs/create-text" \\
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"title":"My Note","content":"This is my document content"}'
 
 # Semantic search
-curl -X POST "${baseUrl}/api/collections/my_docs/search" \\
+curl -X POST "${fullBaseUrl}/collections/my_docs/search" \\
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"query":"machine learning","limit":10}'
 
 # List documents
-curl -X GET "${baseUrl}/api/collections/my_docs/documents" \\
+curl -X GET "${fullBaseUrl}/collections/my_docs/documents" \\
   -H "Authorization: Bearer ${token}"`;
     }
 }
@@ -184,8 +164,12 @@ async function apiCall(url, options = {}) {
         }
     };
     
+    // HACK: The backend's admin routes are not yet versioned.
+    // This sends admin calls to /api/admin/* instead of /api/v1/admin/*
+    const endpoint = url.startsWith('/admin/') ? `/api${url}` : `${API_BASE_URL}${url}`;
+    
     try {
-        const response = await fetch(url, { ...defaultOptions, ...options });
+        const response = await fetch(endpoint, { ...defaultOptions, ...options });
         
         if (response.status === 401 || response.status === 403) {
             console.error('Authentication failed, redirecting to login');
@@ -302,7 +286,7 @@ async function deleteCollection(name) {
 
 async function reindexCollection(name) {
     try {
-        const response = await apiCall(`/api/collections/${name}/reindex`, {
+        const response = await apiCall(`/collections/${name}/reindex`, {
             method: 'POST'
         });
         
@@ -483,7 +467,7 @@ async function uploadFiles() {
         formData.append('file', files[i]);
         
         try {
-            const response = await fetch(`/api/collections/${collection}/upload`, {
+            const response = await fetch(`${API_BASE_URL}/collections/${collection}/documents/upload`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -557,7 +541,7 @@ async function uploadFromUrl() {
     progressDiv.innerHTML = '<div class="progress"><div class="progress-bar" style="width: 50%"></div></div><p>Downloading from URL...</p>';
     
     try {
-        const response = await fetch(`/api/collections/${collection}/upload-url`, {
+        const response = await fetch(`${API_BASE_URL}/collections/${collection}/upload-url`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -629,7 +613,7 @@ async function createTextDocument() {
     }
     
     try {
-        const response = await apiCall(`/api/collections/${collection}/create-text`, {
+        const response = await apiCall(`/collections/${collection}/create-text`, {
             method: 'POST',
             body: JSON.stringify({
                 title,
@@ -664,7 +648,7 @@ async function searchDocuments() {
     resultsDiv.innerHTML = '<p>Searching...</p>';
     
     try {
-        const response = await apiCall(`/api/collections/${collection}/search`, {
+        const response = await apiCall(`/collections/${collection}/search`, {
             method: 'POST',
             body: JSON.stringify({
                 query,
@@ -697,7 +681,7 @@ async function browseDocuments() {
     resultsDiv.innerHTML = '<p>Loading documents...</p>';
     
     try {
-        const response = await apiCall(`/api/collections/${collection}/documents?limit=50`);
+        const response = await apiCall(`/collections/${collection}/documents?limit=50`);
         
         if (response && response.ok) {
             const data = await response.json();
@@ -877,7 +861,7 @@ async function askQuestion() {
             requestBody.systemPrompt = systemPrompt;
         }
 
-        const response = await fetch(`/api/collections/${encodeURIComponent(collectionName)}/ask`, {
+        const response = await fetch(`${API_BASE_URL}/collections/${encodeURIComponent(collectionName)}/ask`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -904,7 +888,7 @@ async function deleteDocument(collection, documentId) {
     }
     
     try {
-        const response = await apiCall(`/api/collections/${collection}/documents/${documentId}`, {
+        const response = await apiCall(`/collections/${collection}/documents/${documentId}`, {
             method: 'DELETE'
         });
         
@@ -931,7 +915,7 @@ async function uploadPastedFile(file, collection) {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`/api/collections/${collection}/upload`, {
+        const response = await fetch(`${API_BASE_URL}/collections/${collection}/documents/upload`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -965,7 +949,7 @@ async function uploadPastedText(text, collection) {
     progressDiv.innerHTML = '<div class="progress"><div class="progress-bar" style="width: 50%"></div></div><p>Uploading pasted text...</p>';
 
     try {
-        const response = await apiCall(`/api/collections/${collection}/create-text`, {
+        const response = await apiCall(`/collections/${collection}/create-text`, {
             method: 'POST',
             body: JSON.stringify({
                 title: 'Pasted Text',
@@ -991,114 +975,10 @@ async function uploadPastedText(text, collection) {
     }
 }
 
-// Load personal usage statistics
-async function loadUsageStats() {
-    try {
-        const response = await fetch('/api/auth/usage/personal', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            displayUsageStats(data);
-        } else if (response.status === 404) {
-            // Usage API not available, show mock data or hide section
-            displayUsageStatsUnavailable();
-        } else {
-            document.getElementById('usage-stats').innerHTML = 
-                '<p style="color: #dc3545;">Unable to load usage statistics</p>';
-        }
-    } catch (error) {
-        console.error('Error loading usage stats:', error);
-        displayUsageStatsUnavailable();
-    }
-}
-
-function displayUsageStatsUnavailable() {
-    document.getElementById('usage-stats').innerHTML = `
-        <div style="text-align: center; padding: 20px; color: #666;">
-            <p>📊 Usage statistics are not available at this time.</p>
-            <p style="font-size: 0.9em; margin-top: 10px;">The usage tracking service may not be configured yet.</p>
-        </div>
-    `;
-}
-
-function displayUsageStats(data) {
-    const tierBadgeColors = {
-        free: '#6c757d',
-        starter: '#17a2b8',
-        professional: '#28a745',
-        enterprise: '#6f42c1',
-        unlimited: '#fd7e14'
-    };
-
-    const html = `
-        <div style="margin-bottom: 15px;">
-            <span style="background: ${tierBadgeColors[data.tier] || tierBadgeColors.free}; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; text-transform: uppercase; font-size: 0.8em;">
-                ${data.tier || 'free'} Plan
-            </span>
-        </div>
-
-        <div class="usage-grid">
-            <div class="usage-item">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <span>📄 Documents</span>
-                    <span>${data.current?.documents || 0} / ${data.limits?.documents === Infinity ? '∞' : (data.limits?.documents || '∞')}</span>
-                </div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" style="width: ${data.usage?.documentsPercent || 0}%; background: ${(data.usage?.documentsPercent || 0) > 80 ? '#dc3545' : '#007bff'};"></div>
-                </div>
-            </div>
-
-            <div class="usage-item">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <span>💾 Storage</span>
-                    <span>${data.formatted?.storageUsed || '0 B'} / ${data.formatted?.storageLimit || '∞'}</span>
-                </div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" style="width: ${data.usage?.storagePercent || 0}%; background: ${(data.usage?.storagePercent || 0) > 80 ? '#dc3545' : '#28a745'};"></div>
-                </div>
-            </div>
-
-            <div class="usage-item">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <span>📞 API Calls (Month)</span>
-                    <span>${data.current?.apiCallsThisMonth || 0} / ${data.limits?.apiCallsMonthly === Infinity ? '∞' : (data.limits?.apiCallsMonthly || '∞')}</span>
-                </div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" style="width: ${data.usage?.apiCallsPercent || 0}%; background: ${(data.usage?.apiCallsPercent || 0) > 80 ? '#dc3545' : '#ffc107'};"></div>
-                </div>
-            </div>
-
-            <div class="usage-item">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <span>📂 Collections</span>
-                    <span>${data.current?.collections || 0} / ${data.limits?.collections === Infinity ? '∞' : (data.limits?.collections || '∞')}</span>
-                </div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" style="width: ${data.usage?.collectionsPercent || 0}%; background: ${(data.usage?.collectionsPercent || 0) > 80 ? '#dc3545' : '#17a2b8'};"></div>
-                </div>
-            </div>
-        </div>
-
-        <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9em;">
-            <strong>Plan Features:</strong>
-            <ul style="margin: 5px 0; padding-left: 20px;">
-                ${(data.limits?.features || ['basic_features']).map(feature => `<li>${feature.replace(/_/g, ' ')}</li>`).join('')}
-            </ul>
-            <strong>Max File Size:</strong> ${data.formatted?.maxFileSize || '10 MB'}
-        </div>
-    `;
-
-    document.getElementById('usage-stats').innerHTML = html;
-}
-
 // Admin functions
 async function loadSystemStatus() {
     try {
-        const response = await apiCall('/api/auth/registration-status');
+        const response = await apiCall('/admin/system/health');
         if (response && response.ok) {
             const data = await response.json();
             document.getElementById('self-reg-status').textContent = data.selfRegistrationEnabled ? 'Enabled' : 'Disabled';
@@ -1113,7 +993,7 @@ async function loadUsers() {
     if (!isAdmin) return;
     
     try {
-        const response = await apiCall('/api/auth/admin/users');
+        const response = await apiCall('/admin/users');
         if (response && response.ok) {
             const data = await response.json();
             displayUsers(data.users);
@@ -1165,7 +1045,7 @@ async function createUser() {
     }
     
     try {
-        const response = await apiCall('/api/auth/admin/users', {
+        const response = await apiCall('/admin/users', {
             method: 'POST',
             body: JSON.stringify({
                 username: newUsername,
@@ -1204,7 +1084,7 @@ async function editUser(targetUsername, currentIsAdmin) {
     updateData.isAdmin = makeAdmin;
     
     try {
-        const response = await apiCall(`/api/auth/admin/users/${targetUsername}`, {
+        const response = await apiCall(`/admin/users/${targetUsername}`, {
             method: 'PUT',
             body: JSON.stringify(updateData)
         });
@@ -1228,7 +1108,7 @@ async function deleteUser(targetUsername) {
     }
     
     try {
-        const response = await apiCall(`/api/auth/admin/users/${targetUsername}`, {
+        const response = await apiCall(`/admin/users/${targetUsername}`, {
             method: 'DELETE'
         });
         
@@ -1253,3 +1133,64 @@ window.uploadFromUrl = uploadFromUrl;
 window.isValidUrl = isValidUrl;
 window.removeSelectedFile = removeSelectedFile;
 window.clearSelectedFiles = clearSelectedFiles;
+
+// This function is called from dashboard.html to show the "Usage & Plan" card.
+// It's updated to use the new API endpoint and render the response.
+async function showUsagePlan() {
+    const usageCard = document.querySelector('[data-card="usage"]');
+    usageCard.style.display = 'block';
+    const usageStatsDiv = document.getElementById('usage-stats');
+    usageStatsDiv.innerHTML = 'Loading usage statistics...';
+
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/users/usage`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to load usage data');
+        }
+
+        const usage = await response.json();
+        
+        usageStatsDiv.innerHTML = `
+            <div class="usage-grid">
+                <div class="usage-item">
+                    <strong>Collections</strong>
+                    <p>${usage.collections.count} / ${usage.collections.limit}</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${usage.collections.percentage}%; background-color: var(--fiori-primary);"></div>
+                    </div>
+                </div>
+                <div class="usage-item">
+                    <strong>Documents</strong>
+                    <p>${usage.documents.count} / ${usage.documents.limit}</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${usage.documents.percentage}%; background-color: var(--fiori-success);"></div>
+                    </div>
+                </div>
+                <div class="usage-item">
+                    <strong>Uploads (monthly)</strong>
+                    <p>${usage.uploads.count} / ${usage.uploads.limit}</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${usage.uploads.percentage}%; background-color: var(--fiori-warning);"></div>
+                    </div>
+                </div>
+                <div class="usage-item">
+                    <strong>Searches (monthly)</strong>
+                    <p>${usage.searches.count} / ${usage.searches.limit}</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${usage.searches.percentage}%; background-color: var(--fiori-info);"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+    } catch (error) {
+        usageStatsDiv.innerHTML = `<div class="error">${error.message}</div>`;
+    }
+}

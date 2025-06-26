@@ -1,39 +1,92 @@
 {
   "name": "vsi-vector-store-service",
   "version": "1.0.0",
-  "description": "Vector Store as a Service with file upload and Markdown conversion.",
-  "main": "src/index.js",
+  "description": "VSI Vector Store - Document search and retrieval system with AI-powered semantic search",
+  "main": "server.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "mcp": "node src/mcp-server.js"
+    "test": "jest",
+    "test:watch": "NODE_ENV=test DATABASE_URL=test://mock mocha tests/**/*.test.js --require tests/setup.js --timeout 15000 --watch",
+    "test:coverage": "NODE_ENV=test DATABASE_URL=test://mock nyc mocha tests/**/*.test.js --require tests/setup.js --timeout 15000 --exit",
+    "test:unit": "NODE_ENV=test DATABASE_URL=test://mock mocha tests/unit/**/*.test.js --require tests/setup.js --timeout 10000 --exit",
+    "test:integration": "NODE_ENV=test DATABASE_URL=test://mock mocha tests/integration/**/*.test.js --require tests/setup.js --timeout 15000 --exit",
+    "lint": "eslint src/**/*.js tests/**/*.js",
+    "lint:fix": "eslint src/**/*.js tests/**/*.js --fix",
+    "migrate": "node scripts/migrate.js",
+    "migrate:test": "NODE_ENV=test node scripts/migrate.js",
+    "migrate:production": "NODE_ENV=production node scripts/migrate.js",
+    "seed": "node scripts/seed.js",
+    "seed:test": "NODE_ENV=test node scripts/seed.js",
+    "validate-config": "node scripts/validate-config.js",
+    "cleanup:legacy": "node scripts/cleanup-legacy.js",
+    "logs:error": "tail -f logs/error.log",
+    "logs:combined": "tail -f logs/combined.log",
+    "clean": "rm -rf logs/* uploads/* && mkdir -p logs uploads",
+    "health-check": "curl -f http://localhost:3000/api/v1/health || exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "vector-store",
+    "document-search",
+    "semantic-search",
+    "ai",
+    "embeddings",
+    "postgresql",
+    "nodejs",
+    "express",
+    "rest-api"
+  ],
+  "author": "VSI Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
   "dependencies": {
-    "@google/generative-ai": "^0.14.0",
-    "@modelcontextprotocol/sdk": "^0.4.0",
-    "@qdrant/qdrant-js": "^1.8.0",
-    "axios": "^1.7.2",
+    "@google/generative-ai": "^0.17.1",
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "form-data": "^4.0.0",
-    "http-proxy-middleware": "^3.0.0",
-    "jsonwebtoken": "^9.0.2",
-    "mammoth": "^1.9.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
-    "pdf-parse": "^1.1.1",
-    "uuid": "^10.0.0",
-    "xlsx": "^0.18.5",
+    "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.3",
-    "redis": "^4.6.7",
-    "express-rate-limit": "^6.10.0",
-    "rate-limit-redis": "^3.0.1",
-    "cheerio": "^1.0.0-rc.12"
+    "axios": "^1.6.0",
+    "pdf-parse": "^1.1.1",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
-  }
+    "chai": "^4.5.0",
+    "eslint": "^8.57.1",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.6.0",
+    "mocha": "^10.8.2",
+    "nodemon": "^3.0.2",
+    "nyc": "^15.1.0",
+    "supertest": "^6.3.4"
+  },
+  "nyc": {
+    "exclude": [
+      "tests/**",
+      "coverage/**",
+      "logs/**",
+      "uploads/**"
+    ],
+    "reporter": [
+      "text",
+      "html",
+      "lcov"
+    ],
+    "report-dir": "./coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vsi-team/vector-store.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vsi-team/vector-store/issues"
+  },
+  "homepage": "https://github.com/vsi-team/vector-store#readme"
 }

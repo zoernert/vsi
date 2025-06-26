@@ -475,7 +475,7 @@
                 }
 
                 // Check if user is admin before loading admin dashboard
-                const meResponse = await fetch('/api/auth/me', {
+                const meResponse = await fetch('/api/v1/auth/me', {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -493,7 +493,7 @@
                     return;
                 }
 
-                const response = await fetch('/api/admin/dashboard', {
+                const response = await fetch('/api/v1/admin/dashboard', {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -620,7 +620,7 @@
         async function loadUsers() {
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch('/api/auth/admin/users', {
+                const response = await fetch('/api/v1/admin/users', {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -662,7 +662,7 @@
         async function loadSystemHealth() {
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch('/api/admin/system/health', {
+                const response = await fetch('/api/v1/admin/system/health', {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }

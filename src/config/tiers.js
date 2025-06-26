@@ -19,7 +19,7 @@ const TIER_LIMITS = {
         documents: 10000,
         storage_bytes: 50 * 1024 * 1024 * 1024, // 50GB
         api_calls_monthly: 100000,
-        collections: 50,
+        collections: 100, // Increase from 50 to 100
         max_file_size: 200 * 1024 * 1024, // 200MB
         features: ['basic_search', 'file_upload', 'advanced_qa', 'analytics', 'priority_support']
     },
@@ -27,7 +27,7 @@ const TIER_LIMITS = {
         documents: 100000,
         storage_bytes: 500 * 1024 * 1024 * 1024, // 500GB
         api_calls_monthly: 1000000,
-        collections: 1000,
+        collections: 10000, // Increase from 1000 to 10000
         max_file_size: 1024 * 1024 * 1024, // 1GB
         features: ['all_features', 'white_label', 'dedicated_support']
     },
