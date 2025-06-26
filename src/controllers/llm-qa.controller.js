@@ -88,25 +88,23 @@ router.post('/:collection/ask',
 
             // Ensure collection exists before searching
             try {
-                // Use getCollection to check existence, do not create if already exists
                 await qdrantClient.getCollection(actualCollectionName);
             } catch (error) {
                 if (error.status === 404 || error.message.includes('Not found') || error.message.includes("doesn't exist")) {
                     console.warn(`Collection ${actualCollectionName} doesn't exist, creating empty collection for search`);
                     await qdrantClient.ensureCollection(actualCollectionName);
                 } else {
-                    // If another error, rethrow
                     throw error;
                 }
             }
 
-            // Create vector service that uses your existing search functionality
+            // Create vector service that uses real Qdrant search functionality
             const vectorService = {
                 search: async (collectionName, query, limit) => {
                     try {
-                        console.log(`Searching in collection: ${actualCollectionName} for query: "${query}"`);
+                        console.log(`🔍 Searching in collection: ${actualCollectionName} for query: "${query}"`);
                         
-                        // Generate embedding for the query using the same method as uploadRoutes
+                        // Generate embedding for the query
                         const queryEmbedding = await generateEmbedding(query);
                         
                         // Search in Qdrant with user-specific collection
@@ -114,63 +112,49 @@ router.post('/:collection/ask',
                             vector: queryEmbedding,
                             limit: limit,
                             with_payload: true,
-                            with_vector: false
+                            with_vector: false,
+                            score_threshold: 0.1 // Lower threshold for better recall
                         });
 
-                        console.log(`Found ${searchResult.length} results from Qdrant`);
+                        console.log(`🔍 Found ${searchResult.length} results from Qdrant`);
                         
-                        // Get document metadata from PostgreSQL for each Qdrant result
-                        if (searchResult.length > 0) {
-                            const { DatabaseService } = require('../services/databaseService');
-                            const db = new DatabaseService();
-                            if (!db.pool) await db.initialize();
+                        // Transform Qdrant results to include proper metadata for snippet preview
+                        return searchResult.map(result => {
+                            const payload = result.payload || {};
                             
-                            const pointIds = searchResult.map(hit => hit.id);
-                            const documentsResult = await db.pool.query(
-                                `SELECT * FROM documents WHERE qdrant_point_id = ANY($1)`,
-                                [pointIds]
-                            );
+                            // Extract content with fallbacks
+                            let content = payload.text || 
+                                         payload.content || 
+                                         payload.chunkContent ||
+                                         payload.chunk ||
+                                         `Document: ${payload.filename || 'Unknown'}`;
                             
-                            // Combine Qdrant payload with PostgreSQL metadata
-                            return searchResult.map(result => {
-                                const dbDoc = documentsResult.rows.find(d => d.qdrant_point_id === result.id);
-                                
-                                // Get content from Qdrant payload or PostgreSQL
-                                let content = result.payload?.text || 
-                                             result.payload?.content || 
-                                             result.payload?.chunkContent ||
-                                             result.payload?.markdown || 
-                                             result.payload?.chunk ||
-                                             dbDoc?.content ||
-                                             `Document: ${result.payload?.filename || dbDoc?.filename || 'Unknown'}`;
-                                
-                                // If this is a file result, add file metadata
-                                if (result.payload?.filename || dbDoc?.filename) {
-                                    const filename = result.payload?.filename || dbDoc?.filename;
-                                    const fileInfo = `📄 File: ${filename}`;
-                                    if (result.payload?.downloadUrl) {
-                                        content = `${fileInfo}\nDownload: ${result.payload.downloadUrl}\n\nContent:\n${content}`;
-                                    } else {
-                                        content = `${fileInfo}\n\nContent:\n${content}`;
-                                    }
-                                }
-                                
-                                console.log(`Content length for result ${result.id}: ${content.length} characters`);
-                                
-                                return {
-                                    metadata: {
-                                        content: content
-                                    },
-                                    score: result.score,
-                                    id: result.id
-                                };
-                            });
-                        }
-                        
-                        return [];
+                            // Add file context if available
+                            if (payload.filename) {
+                                const fileInfo = `📄 File: ${payload.filename}`;
+                                const chunkInfo = payload.chunk_index !== undefined ? 
+                                    ` (Chunk ${payload.chunk_index + 1}/${payload.chunk_total || 1})` : '';
+                                content = `${fileInfo}${chunkInfo}\n\nContent:\n${content}`;
+                            }
+                            
+                            console.log(`🔍 Result ${result.id}: ${content.length} characters from ${payload.filename || 'Unknown'}`);
+                            
+                            return {
+                                metadata: {
+                                    content: content,
+                                    filename: payload.filename || payload.originalName || 'Unknown Document',
+                                    chunkId: result.id, // Important: include the chunk ID
+                                    fileType: payload.file_type || payload.fileType,
+                                    chunkIndex: payload.chunk_index,
+                                    chunkTotal: payload.chunk_total
+                                },
+                                score: result.score,
+                                id: result.id
+                            };
+                        });
                         
                     } catch (error) {
-                        console.error(`Vector search failed for query "${query}" in collection "${actualCollectionName}":`, error);
+                        console.error(`❌ Vector search failed for query "${query}" in collection "${actualCollectionName}":`, error);
                         return [];
                     }
                 }
@@ -180,7 +164,7 @@ router.post('/:collection/ask',
 
             const qaRequest = {
                 question,
-                collectionName: collection, // Use original collection name for the service
+                collectionName: collection,
                 systemPrompt,
                 userPrompt,
                 maxResults: maxResults || 5
@@ -188,26 +172,33 @@ router.post('/:collection/ask',
 
             const result = await llmQaService.answerQuestion(qaRequest);
             
-            // Enhanced debug information to show actual content
-            console.log('Retrieved context count:', result.retrievedContext.length);
-            console.log('Context details:');
-            result.retrievedContext.forEach((ctx, index) => {
-                // Find where actual content starts (after file header)
-                const contentStartMatch = ctx.match(/Content:\n(.+)/s);
-                if (contentStartMatch) {
-                    const actualContent = contentStartMatch[1];
-                    console.log(`  Context ${index + 1}: File header + ${actualContent.length} chars of content`);
-                    console.log(`  Preview: ${actualContent.substring(0, 150)}...`);
-                } else {
-                    console.log(`  Context ${index + 1}: ${ctx.substring(0, 100)}...`);
-                }
+            // Enhanced source information with proper chunk IDs and metadata for snippet preview
+            if (result.sources && result.sources.length > 0) {
+                result.sources = result.sources.map(source => ({
+                    id: source.id,
+                    chunkId: source.id, // Ensure chunk ID is available
+                    filename: source.metadata?.filename || 'Unknown',
+                    similarity: source.score || 0,
+                    contentPreview: (source.metadata?.content || '').substring(0, 150) + '...',
+                    metadata: source.metadata // Include full metadata for debugging
+                }));
+            }
+            
+            console.log('✅ Enhanced LLM QA result with real chunk IDs:', {
+                sourcesCount: result.sources?.length || 0,
+                sourcesWithChunkIds: result.sources?.filter(s => s.chunkId).length || 0,
+                sampleChunkIds: result.sources?.slice(0, 3).map(s => s.chunkId) || []
             });
             
-            res.json(result);
+            res.json({
+                success: true,
+                data: result
+            });
 
         } catch (error) {
-            console.error('Error in LLM QA:', error);
+            console.error('❌ Error in LLM QA:', error);
             res.status(500).json({
+                success: false,
                 error: error.message || 'Failed to process question'
             });
         }

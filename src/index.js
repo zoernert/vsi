@@ -19,6 +19,7 @@ const { DatabaseService } = require('./services/databaseService');
 const { MigrationService } = require('./services/migrationService');
 const { auth } = require('./middleware');
 const uploadRoutes = require('./routes/uploadRoutes');
+const searchRoutes = require('./routes/searchRoutes'); // Add this line
 const { QdrantService } = require('./services/qdrantService');
 const { EmbeddingService } = require('./services/embeddingService');
 const { GeminiService } = require('./services/geminiService');
@@ -865,6 +866,11 @@ app.use('/api', (req, res, next) => {
     next();
 }, uploadRoutes);
 console.log('✅ Upload routes registered');
+
+// Search routes - Add new search routes
+console.log('🔍 Registering search routes...');
+app.use('/api', searchRoutes);
+console.log('✅ Search routes registered');
 
 // Health check
 app.get('/api/health', (req, res) => {

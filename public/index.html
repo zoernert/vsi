@@ -258,6 +258,9 @@
                                 <button class="btn btn-outline-info me-2" onclick="app.documents.showCreateTextModal()">
                                     <i class="fas fa-plus me-2"></i>Create Text
                                 </button>
+                                <button class="btn btn-outline-success me-2" onclick="app.collections.showDeveloperIntegration()">
+                                    <i class="fas fa-code me-2"></i>Developer API
+                                </button>
                                 <button class="btn btn-danger" onclick="app.collections.deleteCurrentCollection()">
                                     <i class="fas fa-trash me-2"></i>Delete Collection
                                 </button>
@@ -564,6 +567,181 @@
         </div>
     </div>
 
+    <!-- Developer Integration Modal -->
+    <div class="modal fade" id="developerModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-code me-2"></i>
+                        Developer Integration - <span id="devModalCollectionName">Collection</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Upload files to this collection programmatically</strong><br>
+                        Use these code snippets to integrate file uploads into your applications. Replace the token and collection ID with your actual values.
+                    </div>
+
+                    <!-- API Information -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-link me-2"></i>Upload Endpoint</h6>
+                                    <code id="apiEndpoint">Loading...</code>
+                                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="app.collections.copyToClipboard('apiEndpoint')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-robot me-2"></i>AI Chat Endpoint</h6>
+                                    <code id="chatEndpoint">Loading...</code>
+                                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="app.collections.copyToClipboard('chatEndpoint')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-key me-2"></i>Collection ID</h6>
+                                    <code id="collectionId">Loading...</code>
+                                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="app.collections.copyToClipboard('collectionId')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Token Status -->
+                    <div class="alert alert-info d-flex align-items-center" id="tokenStatus">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        <div>
+                            <strong>Authentication Token:</strong>
+                            <span id="tokenStatusText">Loading...</span>
+                        </div>
+                    </div>
+
+                    <!-- Code Examples Tabs -->
+                    <ul class="nav nav-tabs" id="codeExampleTabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" data-bs-toggle="tab" href="#curlExample">
+                                <i class="fas fa-terminal me-2"></i>cURL
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#fetchExample">
+                                <i class="fab fa-js-square me-2"></i>Node.js Fetch
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#axiosExample">
+                                <i class="fab fa-js-square me-2"></i>Axios
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#pythonExample">
+                                <i class="fab fa-python me-2"></i>Python
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#descriptionExample">
+                                <i class="fas fa-book me-2"></i>Description
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content mt-3">
+                        <!-- cURL Example -->
+                        <div class="tab-pane fade show active" id="curlExample">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6>cURL Command</h6>
+                                <button class="btn btn-sm btn-primary" onclick="app.collections.copyCodeExample('curlCode')">
+                                    <i class="fas fa-copy me-1"></i>Copy Code
+                                </button>
+                            </div>
+                            <pre><code id="curlCode" class="language-bash">Loading...</code></pre>
+                        </div>
+
+                        <!-- Node.js Fetch Example -->
+                        <div class="tab-pane fade" id="fetchExample">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6>Node.js with Fetch API</h6>
+                                <button class="btn btn-sm btn-primary" onclick="app.collections.copyCodeExample('fetchCode')">
+                                    <i class="fas fa-copy me-1"></i>Copy Code
+                                </button>
+                            </div>
+                            <pre><code id="fetchCode" class="language-javascript">Loading...</code></pre>
+                        </div>
+
+                        <!-- Axios Example -->
+                        <div class="tab-pane fade" id="axiosExample">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6>JavaScript with Axios</h6>
+                                <button class="btn btn-sm btn-primary" onclick="app.collections.copyCodeExample('axiosCode')">
+                                    <i class="fas fa-copy me-1"></i>Copy Code
+                                </button>
+                            </div>
+                            <pre><code id="axiosCode" class="language-javascript">Loading...</code></pre>
+                        </div>
+
+                        <!-- Python Example -->
+                        <div class="tab-pane fade" id="pythonExample">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6>Python with Requests</h6>
+                                <button class="btn btn-sm btn-primary" onclick="app.collections.copyCodeExample('pythonCode')">
+                                    <i class="fas fa-copy me-1"></i>Copy Code
+                                </button>
+                            </div>
+                            <pre><code id="pythonCode" class="language-python">Loading...</code></pre>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="tab-pane fade" id="descriptionExample">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-upload me-2"></i>File Upload Guide</h6>
+                                    <div id="uploadDescription">Loading...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Information -->
+                    <div class="mt-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-primary">
+                                    <div class="card-body">
+                                        <h6><i class="fas fa-shield-alt me-2"></i>Authentication</h6>
+                                        <p class="small mb-0">All API requests require a valid JWT token in the Authorization header. You can get your token by logging into the web interface and checking your browser's localStorage.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-success">
+                                    <div class="card-body">
+                                        <h6><i class="fas fa-file-alt me-2"></i>Supported Formats</h6>
+                                        <p class="small mb-0">PDF, Word Documents (DOCX), Text files (TXT), Markdown (MD), Images (JPG, PNG) for OCR processing, and Excel files (XLSX).</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- User Profile Modal -->
     <div class="modal fade" id="profileModal" tabindex="-1">
         <div class="modal-dialog">
@@ -605,13 +783,13 @@
     <!-- Scripts - Load in dependency order -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Utilities -->
+    <!-- Utilities first -->
     <script src="js/utils/vsi-utils.js"></script>
     
     <!-- Services -->
     <script src="js/services/api-service.js"></script>
     
-    <!-- Modules -->
+    <!-- Modules - Load all modules before core -->
     <script src="js/modules/ui-module.js"></script>
     <script src="js/modules/auth-module.js"></script>
     <script src="js/modules/collections-module.js"></script>
@@ -621,10 +799,10 @@
     <script src="js/modules/admin-module.js"></script>
     <script src="js/modules/usage-module.js"></script>
     
-    <!-- Core -->
+    <!-- Core after all modules are loaded -->
     <script src="js/core/vsi-core.js"></script>
     
-    <!-- Global functions and initialization -->
+    <!-- Global functions and initialization last -->
     <script src="js/vsi-init.js"></script>
 </body>
 </html>
