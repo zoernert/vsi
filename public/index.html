@@ -31,11 +31,6 @@
                         </div>
                         <button type="submit" class="btn btn-primary w-100">Login</button>
                     </form>
-                    <div class="mt-3">
-                        <small class="text-muted">
-                            Default admin from .env: username=stromdao, password=Maus12Rad
-                        </small>
-                    </div>
                     <hr>
                     <p class="text-center mb-0">
                         Don't have an account? 
@@ -581,6 +576,12 @@
                 <div class="modal-body">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
+                        <strong>Ready-to-use API integration examples</strong><br>
+                        These code snippets include your actual authentication token and collection details. Simply copy and paste them into your applications.
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
                         <strong>Upload files to this collection programmatically</strong><br>
                         Use these code snippets to integrate file uploads into your applications. Replace the token and collection ID with your actual values.
                     </div>
@@ -715,6 +716,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <h6>⚠️ Important Notes</h6>
+                    <ul>
+                        <li><strong>Authentication:</strong> Your current JWT token is already included in all examples above</li>
+                        <li><strong>File Processing:</strong> Allow 2-10 seconds for document processing before asking questions</li>
+                        <li><strong>Rate Limiting:</strong> API calls are subject to your account tier limits</li>
+                        <li><strong>AI Context:</strong> Questions use semantic search to find relevant document chunks</li>
+                        <li><strong>Token Security:</strong> ${actualToken ? 'Keep your token secure and do not share these examples with others' : 'Please log in again to get examples with your current token'}</li>
+                    </ul>
 
                     <!-- Additional Information -->
                     <div class="mt-4">

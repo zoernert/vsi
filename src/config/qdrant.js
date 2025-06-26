@@ -87,8 +87,30 @@ const qdrantWrapper = {
     },
 
     async count(collectionName) {
-        console.log(`Counting points in collection ${collectionName}`);
-        return await qdrantClient.count(collectionName);
+        console.log(`📊 Counting points in collection ${collectionName}`);
+        try {
+            // Use the Qdrant client's count method directly
+            const result = await qdrantClient.count(collectionName);
+            const count = result?.count || 0;
+            console.log(`📊 Collection ${collectionName} has ${count} points`);
+            return { count };
+        } catch (error) {
+            console.error(`❌ Failed to count points in collection ${collectionName}:`, {
+                error: error.message,
+                status: error.status,
+                response: error.response?.data
+            });
+            
+            // Check if it's a collection not found error
+            if (error.status === 404 || error.message?.includes('Not found') || error.message?.includes("doesn't exist")) {
+                console.warn(`📊 Collection ${collectionName} does not exist in Qdrant`);
+                return { count: 0 };
+            }
+            
+            // For other errors, still return 0 but log more details
+            console.error(`📊 Unexpected error counting collection ${collectionName}, returning 0`);
+            return { count: 0 };
+        }
     },
 
     async scroll(collectionName, params) {
@@ -103,11 +125,18 @@ const qdrantWrapper = {
 
     // Legacy methods for backward compatibility
     async collectionExists(collectionName) {
-        console.log(`Checking if collection ${collectionName} exists`);
+        console.log(`🔍 Checking if collection ${collectionName} exists`);
         try {
-            await this.getCollection(collectionName);
+            await qdrantClient.getCollection(collectionName);
+            console.log(`✅ Collection ${collectionName} exists`);
             return true;
         } catch (error) {
+            if (error.status === 404 || error.message?.includes('Not found') || error.message?.includes("doesn't exist")) {
+                console.log(`❌ Collection ${collectionName} does not exist`);
+                return false;
+            }
+            // For other errors, assume it doesn't exist
+            console.error(`❌ Error checking collection ${collectionName} existence:`, error.message);
             return false;
         }
     },

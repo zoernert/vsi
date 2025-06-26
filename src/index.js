@@ -203,18 +203,86 @@ app.get('/api/users/usage', auth, async (req, res) => {
 // Collections routes
 app.get('/api/collections', auth, async (req, res) => {
     try {
-        const result = await db.query('SELECT * FROM collections WHERE user_id = $1', [req.user.id]);
-        const collections = result.rows.map(collection => ({
-            ...collection,
-            document_count: "0",
-            stats: {
-                document_count: "0",
-                total_content_size: null,
-                avg_content_size: null,
-                last_updated: null
-            }
-        }));
-        res.json(collections);
+        const includeStats = req.query.include_stats === 'true';
+        
+        if (includeStats) {
+            // Get collections with enhanced stats
+            const collectionsResult = await db.query(`
+                SELECT 
+                    c.*,
+                    COUNT(d.id) as document_count,
+                    COALESCE(SUM(LENGTH(d.content)), 0) as total_content_size,
+                    CASE 
+                        WHEN COUNT(d.id) > 0 THEN AVG(LENGTH(d.content))
+                        ELSE 0 
+                    END as avg_content_size,
+                    MAX(d.updated_at) as last_document_update
+                FROM collections c
+                LEFT JOIN documents d ON c.id = d.collection_id
+                WHERE c.user_id = $1
+                GROUP BY c.id, c.name, c.description, c.user_id, c.qdrant_collection_name, c.created_at, c.updated_at
+                ORDER BY c.updated_at DESC
+            `, [req.user.id]);
+            
+            // Get chunk counts from Qdrant for each collection
+            const collections = await Promise.all(collectionsResult.rows.map(async (collection) => {
+                let chunksCount = 0;
+                try {
+                    console.log(`📊 Getting count for Qdrant collection: ${collection.qdrant_collection_name}`);
+                    
+                    // First check if collection exists in Qdrant
+                    const collectionExists = await qdrant.collectionExists(collection.qdrant_collection_name);
+                    if (!collectionExists) {
+                        console.warn(`📊 Qdrant collection ${collection.qdrant_collection_name} does not exist`);
+                        chunksCount = 0;
+                    } else {
+                        // Get the actual count from Qdrant
+                        const countResult = await qdrant.count(collection.qdrant_collection_name);
+                        chunksCount = countResult?.count || 0;
+                        console.log(`📊 Qdrant collection ${collection.qdrant_collection_name} has ${chunksCount} chunks`);
+                    }
+                } catch (qdrantError) {
+                    console.error(`❌ Failed to get chunk count for collection ${collection.qdrant_collection_name}:`, {
+                        error: qdrantError.message,
+                        status: qdrantError.status,
+                        stack: qdrantError.stack
+                    });
+                    chunksCount = 0; // Fallback to 0 on error
+                }
+                
+                return {
+                    ...collection,
+                    documentsCount: parseInt(collection.document_count) || 0,
+                    chunksCount: chunksCount,
+                    stats: {
+                        totalContentSize: parseInt(collection.total_content_size) || 0,
+                        avgContentSize: parseFloat(collection.avg_content_size) || 0,
+                        lastUpdated: collection.last_document_update || collection.updated_at,
+                        document_count: parseInt(collection.document_count) || 0,
+                        total_content_size: parseInt(collection.total_content_size) || 0
+                    }
+                };
+            }));
+            
+            console.log(`📊 Loaded ${collections.length} collections with stats`);
+            res.json(collections);
+        } else {
+            // Simple collections without stats
+            const result = await db.query('SELECT * FROM collections WHERE user_id = $1 ORDER BY updated_at DESC', [req.user.id]);
+            const collections = result.rows.map(collection => ({
+                ...collection,
+                documentsCount: 0,
+                chunksCount: 0,
+                stats: {
+                    totalContentSize: 0,
+                    avgContentSize: 0,
+                    lastUpdated: collection.updated_at,
+                    document_count: 0,
+                    total_content_size: 0
+                }
+            }));
+            res.json(collections);
+        }
     } catch (error) {
         console.error('Collections error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -223,17 +291,77 @@ app.get('/api/collections', auth, async (req, res) => {
 
 app.get('/api/collections/:id', auth, async (req, res) => {
     try {
-        const result = await db.query(
-            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [req.params.id, req.user.id]
-        );
+        // Get collection with enhanced stats
+        const collectionResult = await db.query(`
+            SELECT 
+                c.*,
+                COUNT(d.id) as document_count,
+                COALESCE(SUM(LENGTH(d.content)), 0) as total_content_size,
+                CASE 
+                    WHEN COUNT(d.id) > 0 THEN AVG(LENGTH(d.content))
+                    ELSE 0 
+                END as avg_content_size,
+                MAX(d.updated_at) as last_document_update
+            FROM collections c
+            LEFT JOIN documents d ON c.id = d.collection_id
+            WHERE c.id = $1 AND c.user_id = $2
+            GROUP BY c.id, c.name, c.description, c.user_id, c.qdrant_collection_name, c.created_at, c.updated_at
+        `, [req.params.id, req.user.id]);
         
-        if (result.rows.length === 0) {
+        if (collectionResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
         
-        res.json(result.rows[0]);
+        const collection = collectionResult.rows[0];
+        
+        // Get chunk count from Qdrant with better error handling
+        let chunksCount = 0;
+        try {
+            console.log(`📊 Getting count for single collection: ${collection.qdrant_collection_name}`);
+            
+            // Check if collection exists first
+            const collectionExists = await qdrant.collectionExists(collection.qdrant_collection_name);
+            if (!collectionExists) {
+                console.warn(`📊 Qdrant collection ${collection.qdrant_collection_name} does not exist`);
+                chunksCount = 0;
+            } else {
+                const countResult = await qdrant.count(collection.qdrant_collection_name);
+                chunksCount = countResult?.count || 0;
+                console.log(`📊 Single collection ${collection.qdrant_collection_name} has ${chunksCount} chunks`);
+            }
+        } catch (qdrantError) {
+            console.error(`❌ Failed to get chunk count for single collection ${collection.qdrant_collection_name}:`, {
+                error: qdrantError.message,
+                status: qdrantError.status,
+                collection_name: collection.qdrant_collection_name
+            });
+            chunksCount = 0;
+        }
+        
+        // Format response with stats
+        const responseData = {
+            ...collection,
+            documentsCount: parseInt(collection.document_count) || 0,
+            chunksCount: chunksCount,
+            stats: {
+                totalContentSize: parseInt(collection.total_content_size) || 0,
+                avgContentSize: parseFloat(collection.avg_content_size) || 0,
+                lastUpdated: collection.last_document_update || collection.updated_at,
+                document_count: parseInt(collection.document_count) || 0,
+                total_content_size: parseInt(collection.total_content_size) || 0
+            }
+        };
+        
+        console.log(`📊 Collection ${collection.name} final stats:`, {
+            documents: responseData.documentsCount,
+            chunks: responseData.chunksCount,
+            size: responseData.stats.totalContentSize,
+            qdrant_collection: collection.qdrant_collection_name
+        });
+        
+        res.json(responseData);
     } catch (error) {
+        console.error('Collection fetch error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
