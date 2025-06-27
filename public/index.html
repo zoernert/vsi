@@ -523,13 +523,8 @@
                         </div>
                         <div id="uploadStatus" class="mt-2"></div>
                     </div>
-                    <hr>
-                    <h6>Upload from URL</h6>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="urlInput" placeholder="https://example.com/document.pdf">
-                        <button class="btn btn-outline-primary" onclick="app.documents.uploadFromUrl()">
-                            Upload URL
-                        </button>
+                    <div class="text-muted mt-3">
+                        <small><i class="fas fa-info-circle me-1"></i>URL upload feature will be available in a future update.</small>
                     </div>
                 </div>
             </div>
@@ -585,8 +580,8 @@
                 <div class="modal-body">
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>Ready-to-use API integration examples</strong><br>
-                        These code snippets include your actual authentication token and collection details. Simply copy and paste them into your applications.
+                        <strong>Simple File Upload API</strong><br>
+                        Upload files to this collection using a simple multipart/form-data request with just a "file" field. No additional metadata required - the backend handles everything automatically.
                     </div>
 
                     <div class="alert alert-info">
@@ -719,8 +714,58 @@
                         <div class="tab-pane fade" id="descriptionExample">
                             <div class="card">
                                 <div class="card-body">
-                                    <h6><i class="fas fa-upload me-2"></i>File Upload Guide</h6>
-                                    <div id="uploadDescription">Loading...</div>
+                                    <h6><i class="fas fa-upload me-2"></i>Simple File Upload API</h6>
+                                    <div class="mb-3">
+                                        <h7><strong>How it works:</strong></h7>
+                                        <ol class="mt-2">
+                                            <li><strong>Upload:</strong> Send a POST request with a "file" field to the upload endpoint</li>
+                                            <li><strong>Processing:</strong> The backend automatically extracts text, creates embeddings, and stores in the vector database</li>
+                                            <li><strong>Ready:</strong> Documents are immediately available for AI chat and search</li>
+                                        </ol>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h7><strong>Supported File Types:</strong></h7>
+                                        <ul class="mt-2">
+                                            <li><code>PDF</code> - Portable Document Format</li>
+                                            <li><code>DOCX</code> - Microsoft Word Documents</li>
+                                            <li><code>DOC</code> - Legacy Word Documents</li>
+                                            <li><code>TXT</code> - Plain Text Files</li>
+                                            <li><code>MD</code> - Markdown Files</li>
+                                            <li><code>Images</code> - JPG, PNG (with OCR processing)</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h7><strong>Request Format:</strong></h7>
+                                        <pre class="mt-2"><code>Content-Type: multipart/form-data
+Authorization: Bearer YOUR_JWT_TOKEN
+
+Form Data:
+- file: [binary file data]</code></pre>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h7><strong>Response Format:</strong></h7>
+                                        <pre class="mt-2"><code>{
+  "success": true,
+  "message": "Document processed successfully",
+  "document": {
+    "id": 123,
+    "filename": "document.pdf",
+    "file_type": "pdf",
+    "collection_id": 15
+  },
+  "chunksStored": 25,
+  "totalChunks": 25,
+  "processingTime": 3500
+}</code></pre>
+                                    </div>
+                                    
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        <strong>Pro Tip:</strong> After uploading, wait 2-5 seconds before asking AI questions to ensure all embeddings are processed.
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -728,11 +773,12 @@
 
                     <h6>⚠️ Important Notes</h6>
                     <ul>
-                        <li><strong>Authentication:</strong> Your current JWT token is already included in all examples above</li>
+                        <li><strong>Simple Upload:</strong> Just send the file - no additional fields required</li>
+                        <li><strong>Authentication:</strong> Your current JWT token is included in all examples above</li>
                         <li><strong>File Processing:</strong> Allow 2-10 seconds for document processing before asking questions</li>
                         <li><strong>Rate Limiting:</strong> API calls are subject to your account tier limits</li>
                         <li><strong>AI Context:</strong> Questions use semantic search to find relevant document chunks</li>
-                        <li><strong>Token Security:</strong> ${actualToken ? 'Keep your token secure and do not share these examples with others' : 'Please log in again to get examples with your current token'}</li>
+                        <li><strong>Token Security:</strong> Keep your token secure and do not share these examples with others</li>
                     </ul>
 
                     <!-- Additional Information -->
