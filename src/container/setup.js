@@ -5,6 +5,7 @@ const { validateConfig } = require('../utils/configValidator');
 
 // Database
 const { DatabaseService } = require('../services/databaseService');
+const { VectorService } = require('../services/vector.service'); // Import VectorService
 
 // Repositories
 const UserRepository = require('../repositories/UserRepository');
@@ -36,6 +37,11 @@ const setupDependencies = () => {
     dependencies: ['databaseConfig']
   });
 
+  // Register VectorService
+  container.registerClass('vectorService', VectorService, {
+    dependencies: [] // Add its dependencies if any, assuming none for now
+  });
+
   // Register repositories
   container.registerClass('userRepository', UserRepository, {
     dependencies: ['database']
@@ -55,7 +61,7 @@ const setupDependencies = () => {
   });
 
   container.registerClass('collectionService', CollectionService, {
-    dependencies: ['collectionRepository', 'documentRepository', 'userRepository']
+    dependencies: ['collectionRepository', 'documentRepository', 'userRepository', 'vectorService']
   });
 
   container.registerClass('searchService', SearchService, {

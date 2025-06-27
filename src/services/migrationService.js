@@ -8,38 +8,51 @@ class MigrationService {
     }
 
     async runMigrations() {
+        console.log('🔄 Running database migrations...');
+        
         try {
-            console.log('Running database migrations...');
-            
-            // Initialize database connection if not already done
-            if (!this.db.pool) {
-                await this.db.initialize();
+            const migrations = [
+                '001_initial_schema.sql',
+                '002_add_usage_tracking.sql', 
+                '003_add_user_tiers.sql',
+                '004_make_qdrant_collection_name_nullable.sql' // Add the new migration
+            ];
+
+            for (const migration of migrations) {
+                await this.runMigration(migration);
             }
-
-            // Create migrations table if it doesn't exist
-            await this.db.pool.query(`
-                CREATE TABLE IF NOT EXISTS migrations (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL UNIQUE,
-                    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-
-            // Create users table if it doesn't exist
-            await this.createUsersTable();
-            
-            // Create collections table if it doesn't exist
-            await this.createCollectionsTable();
-
-            // Create usage tracking table
-            await this.createUsageTrackingTable();
-
-            // Create files table for file storage
-            await this.createFilesTable();
 
             console.log('✅ All migrations completed successfully');
         } catch (error) {
             console.error('❌ Migration failed:', error);
+            throw error;
+        }
+    }
+
+    async runMigration(filename) {
+        const migrationPath = path.join(__dirname, '../migrations', filename);
+        
+        if (!fs.existsSync(migrationPath)) {
+            console.warn(`⚠️ Migration file not found: ${filename}`);
+            return;
+        }
+
+        try {
+            console.log(`📄 Running migration: ${filename}`);
+            const sql = fs.readFileSync(migrationPath, 'utf8');
+            
+            // Split on semicolons to handle multiple statements
+            const statements = sql.split(';').filter(stmt => stmt.trim().length > 0);
+            
+            for (const statement of statements) {
+                if (statement.trim()) {
+                    await this.db.query(statement.trim());
+                }
+            }
+            
+            console.log(`✅ Migration completed: ${filename}`);
+        } catch (error) {
+            console.error(`❌ Migration failed: ${filename}`, error);
             throw error;
         }
     }

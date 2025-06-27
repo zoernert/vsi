@@ -1,6 +1,13 @@
 console.log('🔥 INDEX.JS LOADING - NEW DEBUG VERSION');
 console.log('🕐 Timestamp:', new Date().toISOString());
 
+// ARCHITECTURAL NOTE: This file is in a transitional state.
+// It currently contains a mix of old, monolithic route handlers and is not yet
+// integrated with the new dependency injection container and controller/service
+// architecture defined in /src/container, /src/controllers, etc.
+// The final goal is to refactor this file to only handle server setup and
+// route registration, delegating all business logic to the new architecture.
+
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
@@ -35,8 +42,12 @@ const gemini = new GeminiService();
 // Initialize database on startup
 async function initializeApp() {
     try {
+        console.log('🔄 Initializing database connection...');
         await db.initialize();
+        
+        console.log('🔄 Running database migrations...');
         await migrations.runMigrations();
+        console.log('✅ Database migrations completed');
         
         // Check and fix password hashes for existing users
         const usersWithoutHash = await db.getUsersWithoutPasswordHash();
@@ -50,9 +61,9 @@ async function initializeApp() {
             }
         }
         
-        console.log('All users have proper password hashes');
+        console.log('✅ Database initialization completed successfully');
     } catch (error) {
-        console.error('Failed to initialize app:', error);
+        console.error('❌ Failed to initialize app:', error);
         process.exit(1);
     }
 }
@@ -83,8 +94,15 @@ app.use((req, res, next) => {
 
 console.log('🐛 Debug middleware registered');
 
-// Serve static files
-app.use(express.static(path.join(__dirname, '../public')));
+// Helper function to get collection by UUID and verify ownership
+async function getCollectionByIdOr404(collectionId, userId, clientOrDb = db) {
+    const result = await clientOrDb.query(
+        'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
+        [collectionId, userId]
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+}
 
 // Auth routes
 app.post('/api/auth/login', async (req, res) => {
@@ -291,75 +309,12 @@ app.get('/api/collections', auth, async (req, res) => {
 
 app.get('/api/collections/:id', auth, async (req, res) => {
     try {
-        // Get collection with enhanced stats
-        const collectionResult = await db.query(`
-            SELECT 
-                c.*,
-                COUNT(d.id) as document_count,
-                COALESCE(SUM(LENGTH(d.content)), 0) as total_content_size,
-                CASE 
-                    WHEN COUNT(d.id) > 0 THEN AVG(LENGTH(d.content))
-                    ELSE 0 
-                END as avg_content_size,
-                MAX(d.updated_at) as last_document_update
-            FROM collections c
-            LEFT JOIN documents d ON c.id = d.collection_id
-            WHERE c.id = $1 AND c.user_id = $2
-            GROUP BY c.id, c.name, c.description, c.user_id, c.qdrant_collection_name, c.created_at, c.updated_at
-        `, [req.params.id, req.user.id]);
-        
-        if (collectionResult.rows.length === 0) {
+        const collectionId = req.params.id;
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
+        if (!collection) {
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
-        
-        const collection = collectionResult.rows[0];
-        
-        // Get chunk count from Qdrant with better error handling
-        let chunksCount = 0;
-        try {
-            console.log(`📊 Getting count for single collection: ${collection.qdrant_collection_name}`);
-            
-            // Check if collection exists first
-            const collectionExists = await qdrant.collectionExists(collection.qdrant_collection_name);
-            if (!collectionExists) {
-                console.warn(`📊 Qdrant collection ${collection.qdrant_collection_name} does not exist`);
-                chunksCount = 0;
-            } else {
-                const countResult = await qdrant.count(collection.qdrant_collection_name);
-                chunksCount = countResult?.count || 0;
-                console.log(`📊 Single collection ${collection.qdrant_collection_name} has ${chunksCount} chunks`);
-            }
-        } catch (qdrantError) {
-            console.error(`❌ Failed to get chunk count for single collection ${collection.qdrant_collection_name}:`, {
-                error: qdrantError.message,
-                status: qdrantError.status,
-                collection_name: collection.qdrant_collection_name
-            });
-            chunksCount = 0;
-        }
-        
-        // Format response with stats
-        const responseData = {
-            ...collection,
-            documentsCount: parseInt(collection.document_count) || 0,
-            chunksCount: chunksCount,
-            stats: {
-                totalContentSize: parseInt(collection.total_content_size) || 0,
-                avgContentSize: parseFloat(collection.avg_content_size) || 0,
-                lastUpdated: collection.last_document_update || collection.updated_at,
-                document_count: parseInt(collection.document_count) || 0,
-                total_content_size: parseInt(collection.total_content_size) || 0
-            }
-        };
-        
-        console.log(`📊 Collection ${collection.name} final stats:`, {
-            documents: responseData.documentsCount,
-            chunks: responseData.chunksCount,
-            size: responseData.stats.totalContentSize,
-            qdrant_collection: collection.qdrant_collection_name
-        });
-        
-        res.json(responseData);
+        res.json(collection);
     } catch (error) {
         console.error('Collection fetch error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
@@ -369,15 +324,9 @@ app.get('/api/collections/:id', auth, async (req, res) => {
 app.get('/api/collections/:id/documents', auth, async (req, res) => {
     console.log(`📋 Loading documents for collection ${req.params.id}`);
     try {
-        const collectionId = parseInt(req.params.id);
-        
-        // Verify user owns the collection
-        const collectionResult = await db.query(
-            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [collectionId, req.user.id]
-        );
-        
-        if (collectionResult.rows.length === 0) {
+        const collectionId = req.params.id;
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
+        if (!collection) {
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
         
@@ -423,20 +372,13 @@ app.get('/api/collections/:id/documents', auth, async (req, res) => {
 app.post('/api/collections/:id/search', auth, async (req, res) => {
     console.log(`🔍 Search request for collection ${req.params.id}`);
     try {
-        const collectionId = parseInt(req.params.id);
+        const collectionId = req.params.id;
         const { query, limit = 10, threshold = 0.5 } = req.body;
         
-        // Verify user owns the collection
-        const collectionResult = await db.query(
-            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [collectionId, req.user.id]
-        );
-        
-        if (collectionResult.rows.length === 0) {
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
+        if (!collection) {
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
-        
-        const collection = collectionResult.rows[0];
         
         // Generate embedding for search query
         const queryEmbedding = await embeddingService.generateEmbedding(query);
@@ -480,20 +422,13 @@ app.post('/api/collections/:id/search', auth, async (req, res) => {
 app.post('/api/collections/:id/ask', auth, async (req, res) => {
     console.log(`🤖 AI chat request for collection ${req.params.id}`);
     try {
-        const collectionId = parseInt(req.params.id);
+        const collectionId = req.params.id;
         const { question, systemPrompt, maxResults = 5 } = req.body;
         
-        // Verify user owns the collection
-        const collectionResult = await db.query(
-            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [collectionId, req.user.id]
-        );
-        
-        if (collectionResult.rows.length === 0) {
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
+        if (!collection) {
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
-        
-        const collection = collectionResult.rows[0];
         
         // Generate embedding for question
         const questionEmbedding = await embeddingService.generateEmbedding(question);
@@ -615,40 +550,70 @@ app.get('/api/search', auth, async (req, res) => {
 
 // Collection creation endpoint
 app.post('/api/collections', auth, async (req, res) => {
+    const client = await db.getClient(); // Use a transaction for atomicity
     try {
-        const { name, description = '' } = req.body;
+        await client.query('BEGIN');
         
+        const { name, description = '' } = req.body;
         if (!name || name.trim().length === 0) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ success: false, message: 'Collection name is required' });
         }
-        
-        // Generate unique Qdrant collection name
-        const qdrantCollectionName = `user_${req.user.id}_${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}`;
-        
-        // Create collection in database
-        const result = await db.query(
-            'INSERT INTO collections (name, description, user_id, qdrant_collection_name) VALUES ($1, $2, $3, $4) RETURNING *',
-            [name.trim(), description.trim(), req.user.id, qdrantCollectionName]
+
+        // 1. Insert collection without qdrant_collection_name to get UUID
+        const result = await client.query(
+            'INSERT INTO collections (name, description, user_id) VALUES ($1, $2, $3) RETURNING *',
+            [name.trim(), description.trim(), req.user.id]
         );
-        
         const collection = result.rows[0];
+
+        // 2. Generate qdrant_collection_name using the UUID
+        const qdrantCollectionName = `collection_${collection.id}`;
+
+        // 3. Update the collection with the Qdrant collection name
+        await client.query(
+            'UPDATE collections SET qdrant_collection_name = $1 WHERE id = $2',
+            [qdrantCollectionName, collection.id]
+        );
+
+        // 4. Create collection in Qdrant
+        try {
+            await qdrant.createCollection(qdrantCollectionName);
+            console.log(`✅ Created Qdrant collection: ${qdrantCollectionName}`);
+        } catch (qdrantError) {
+            console.error('❌ Failed to create Qdrant collection:', qdrantError.message);
+            await client.query('ROLLBACK');
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to create vector collection',
+                error: qdrantError.message
+            });
+        }
+
+        await client.query('COMMIT');
         
-        // Create collection in Qdrant
-        await qdrant.createCollection(qdrantCollectionName);
-        
-        console.log(`✅ Created collection: ${name} (Qdrant: ${qdrantCollectionName})`);
-        
+        console.log(`✅ Created collection: ${name} (UUID: ${collection.id}, Qdrant: ${qdrantCollectionName})`);
+
+        // 5. Return the updated collection
+        const updatedCollection = {
+            ...collection,
+            qdrant_collection_name: qdrantCollectionName
+        };
+
         res.status(201).json({
             success: true,
-            data: collection,
+            data: updatedCollection,
             message: 'Collection created successfully'
         });
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('Collection creation error:', error);
         if (error.code === '23505') {
             return res.status(400).json({ success: false, message: 'Collection name already exists' });
         }
         res.status(500).json({ success: false, message: 'Failed to create collection' });
+    } finally {
+        client.release();
     }
 });
 
@@ -656,19 +621,11 @@ app.post('/api/collections', auth, async (req, res) => {
 app.delete('/api/collections/:id', auth, async (req, res) => {
     console.log(`🗑️ Delete collection request for ID: ${req.params.id}`);
     try {
-        const collectionId = parseInt(req.params.id);
-        
-        // Verify user owns the collection
-        const collectionResult = await db.query(
-            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [collectionId, req.user.id]
-        );
-        
-        if (collectionResult.rows.length === 0) {
+        const collectionId = req.params.id;
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
+        if (!collection) {
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
-        
-        const collection = collectionResult.rows[0];
         
         try {
             // Delete the Qdrant collection
@@ -701,16 +658,11 @@ app.delete('/api/collections/:id', auth, async (req, res) => {
 app.delete('/api/collections/:collectionId/documents/:documentId', auth, async (req, res) => {
     console.log(`🗑️ Delete document request: Collection ${req.params.collectionId}, Document ${req.params.documentId}`);
     try {
-        const collectionId = parseInt(req.params.collectionId);
+        const collectionId = req.params.collectionId;
         const documentId = parseInt(req.params.documentId);
         
-        // Verify user owns the collection
-        const collectionResult = await db.query(
-            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [collectionId, req.user.id]
-        );
-        
-        if (collectionResult.rows.length === 0) {
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
+        if (!collection) {
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
         
@@ -725,35 +677,38 @@ app.delete('/api/collections/:collectionId/documents/:documentId', auth, async (
         }
         
         const document = documentResult.rows[0];
-        const collection = collectionResult.rows[0];
         
         // Delete related vector points from Qdrant
         try {
-            // Search for all points related to this document
-            const queryEmbedding = await embeddingService.generateEmbedding(document.filename);
-            const relatedPoints = await qdrant.searchPoints(
-                collection.qdrant_collection_name,
-                queryEmbedding,
-                100, // Get more results to find all chunks
-                0.0  // Very low threshold to get all chunks
-            );
-            
-            // Filter points that belong to this specific document
-            const documentPoints = relatedPoints.filter(point => 
-                point.payload.filename === document.filename
-            );
-            
-            if (documentPoints.length > 0) {
-                console.log(`🗑️ Found ${documentPoints.length} vector points to delete for document ${document.filename}`);
+            console.log(`🔍 Finding vector points for document ID: ${documentId}`);
+            // Use scroll API with a filter to get all points for the document
+            const scrollResponse = await qdrant.client.scroll(collection.qdrant_collection_name, {
+                filter: {
+                    must: [
+                        {
+                            key: 'document_id',
+                            match: {
+                                value: documentId
+                            }
+                        }
+                    ]
+                },
+                limit: 10000, // A high limit to get all chunks for a document
+                with_payload: false,
+                with_vector: false
+            });
+
+            const pointIdsToDelete = scrollResponse.points.map(point => point.id);
+
+            if (pointIdsToDelete.length > 0) {
+                console.log(`🗑️ Found ${pointIdsToDelete.length} vector points to delete for document ${document.filename}`);
                 
-                // Delete each point individually (Qdrant doesn't have batch delete by filter)
-                for (const point of documentPoints) {
-                    try {
-                        await qdrant.client.delete(`/collections/${collection.qdrant_collection_name}/points/${point.id}`);
-                    } catch (deleteError) {
-                        console.warn(`⚠️ Failed to delete vector point ${point.id}:`, deleteError.message);
-                    }
-                }
+                // Assuming a batch delete method exists on the qdrant service wrapper
+                await qdrant.deletePoints(collection.qdrant_collection_name, pointIdsToDelete);
+                console.log(`✅ Deleted ${pointIdsToDelete.length} vector points from Qdrant.`);
+
+            } else {
+                console.log(`🤷 No vector points found for document ID ${documentId}. Nothing to delete from Qdrant.`);
             }
         } catch (qdrantError) {
             console.warn(`⚠️ Failed to delete vector data for document: ${qdrantError.message}`);
@@ -778,35 +733,50 @@ app.delete('/api/collections/:collectionId/documents/:documentId', auth, async (
 // Create text document endpoint
 app.post('/api/collections/:id/documents/create-text', auth, async (req, res) => {
     console.log(`📝 Create text document request for collection ${req.params.id}`);
+    const client = await db.getClient(); // Use a transaction
     try {
-        const collectionId = parseInt(req.params.id);
+        await client.query('BEGIN');
+
+        const collectionId = req.params.id;
         const { title, content, type = 'txt' } = req.body;
         
         if (!title || !content) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ 
                 success: false, 
                 message: 'Title and content are required' 
             });
         }
         
-        // Verify user owns the collection
-        const collectionResult = await db.query(
-            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [collectionId, req.user.id]
-        );
-        
-        if (collectionResult.rows.length === 0) {
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id, client);
+        if (!collection) {
+            await client.query('ROLLBACK');
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
-        
-        const collection = collectionResult.rows[0];
         
         // Create filename from title
         const filename = `${title.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_')}.${type}`;
         
+        // Generate preview from content
+        const preview = content.length > 500 
+            ? content.substring(0, 500) + '...' 
+            : content;
+
+        // 1. Insert document metadata into database first to get an ID
+        const insertResult = await client.query(
+            `INSERT INTO documents 
+                (filename, file_type, collection_id, created_at, updated_at, content_preview, content) 
+             VALUES ($1, $2, $3, NOW(), NOW(), $4, $5)
+             RETURNING id`,
+            [filename, type, collection.id, preview, content]
+        );
+        const document = insertResult.rows[0];
+        console.log(`📄 Created preliminary document record with ID: ${document.id}`);
+
         // Process the text content for vector storage
         let chunksStored = 0;
         let chunksSkipped = 0;
+        let firstPointId = null;
         
         // Create chunks from the text
         let chunks;
@@ -825,10 +795,10 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
         
         // Ensure Qdrant collection exists with correct vector size
         try {
-            const collectionResult = await qdrant.createCollection(collection.qdrant_collection_name, vectorSize);
-            console.log(`📁 Collection creation result:`, collectionResult);
+            await qdrant.createCollection(collection.qdrant_collection_name, vectorSize);
         } catch (collectionError) {
             console.error('❌ Failed to create/verify Qdrant collection:', collectionError.message);
+            await client.query('ROLLBACK');
             return res.status(500).json({
                 success: false,
                 message: 'Failed to create vector collection',
@@ -841,7 +811,6 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
             try {
                 console.log(`🧮 Generating embeddings for ${chunks.length} chunks...`);
                 
-                // Process in batches
                 const batchSize = 5;
                 const allPoints = [];
                 
@@ -851,13 +820,13 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
                     
                     const chunkEmbeddings = await embeddingService.generateEmbeddings(batchChunks);
                     
-                    // Prepare points for this batch
                     const batchPoints = batchChunks.map((chunk, batchIndex) => ({
                         id: uuidv4(),
                         vector: chunkEmbeddings[batchIndex],
                         payload: {
                             text: chunk,
                             filename: filename,
+                            document_id: document.id, // Link point to document
                             collection_id: collection.id,
                             chunk_index: i + batchIndex,
                             chunk_total: chunks.length,
@@ -870,13 +839,13 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
                     
                     allPoints.push(...batchPoints);
                     
-                    // Delay between batches for rate limiting
                     if (i + batchSize < chunks.length) {
                         await new Promise(resolve => setTimeout(resolve, 500));
                     }
                 }
                 
-                // Store all points in Qdrant
+                firstPointId = allPoints.length > 0 ? allPoints[0].id : null;
+
                 console.log(`📤 Storing ${allPoints.length} points in Qdrant...`);
                 try {
                     await qdrant.upsertPoints(collection.qdrant_collection_name, allPoints);
@@ -893,27 +862,16 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
             }
         }
         
-        // Generate preview from content
-        const preview = content.length > 500 
-            ? content.substring(0, 500) + '...' 
-            : content;
-        
-        // Insert document metadata into database
-        const insertResult = await db.query(
-            `INSERT INTO documents 
-                (filename, file_type, collection_id, created_at, updated_at, content_preview, content) 
-             VALUES ($1, $2, $3, NOW(), NOW(), $4, $5)
-             RETURNING id, filename, file_type, collection_id, created_at, updated_at`,
-            [
-                filename,
-                type,
-                collection.id,
-                preview,
-                content
-            ]
-        );
-        
-        const document = insertResult.rows[0];
+        // 2. Update the document with the qdrant_point_id of the first chunk
+        if (firstPointId) {
+            await client.query(
+                `UPDATE documents SET qdrant_point_id = $1 WHERE id = $2`,
+                [firstPointId, document.id]
+            );
+            console.log(`🔗 Linked document ${document.id} to Qdrant point ${firstPointId}`);
+        }
+
+        await client.query('COMMIT');
         
         console.log(`✅ Created text document with ID: ${document.id}`);
         
@@ -922,12 +880,10 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
             message: 'Text document created successfully',
             document: {
                 id: document.id,
-                filename: document.filename,
-                fileType: document.file_type,
+                filename: filename,
+                fileType: type,
                 contentPreview: preview,
-                collectionId: document.collection_id,
-                createdAt: document.created_at,
-                updatedAt: document.updated_at
+                collectionId: collection.id,
             },
             collection: collection.name,
             chunksStored,
@@ -937,12 +893,15 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
             contentLength: content.length
         });
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('❌ Create text document error:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Failed to create text document',
             error: error.message 
         });
+    } finally {
+        client.release();
     }
 });
 
@@ -950,7 +909,7 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
 app.post('/api/collections/:id/documents/upload-url', auth, async (req, res) => {
     console.log(`🌐 Upload from URL request for collection ${req.params.id}`);
     try {
-        const collectionId = parseInt(req.params.id);
+        const collectionId = req.params.id;
         const { url } = req.body;
         
         if (!url) {
@@ -960,29 +919,77 @@ app.post('/api/collections/:id/documents/upload-url', auth, async (req, res) => 
             });
         }
         
-        // Verify user owns the collection
-        const collectionResult = await db.query(
-            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
-            [collectionId, req.user.id]
-        );
-        
-        if (collectionResult.rows.length === 0) {
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
+        if (!collection) {
             return res.status(404).json({ success: false, message: 'Collection not found' });
         }
         
-        // For now, return a placeholder response
-        // In a full implementation, you would fetch the URL content and process it
-        res.json({
+        // Placeholder for actual implementation
+        // In a full implementation, you would:
+        // 1. Use a library like axios or node-fetch to get the URL content.
+        // 2. Use a library like cheerio to parse HTML or a text extractor for PDFs.
+        // 3. Process the extracted text just like in the 'create-text' endpoint.
+        console.log(`TODO: Implement content fetching for URL: ${url}`);
+        
+        res.status(501).json({
             success: false,
-            message: 'URL upload functionality not yet implemented',
-            note: 'This feature requires additional implementation for fetching and processing remote content'
+            message: 'URL upload functionality is not yet fully implemented.',
+            note: 'This feature requires a backend job to fetch, parse, and process remote content.'
         });
     } catch (error) {
         console.error('❌ Upload URL error:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Failed to upload from URL',
+            message: 'Failed to process upload from URL request.',
             error: error.message 
+        });
+    }
+});
+
+// File upload endpoint
+app.post('/api/collections/:id/documents/upload', auth, async (req, res) => {
+    console.log(`📤 File upload request for collection ${req.params.id}`);
+    try {
+        const collectionId = req.params.id;
+        const { filePath, mimeType } = req.body;
+
+        if (!filePath || !mimeType) {
+            return res.status(400).json({
+                success: false,
+                message: 'File path and MIME type are required'
+            });
+        }
+
+        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
+        if (!collection) {
+            return res.status(404).json({ success: false, message: 'Collection not found' });
+        }
+
+        // Extract text from the uploaded file
+        const extractedText = await documentProcessor.extractFromPDF(filePath, mimeType);
+
+        // Add this check:
+        if (!extractedText || extractedText.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No text could be extracted from this PDF. It may be a scanned document or image-only PDF. Try using OCR or upload a text-based PDF.'
+            });
+        }
+
+        // Continue with chunking and upserting...
+        console.log(`✅ Text extracted successfully. Proceeding with processing...`);
+
+        // Placeholder for further processing logic
+        res.json({
+            success: true,
+            message: 'File uploaded and processed successfully'
+        });
+    } catch (error) {
+        console.error('❌ File upload error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to process file upload',
+            error: error.message
         });
     }
 });
@@ -999,6 +1006,14 @@ console.log('✅ Upload routes registered');
 console.log('🔍 Registering search routes...');
 app.use('/api', searchRoutes);
 console.log('✅ Search routes registered');
+
+// Serve static files - This should come after all API routes
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Serve frontend for all other routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/index.html'));
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1020,11 +1035,6 @@ app._router.stack.forEach((middleware, index) => {
             });
         }
     }
-});
-
-// Serve frontend for all other routes
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 // Error handling middleware

@@ -27,18 +27,18 @@ class CollectionController extends BaseController {
     const collections = await this.collectionService.getUserCollections(userId, options);
     
     // For paginated response, we need total count
-    // This is a simplified version - in production, you'd get total count separately
+    const totalCollections = await this.collectionService.collectionRepository.countByUserId(userId);
     this.sendPaginatedResponse(res, collections, {
       page: pagination.page,
       limit: pagination.limit,
-      total: collections.length // This should be actual total count
+      total: totalCollections
     }, 'Collections retrieved successfully');
   });
 
   getCollection = this.asyncHandler(async (req, res) => {
     const userId = req.user.id; // Use 'id' instead of 'userId'
     const collectionId = parseInt(req.params.id);
-    
+    // Always use collectionId (UUID)
     const collection = await this.collectionService.getCollectionById(collectionId, userId);
     this.sendSuccessResponse(res, collection, 'Collection retrieved successfully');
   });

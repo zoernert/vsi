@@ -42,6 +42,14 @@ class CollectionRepository extends BaseRepository {
     return result.rows[0];
   }
 
+  async countByUserId(userId) {
+    const result = await this.db.query(
+      'SELECT COUNT(*) FROM collections WHERE user_id = $1',
+      [userId]
+    );
+    return parseInt(result.rows[0].count, 10);
+  }
+
   async getCollectionStats(collectionId) {
     const result = await this.db.query(
       `SELECT 

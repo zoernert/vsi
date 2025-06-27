@@ -21,36 +21,47 @@ class VectorService {
   async createCollection(userId, name, description = '') {
     await this.initializeDatabase();
     
-    // Check if collection already exists for this user
-    const existingCollection = await this.db.pool.query(
-      'SELECT * FROM collections WHERE name = $1 AND user_id = $2',
-      [name, userId]
-    );
-    
-    if (existingCollection.rows.length > 0) {
-      throw new Error('Collection with this name already exists');
+    const client = await this.db.getClient();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Insert collection into database to get the UUID
+      const result = await client.query(
+        'INSERT INTO collections (name, description, user_id) VALUES ($1, $2, $3) RETURNING *',
+        [name, description, userId]
+      );
+      const collection = result.rows[0];
+
+      // 2. Use the UUID as the Qdrant collection name
+      const qdrantCollectionName = `collection_${collection.id}`;
+
+      // 3. Update the collection with the Qdrant collection name
+      await client.query(
+        'UPDATE collections SET qdrant_collection_name = $1 WHERE id = $2',
+        [qdrantCollectionName, collection.id]
+      );
+
+      // 4. Create collection in Qdrant
+      await this.qdrantClient.createCollection(qdrantCollectionName, {
+        vectors: {
+          size: 768,
+          distance: 'Cosine'
+        }
+      });
+
+      await client.query('COMMIT');
+
+      // 5. Return the updated collection
+      return {
+        ...collection,
+        qdrant_collection_name: qdrantCollectionName
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-    
-    // Create Qdrant collection name
-    const qdrantCollectionName = `user_${userId}_${name}`;
-    
-    // Create collection in Qdrant
-    await this.qdrantClient.createCollection(qdrantCollectionName, {
-      vectors: {
-        size: 768,
-        distance: 'Cosine'
-      }
-    });
-    
-    // Create collection record in database
-    const result = await this.db.pool.query(
-      `INSERT INTO collections (name, description, user_id, qdrant_collection_name, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       RETURNING *`,
-      [name, description, userId, qdrantCollectionName]
-    );
-    
-    return result.rows[0];
   }
 
   async getUserCollections(userId, includeStats = false) {
@@ -80,16 +91,11 @@ class VectorService {
 
   async getCollection(userId, collectionId) {
     await this.initializeDatabase();
-    
     const result = await this.db.pool.query(
       'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
       [collectionId, userId]
     );
-    
-    if (result.rows.length === 0) {
-      return null;
-    }
-    
+    if (result.rows.length === 0) return null;
     return result.rows[0];
   }
 
@@ -351,9 +357,12 @@ class VectorService {
     try {
       await this.initializeDatabase();
       
-      // Get the document and its embedding
+      // Get the document and its collection info
       const docResult = await this.db.pool.query(
-        'SELECT * FROM documents WHERE id = $1',
+        `SELECT d.*, c.qdrant_collection_name 
+         FROM documents d 
+         JOIN collections c ON d.collection_id = c.id 
+         WHERE d.id = $1`,
         [documentId]
       );
       
@@ -364,7 +373,7 @@ class VectorService {
       const document = docResult.rows[0];
       
       // Get the document's vector from Qdrant
-      const points = await this.qdrantClient.retrieve(document.collection_id, {
+      const points = await this.qdrantClient.retrieve(document.qdrant_collection_name, {
         ids: [document.qdrant_point_id],
         with_vector: true
       });

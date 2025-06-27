@@ -70,3 +70,29 @@ The modular structure allows for easy reuse. For example, to create a minimal se
 | **System Health & Monitoring** | `usage-module.js` | Usage statistics, health checks, tier management |
 
 The frontend is now **production-ready** with a **clean, modular architecture** that can be easily maintained, extended, and reused across different applications while providing complete coverage of all VSI Vector Store use cases.
+
+## 🚀 **Future Backend Architecture (In Progress)**
+
+The backend is currently being refactored towards a modern, scalable, and maintainable architecture based on **Dependency Injection (DI)** and the **Controller-Service-Repository** pattern. The goal is to mirror the modularity and separation of concerns achieved in the frontend.
+
+### **Target Backend Structure:**
+
+- **`src/index.js`**: Main server entry point. Will be simplified to only handle server setup, middleware registration, and routing.
+- **`src/container/`**: Contains the Dependency Injection container setup (`setup.js`).
+- **`src/controllers/`**: Handles incoming HTTP requests, validates input, and calls application services. (e.g., `CollectionController.js`)
+- **`src/services/application/`**: Contains the core business logic and orchestrates operations between repositories. (e.g., `CollectionApplicationService.js`)
+- **`src/repositories/`**: Manages data access and communication with the database (PostgreSQL) and vector store (Qdrant). (e.g., `CollectionRepository.js`)
+- **`src/routes/`**: Defines API endpoints and maps them to controller methods.
+
+### **Current Status:**
+
+The refactoring is partially complete. The new services, repositories, and controllers have been created, and the DI container is set up in `src/container/setup.js`.
+
+However, the main server file (`src/index.js`) has not yet been updated to use this new structure. It still contains monolithic route handlers with business logic mixed in.
+
+**The next step is to wire up the new architecture in `index.js` by:**
+1. Initializing the DI container.
+2. Creating API routes that use the controllers from the container.
+3. Removing the old, monolithic route handlers from `index.js`.
+
+This will resolve architectural inconsistencies and make the backend as clean and maintainable as the frontend.

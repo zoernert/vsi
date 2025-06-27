@@ -174,13 +174,17 @@ class SearchApplicationService {
   async getSimilarDocuments(documentId, options = {}) {
     const { limit = 5, threshold = 0.7 } = options;
 
-    const document = await this.documentRepository.findById(documentId);
+    const document = await this.documentRepository.getDocumentWithContent(documentId);
     if (!document) {
       throw new NotFoundError('Document');
     }
 
-    // Parse the embedding from the document
-    const embedding = JSON.parse(document.embedding);
+    // Get the document's vector from Qdrant
+    const point = await this.documentRepository.getPoint(document.qdrant_collection_name, document.qdrant_point_id);
+    if (!point || !point.vector) {
+      throw new Error('Could not retrieve document vector from vector store.');
+    }
+    const embedding = point.vector;
 
     // Find similar documents
     const results = await this.documentRepository.searchSimilar(
@@ -191,7 +195,7 @@ class SearchApplicationService {
     );
 
     // Filter out the source document
-    const similarDocuments = results.filter(result => result.id !== documentId).slice(0, limit);
+    const similarDocuments = results.filter(result => result.qdrant_point_id !== document.qdrant_point_id).slice(0, limit);
 
     return {
       sourceDocument: {

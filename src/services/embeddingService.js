@@ -162,91 +162,55 @@ class EmbeddingService {
     }
 
     // Add a method for recursive chunking of very large documents
-    recursiveChunkText(text, maxChunkSize = 4000, overlap = 1000, maxDepth = 3, currentDepth = 0) {
-        console.log(`🔄 Recursive chunking at depth ${currentDepth}, text length: ${text.length}`);
-        
-        // If text is small enough or we've reached max depth, use regular chunking
-        if (text.length <= maxChunkSize * 2 || currentDepth >= maxDepth) {
-            return this.chunkText(text, maxChunkSize, overlap);
+    recursiveChunkText(text, maxChunkSize = 4000, overlap = 1000) {
+        if (text.length <= maxChunkSize) {
+            return [text];
         }
-        
-        // For very large texts, first split by major sections
-        let majorChunks = [];
-        
-        if (currentDepth === 0) {
-            // First level: split by major section markers
-            const sectionMarkers = [
-                /\n#{1,3}\s+/g,  // Markdown headers
-                /\n\d+\.\s+/g,   // Numbered sections
-                /\n[A-Z][A-Z\s]{10,}\n/g, // ALL CAPS section headers
-                /\n\n[A-Z][^.!?]*[.!?]\n\n/g // Paragraph headers
-            ];
-            
-            let bestSplit = this.findBestSplit(text, sectionMarkers);
-            if (bestSplit.length > 1) {
-                majorChunks = bestSplit;
+
+        const chunks = [];
+        const separators = ['\n\n', '\n', '. ', ' ', ''];
+
+        function split(text, currentSeparators) {
+            if (text.length <= maxChunkSize) {
+                return [text];
             }
-        }
-        
-        // If no major sections found, split by paragraphs
-        if (majorChunks.length <= 1) {
-            majorChunks = text.split(/\n\n+/).filter(chunk => chunk.trim().length > 0);
-        }
-        
-        // If still no good splits, split by sentences
-        if (majorChunks.length <= 1) {
-            majorChunks = text.split(/[.!?]+\s+/).filter(chunk => chunk.trim().length > 0);
-        }
-        
-        // Recursively chunk each major section
-        const allChunks = [];
-        for (const majorChunk of majorChunks) {
-            if (majorChunk.length > maxChunkSize) {
-                const subChunks = this.recursiveChunkText(
-                    majorChunk, 
-                    maxChunkSize, 
-                    overlap, 
-                    maxDepth, 
-                    currentDepth + 1
-                );
-                allChunks.push(...subChunks);
-            } else if (majorChunk.trim().length > 0) {
-                allChunks.push(majorChunk.trim());
+            if (currentSeparators.length === 0) {
+                // Base case: split by character if no separators work
+                const result = [];
+                for (let i = 0; i < text.length; i += maxChunkSize) {
+                    result.push(text.slice(i, i + maxChunkSize));
+                }
+                return result;
             }
-        }
-        
-        console.log(`✅ Recursive chunking completed at depth ${currentDepth}: ${allChunks.length} chunks`);
-        return allChunks;
-    }
-    
-    findBestSplit(text, patterns) {
-        for (const pattern of patterns) {
-            const matches = Array.from(text.matchAll(pattern));
-            if (matches.length > 1) {
-                const splits = [];
-                let lastIndex = 0;
-                
-                for (const match of matches) {
-                    if (match.index > lastIndex) {
-                        splits.push(text.slice(lastIndex, match.index).trim());
+
+            const separator = currentSeparators[0];
+            const parts = text.split(separator);
+            const subChunks = [];
+
+            let currentChunk = '';
+            for (const part of parts) {
+                const potentialChunk = currentChunk + (currentChunk ? separator : '') + part;
+                if (potentialChunk.length > maxChunkSize) {
+                    if (currentChunk) {
+                        subChunks.push(currentChunk);
                     }
-                    lastIndex = match.index;
-                }
-                
-                // Add the final section
-                if (lastIndex < text.length) {
-                    splits.push(text.slice(lastIndex).trim());
-                }
-                
-                // Filter out very small sections
-                const validSplits = splits.filter(split => split.length > 100);
-                if (validSplits.length > 1) {
-                    console.log(`📑 Found ${validSplits.length} sections using pattern: ${pattern}`);
-                    return validSplits;
+                    currentChunk = part;
+                } else {
+                    currentChunk = potentialChunk;
                 }
             }
+            if (currentChunk) {
+                subChunks.push(currentChunk);
+            }
+            
+            const finalChunks = [];
+            for (const subChunk of subChunks) {
+                finalChunks.push(...split(subChunk, currentSeparators.slice(1)));
+            }
+            return finalChunks;
         }
-        return [text];
+        
+        return split(text, separators);
     }
 }
 

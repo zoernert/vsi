@@ -170,15 +170,16 @@ class DatabaseService {
 
     async getSystemStats() {
         try {
-            const [usersResult, collectionsResult] = await Promise.all([
+            const [usersResult, collectionsResult, documentsResult] = await Promise.all([
                 this.pool.query('SELECT COUNT(*) as total_users FROM users'),
-                this.pool.query('SELECT COUNT(*) as total_collections FROM collections')
+                this.pool.query('SELECT COUNT(*) as total_collections FROM collections'),
+                this.pool.query('SELECT COUNT(*) as total_documents FROM documents')
             ]);
 
             return {
                 totalUsers: parseInt(usersResult.rows[0].total_users),
                 totalCollections: parseInt(collectionsResult.rows[0].total_collections || 0),
-                totalDocuments: 0,
+                totalDocuments: parseInt(documentsResult.rows[0].total_documents || 0),
                 systemHealth: { status: 'healthy' }
             };
         } catch (error) {
@@ -219,11 +220,14 @@ class DatabaseService {
 
     async getUserTier(userId) {
         try {
-            const result = await this.pool.query('SELECT tier FROM users WHERE id = $1', [userId]);
-            return result.rows.length > 0 ? result.rows[0].tier : 'free';
+            const result = await this.pool.query(
+                'SELECT tier FROM users WHERE id = $1',
+                [userId]
+            );
+            return result.rows[0]?.tier || 'free';
         } catch (error) {
             console.error('Error getting user tier:', error);
-            return 'free'; // Default to free tier on error
+            return 'free'; // Default to 'free' on error
         }
     }
 

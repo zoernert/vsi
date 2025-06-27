@@ -670,74 +670,66 @@ async function handleAskQuestion(args) {
     const actualCollectionName = getUserCollectionName(collection);
 
     try {
-        // Generate query variations
-        const queries = [question];
-        
-        // Search for relevant documents
-        const allResults = [];
-        for (const query of queries) {
-            const queryEmbedding = await generateEmbedding(query);
-            const searchResult = await qdrantClient.search(actualCollectionName, {
-                vector: queryEmbedding,
-                limit: max_results,
-                with_payload: true,
-                with_vector: false,
-                score_threshold: 0.1,
-            });
-            allResults.push(...searchResult);
+        // 1. Generate embedding for the question
+        const queryEmbedding = await generateEmbedding(question);
+
+        // 2. Search for relevant documents
+        const searchResult = await qdrantClient.search(actualCollectionName, {
+            vector: queryEmbedding,
+            limit: max_results,
+            with_payload: true,
+            with_vector: false,
+            score_threshold: 0.1,
+        });
+
+        // 3. Prepare context from search results
+        const context = searchResult
+            .map(hit => hit.payload.content || hit.payload.text || '')
+            .join('\n\n---\n\n');
+
+        if (context.trim().length === 0) {
+            return {
+                content: [{ type: 'text', text: "I couldn't find any relevant information in the collection to answer your question." }]
+            };
         }
 
-        // Remove duplicates and get top results
-        const uniqueResults = allResults.reduce((acc, current) => {
-            const exists = acc.find(item => item.id === current.id);
-            if (!exists) {
-                acc.push(current);
-            }
-            return acc;
-        }, []);
-
-        const topResults = uniqueResults
-            .sort((a, b) => b.score - a.score)
-            .slice(0, max_results);
-
-        // Prepare context
-        const retrievedContext = topResults.map(hit => 
-            hit.payload.content || hit.payload.text || ''
-        );
-
-        // Generate answer using Google AI
+        // 4. Generate answer using Google AI
         if (!process.env.GOOGLE_AI_API_KEY) {
-            throw new Error('Google AI API key not configured');
+            throw new Error('Google AI API key is not configured.');
         }
-
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const llm = genAI.getGenerativeModel({ model: "gemini-pro" });
         
-        const systemPromptText = system_prompt || 
-            "You are a helpful AI assistant. Answer questions based on the provided context. " +
-            "If the context doesn't contain enough information to answer the question, say so clearly.";
-
-        const contextText = retrievedContext.join('\n\n');
-        const prompt = `${systemPromptText}\n\nContext:\n${contextText}\n\nQuestion: ${question}\n\nAnswer:`;
-
-        const result = await model.generateContent(prompt);
-        const answer = result.response.text();
+        const finalPrompt = `
+System Prompt: ${system_prompt || 'You are a helpful assistant. Answer the question based on the provided context.'}
+---
+Context:
+${context}
+---
+Question: ${question}
+Answer:
+`;
+        const result = await llm.generateContent(finalPrompt);
+        const response = await result.response;
+        const answer = response.text();
 
         return {
             content: [
                 {
                     type: 'text',
                     text: JSON.stringify({
-                        question,
-                        answer,
-                        queries,
-                        retrievedContext,
-                        contextCount: retrievedContext.length,
-                    }, null, 2),
-                },
-            ],
+                        answer: answer,
+                        sources: searchResult.map(hit => ({
+                            id: hit.id,
+                            title: hit.payload.title,
+                            score: hit.score
+                        }))
+                    }, null, 2)
+                }
+            ]
         };
     } catch (error) {
-        throw new Error(`Failed to answer question: ${error.message}`);
+        console.error('Error in handleAskQuestion:', error);
+        throw new Error(`Failed to ask question: ${error.message}`);
     }
 }
 
@@ -746,27 +738,18 @@ async function handleGetCollectionInfo(args) {
     const actualCollectionName = getUserCollectionName(collection);
 
     try {
-        const collectionInfo = await qdrantClient.getCollection(actualCollectionName);
-        
-        // Get document count
-        const countResult = await qdrantClient.count(actualCollectionName);
-        
+        const info = await qdrantClient.getCollection(actualCollectionName);
         return {
             content: [
                 {
                     type: 'text',
-                    text: JSON.stringify({
-                        name: collection,
-                        actualName: actualCollectionName,
-                        vectorsCount: countResult.count,
-                        config: collectionInfo.config,
-                        status: collectionInfo.status,
-                    }, null, 2),
+                    text: JSON.stringify(info, null, 2),
                 },
             ],
         };
     } catch (error) {
-        throw new Error(`Failed to get collection info: ${error.message}`);
+        console.error('Error in handleGetCollectionInfo:', error);
+        throw new Error(`Failed to get info for collection '${collection}': ${error.message}`);
     }
 }
 

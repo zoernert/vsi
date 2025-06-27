@@ -144,9 +144,17 @@ class DocumentRepository extends BaseRepository {
     }
   }
 
+  async getPoint(qdrantCollectionName, pointId) {
+    const points = await qdrantClient.retrieve(qdrantCollectionName, {
+      ids: [pointId],
+      with_vector: true
+    });
+    return points[0] || null;
+  }
+
   async getDocumentWithContent(documentId) {
     const result = await this.db.query(
-      `SELECT d.*, c.name as collection_name, c.user_id
+      `SELECT d.*, c.name as collection_name, c.user_id, c.qdrant_collection_name
        FROM documents d
        JOIN collections c ON d.collection_id = c.id
        WHERE d.id = $1`,

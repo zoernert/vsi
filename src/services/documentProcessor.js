@@ -1,11 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 const pdf = require('pdf-parse');
+const { EmbeddingService } = require('./embeddingService');
+const { v4: uuidv4 } = require('uuid');
 
 class DocumentProcessor {
-    constructor() {
+    constructor(embeddingService, qdrantService) {
         this.supportedTypes = ['.pdf', '.txt', '.md', '.doc', '.docx'];
         console.log('📄 DocumentProcessor initialized with supported types:', this.supportedTypes);
+
+        this.embeddingService = embeddingService || new EmbeddingService();
+        this.qdrantService = qdrantService; // This should be injected
+        this.logger = console; // Replace with a proper logger
     }
 
     async extractText(filePath, mimeType) {
@@ -77,6 +83,12 @@ class DocumentProcessor {
                 .replace(/\r/g, '\n')    // Handle old Mac line endings
                 .replace(/\n{3,}/g, '\n\n')  // Reduce excessive line breaks
                 .trim();
+
+            // Add this check:
+            if (!cleanText || cleanText.length === 0) {
+                console.warn('❌ No text could be extracted from PDF. It may be a scanned document or image-only PDF.');
+                throw new Error('No text could be extracted from this PDF. It may be a scanned document or image-only PDF.');
+            }
                 
             console.log(`✅ PDF text extraction successful: ${cleanText.length} characters after cleanup`);
             
@@ -188,6 +200,56 @@ class DocumentProcessor {
         console.log('📊 Document structure analysis:', analysis);
         return analysis;
     }
+
+    async processTextDocument(documentData) {
+        const { content, filename, fileType = 'txt', collectionId, collectionName } = documentData;
+        
+        this.logger.log(`Processing text document: ${filename}`);
+    
+        // 1. Chunk the text
+        const chunks = this.embeddingService.chunkText(content);
+        this.logger.log(`Created ${chunks.length} chunks.`);
+    
+        if (chunks.length === 0) {
+            return { points: [], documentInfo: null };
+        }
+    
+        // 2. Generate embeddings for chunks
+        const embeddings = await this.embeddingService.generateEmbeddings(chunks);
+        this.logger.log(`Generated ${embeddings.length} embeddings.`);
+    
+        // 3. Create Qdrant points
+        const points = chunks.map((chunk, index) => ({
+            id: uuidv4(),
+            vector: embeddings[index],
+            payload: {
+                text: chunk,
+                filename: filename,
+                file_type: fileType,
+                collection_id: collectionId,
+                chunk_index: index,
+                chunk_total: chunks.length,
+                created_at: new Date().toISOString(),
+            }
+        }));
+    
+        // The caller will be responsible for upserting points to Qdrant
+        // and creating the document metadata in PostgreSQL.
+    
+        const documentInfo = {
+            filename,
+            fileType,
+            collectionId,
+            content,
+            contentPreview: content.substring(0, 500) + (content.length > 500 ? '...' : ''),
+            // The caller should decide which qdrant_point_id to store, if any.
+            // For a multi-chunk document, this model is problematic.
+        };
+    
+        return { points, documentInfo };
+    }
+
+    // TODO: Implement processors for other file types (PDF, DOCX, etc.)
 }
 
 module.exports = { DocumentProcessor };
