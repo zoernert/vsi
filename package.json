@@ -19,6 +19,8 @@
     "seed": "node scripts/seed.js",
     "seed:test": "NODE_ENV=test node scripts/seed.js",
     "validate-config": "node scripts/validate-config.js",
+    "validate-admin": "node scripts/validate-admin-endpoints.js",
+    "test-admin": "node scripts/test-admin-comprehensive.js",
     "cleanup:legacy": "node scripts/cleanup-legacy.js",
     "logs:error": "tail -f logs/error.log",
     "logs:combined": "tail -f logs/combined.log",

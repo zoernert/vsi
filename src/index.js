@@ -29,6 +29,8 @@ const { MigrationService } = require('./services/migrationService');
 const { auth } = require('./middleware');
 const uploadRoutes = require('./routes/uploadRoutes');
 const searchRoutes = require('./routes/searchRoutes'); // Add this line
+const adminRoutes = require('./routes/adminRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 const { QdrantService } = require('./services/qdrantService');
 const { EmbeddingService } = require('./services/embeddingService');
 const { GeminiService } = require('./services/geminiService');
@@ -1154,18 +1156,28 @@ console.log('🔍 Registering search routes...');
 app.use('/api', searchRoutes);
 console.log('✅ Search routes registered');
 
+// Admin routes - Mount admin functionality
+console.log('👑 Registering admin routes...');
+app.use('/api/admin', adminRoutes);
+console.log('✅ Admin routes registered');
+
+// Analytics routes - Mount analytics under admin
+console.log('📊 Registering analytics routes...');
+app.use('/api/admin/analytics', analyticsRoutes);
+console.log('✅ Analytics routes registered');
+
+// Health check - Must be before catch-all route
+app.get('/api/health', (req, res) => {
+    console.log('💚 Health check endpoint hit');
+    res.json({ success: true, message: 'Server is running', timestamp: new Date().toISOString() });
+});
+
 // Serve static files - This should come after all API routes
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Serve frontend for all other routes
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));
-});
-
-// Health check
-app.get('/api/health', (req, res) => {
-    console.log('💚 Health check endpoint hit');
-    res.json({ success: true, message: 'Server is running', timestamp: new Date().toISOString() });
 });
 
 // Debug: List all registered routes
