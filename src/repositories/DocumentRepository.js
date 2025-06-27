@@ -21,13 +21,13 @@ class DocumentRepository extends BaseRepository {
   }
 
   async createDocument(documentData) {
-    const { filename, content, contentPreview, fileType, collectionId, qdrantPointId } = documentData;
+    const { filename, content, contentPreview, fileType, collectionId, collectionUuid, qdrantPointId } = documentData;
     
     const result = await this.db.query(
-      `INSERT INTO documents (filename, content, content_preview, file_type, collection_id, qdrant_point_id, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `INSERT INTO documents (filename, content, content_preview, file_type, collection_id, collection_uuid, qdrant_point_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING *`,
-      [filename, content, contentPreview, fileType, collectionId, qdrantPointId]
+      [filename, content, contentPreview, fileType, collectionId, collectionUuid, qdrantPointId]
     );
     
     return result.rows[0];

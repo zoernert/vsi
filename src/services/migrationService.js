@@ -355,6 +355,124 @@ class MigrationService {
         // No longer needed since we're not storing vectors in PostgreSQL
         return false;
     }
+
+    /**
+     * Add UUID column to collections table
+     */
+    async addCollectionUuids() {
+        const migrationName = 'add_collection_uuids';
+        
+        // Check if migration already ran
+        const existingMigration = await this.db.pool.query(
+            'SELECT * FROM migrations WHERE name = $1',
+            [migrationName]
+        );
+
+        if (existingMigration.rows.length > 0) {
+            console.log(`Migration ${migrationName} already executed`);
+            return;
+        }
+
+        console.log('Adding UUID column to collections table...');
+        
+        // Add UUID column with default generation
+        await this.db.pool.query(`
+            ALTER TABLE collections ADD COLUMN IF NOT EXISTS uuid UUID DEFAULT gen_random_uuid()
+        `);
+
+        // Create unique index on UUID for fast lookups
+        await this.db.pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_uuid ON collections(uuid)
+        `);
+
+        // Ensure all existing collections have UUIDs
+        await this.db.pool.query(`
+            UPDATE collections SET uuid = gen_random_uuid() WHERE uuid IS NULL
+        `);
+
+        // Make UUID column NOT NULL
+        await this.db.pool.query(`
+            ALTER TABLE collections ALTER COLUMN uuid SET NOT NULL
+        `);
+
+        // Record migration
+        await this.db.pool.query(
+            'INSERT INTO migrations (name) VALUES ($1)',
+            [migrationName]
+        );
+
+        console.log(`✅ Migration ${migrationName} completed`);
+    }
+
+    /**
+     * Add collection_uuid column to documents table
+     */
+    async addDocumentCollectionUuids() {
+        const migrationName = 'add_document_collection_uuids';
+        
+        // Check if migration already ran
+        const existingMigration = await this.db.pool.query(
+            'SELECT * FROM migrations WHERE name = $1',
+            [migrationName]
+        );
+
+        if (existingMigration.rows.length > 0) {
+            console.log(`Migration ${migrationName} already executed`);
+            return;
+        }
+
+        console.log('Adding collection_uuid to documents table...');
+        
+        // Add collection_uuid column
+        await this.db.pool.query(`
+            ALTER TABLE documents ADD COLUMN IF NOT EXISTS collection_uuid UUID
+        `);
+
+        // Populate collection_uuid from existing collection_id relationships
+        await this.db.pool.query(`
+            UPDATE documents SET collection_uuid = (
+                SELECT c.uuid 
+                FROM collections c 
+                WHERE c.id = documents.collection_id
+            ) WHERE collection_uuid IS NULL
+        `);
+
+        // Create index on collection_uuid for performance
+        await this.db.pool.query(`
+            CREATE INDEX IF NOT EXISTS idx_documents_collection_uuid ON documents(collection_uuid)
+        `);
+
+        // Add foreign key constraint to maintain referential integrity
+        await this.db.pool.query(`
+            ALTER TABLE documents ADD CONSTRAINT IF NOT EXISTS fk_documents_collection_uuid 
+                FOREIGN KEY (collection_uuid) REFERENCES collections(uuid) ON DELETE CASCADE
+        `);
+
+        // Record migration
+        await this.db.pool.query(
+            'INSERT INTO migrations (name) VALUES ($1)',
+            [migrationName]
+        );
+
+        console.log(`✅ Migration ${migrationName} completed`);
+    }
+
+    /**
+     * Run all UUID-related migrations
+     */
+    async runUuidMigrations() {
+        console.log('🔄 Starting UUID migration process...');
+        
+        try {
+            await this.addCollectionUuids();
+            await this.addDocumentCollectionUuids();
+            
+            console.log('✅ All UUID migrations completed successfully');
+        } catch (error) {
+            console.error('❌ UUID migration failed:', error);
+            throw error;
+        }
+    }
 }
 
 module.exports = { MigrationService };

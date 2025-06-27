@@ -1,5 +1,5 @@
 const express = require('express');
-const { validate, schemas } = require('../middleware/validation');
+const { validate, schemas, validateCollectionId } = require('../middleware/validation');
 const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const { apiLimiter, authLimiter, searchLimiter } = require('../middleware/rateLimiting');
 
@@ -87,55 +87,65 @@ const setupApiRoutes = (container) => {
 
   router.get('/collections/:id',
     authenticateToken,
+    validateCollectionId,
     collectionController.getCollection
   );
 
   router.put('/collections/:id',
     authenticateToken,
+    validateCollectionId,
     validate(schemas.collection.update),
     collectionController.updateCollection
   );
 
   router.delete('/collections/:id',
     authenticateToken,
+    validateCollectionId,
     collectionController.deleteCollection
   );
 
   router.get('/collections/:id/documents',
     authenticateToken,
+    validateCollectionId,
     collectionController.getCollectionDocuments
   );
 
   router.get('/collections/:id/stats',
     authenticateToken,
+    validateCollectionId,
     collectionController.getCollectionStats
   );
 
   // Document management routes
   router.post('/collections/:id/documents/upload',
     authenticateToken,
+    validateCollectionId,
     collectionController.uploadDocument
   );
 
   router.post('/collections/:id/documents/upload-url',
     authenticateToken,
+    validateCollectionId,
     validate(schemas.document.uploadUrl),
     collectionController.uploadFromUrl
   );
 
   router.post('/collections/:id/documents/create-text',
     authenticateToken,
+    validateCollectionId,
     validate(schemas.document.createText),
     collectionController.createTextDocument
   );
 
   router.delete('/collections/:id/documents/:documentId',
     authenticateToken,
+    validateCollectionId,
     collectionController.deleteDocument
   );
 
   router.post('/collections/:id/reindex',
     authenticateToken,
+    validateCollectionId,
     collectionController.reindexCollection
   );
 
@@ -143,6 +153,7 @@ const setupApiRoutes = (container) => {
   router.post('/collections/:id/search',
     searchLimiter,
     authenticateToken,
+    validateCollectionId,
     validate(schemas.search.collection),
     searchController.searchCollection
   );
@@ -150,6 +161,7 @@ const setupApiRoutes = (container) => {
   router.post('/collections/:id/ask',
     searchLimiter,
     authenticateToken,
+    validateCollectionId,
     validate(schemas.search.ask),
     searchController.askQuestion
   );

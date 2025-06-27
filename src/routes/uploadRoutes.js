@@ -230,13 +230,14 @@ router.post('/upload/:collection', (req, res, next) => {
 
         const insertResult = await db.query(
             `INSERT INTO documents 
-                (filename, file_type, collection_id, created_at, updated_at, content_preview, content) 
-             VALUES ($1, $2, $3, NOW(), NOW(), $4, $5)
+                (filename, file_type, collection_id, collection_uuid, created_at, updated_at, content_preview, content) 
+             VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)
              RETURNING id, filename, file_type, collection_id, created_at, updated_at`,
             [
                 req.file.originalname,
                 fileExtension.substring(1),
                 collection.id,
+                collection.uuid,
                 preview,
                 extractedText
             ]

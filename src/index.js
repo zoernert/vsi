@@ -13,6 +13,8 @@ const path = require('path');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const uploadMiddleware = multer({ dest: 'uploads/' });
 require('dotenv').config();
 
 console.log('📦 Dependencies loaded successfully');
@@ -765,10 +767,10 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
         // 1. Insert document metadata into database first to get an ID
         const insertResult = await client.query(
             `INSERT INTO documents 
-                (filename, file_type, collection_id, created_at, updated_at, content_preview, content) 
-             VALUES ($1, $2, $3, NOW(), NOW(), $4, $5)
+                (filename, file_type, collection_id, collection_uuid, created_at, updated_at, content_preview, content) 
+             VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)
              RETURNING id`,
-            [filename, type, collection.id, preview, content]
+            [filename, type, collection.id, collection.uuid, preview, content]
         );
         const document = insertResult.rows[0];
         console.log(`📄 Created preliminary document record with ID: ${document.id}`);
@@ -947,50 +949,195 @@ app.post('/api/collections/:id/documents/upload-url', auth, async (req, res) => 
 });
 
 // File upload endpoint
-app.post('/api/collections/:id/documents/upload', auth, async (req, res) => {
+app.post('/api/collections/:id/documents/upload', auth, uploadMiddleware.single('file'), async (req, res) => {
+    const startTime = Date.now();
     console.log(`📤 File upload request for collection ${req.params.id}`);
+    
+    const client = await db.getClient();
     try {
-        const collectionId = req.params.id;
-        const { filePath, mimeType } = req.body;
-
-        if (!filePath || !mimeType) {
+        await client.query('BEGIN');
+        
+        const collectionId = parseInt(req.params.id);
+        
+        if (!req.file) {
+            await client.query('ROLLBACK');
             return res.status(400).json({
                 success: false,
-                message: 'File path and MIME type are required'
+                message: 'No file uploaded'
             });
         }
 
-        const collection = await getCollectionByIdOr404(collectionId, req.user.id);
-        if (!collection) {
-            return res.status(404).json({ success: false, message: 'Collection not found' });
+        // Verify user owns the collection
+        const collectionResult = await client.query(
+            'SELECT * FROM collections WHERE id = $1 AND user_id = $2',
+            [collectionId, req.user.id]
+        );
+        
+        if (collectionResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({
+                success: false,
+                message: 'Collection not found'
+            });
         }
-
-        // Extract text from the uploaded file
-        const extractedText = await documentProcessor.extractFromPDF(filePath, mimeType);
-
-        // Add this check:
-        if (!extractedText || extractedText.length === 0) {
+        
+        const collection = collectionResult.rows[0];
+        
+        // Extract text from file using DocumentProcessor
+        const processor = new DocumentProcessor();
+        let extractedText = '';
+        const fileExtension = path.extname(req.file.originalname).toLowerCase();
+        
+        try {
+            console.log(`📄 Processing ${fileExtension} file: ${req.file.originalname}`);
+            
+            if (fileExtension === '.pdf') {
+                extractedText = await processor.extractFromPDF(req.file.path);
+            } else if (['.doc', '.docx'].includes(fileExtension)) {
+                extractedText = await processor.extractFromWord(req.file.path);
+            } else if (['.txt', '.md'].includes(fileExtension)) {
+                extractedText = await processor.extractFromText(req.file.path);
+            } else {
+                throw new Error(`Unsupported file type: ${fileExtension}`);
+            }
+            
+            if (!extractedText || extractedText.trim().length === 0) {
+                throw new Error('No text content could be extracted from the file');
+            }
+            
+            console.log(`✅ Extracted ${extractedText.length} characters from ${req.file.originalname}`);
+            
+        } catch (extractError) {
+            console.error(`❌ Text extraction failed:`, extractError.message);
+            await client.query('ROLLBACK');
             return res.status(400).json({
                 success: false,
-                message: 'No text could be extracted from this PDF. It may be a scanned document or image-only PDF. Try using OCR or upload a text-based PDF.'
+                message: `Failed to extract text from file: ${extractError.message}`
             });
         }
 
-        // Continue with chunking and upserting...
-        console.log(`✅ Text extracted successfully. Proceeding with processing...`);
+        // Generate preview from content
+        const preview = extractedText.length > 500 
+            ? extractedText.substring(0, 500) + '...' 
+            : extractedText;
 
-        // Placeholder for further processing logic
+        // Insert document metadata into database
+        const insertResult = await client.query(
+            `INSERT INTO documents 
+                (filename, file_type, collection_id, collection_uuid, created_at, updated_at, content_preview, content) 
+             VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)
+             RETURNING id`,
+            [req.file.originalname, fileExtension.substring(1), collection.id, collection.uuid, preview, extractedText]
+        );
+        const document = insertResult.rows[0];
+        
+        console.log(`📄 Created document record with ID: ${document.id}`);
+
+        // Process the text content for vector storage
+        const embeddingService = new EmbeddingService();
+        const qdrant = new QdrantService();
+        
+        let chunksStored = 0;
+        let chunksSkipped = 0;
+        let firstPointId = null;
+        
+        // Create chunks from the text
+        let chunks;
+        if (extractedText.length > 10000) {
+            console.log(`📚 Large document (${extractedText.length} chars), using recursive chunking`);
+            chunks = embeddingService.recursiveChunkText(extractedText, 4000, 1000);
+        } else {
+            console.log(`📄 Standard document, using regular chunking`);
+            chunks = embeddingService.chunkText(extractedText, 4000, 1000);
+        }
+        
+        console.log(`📝 Created ${chunks.length} text chunks`);
+        
+        // Get the correct vector size for the embedding model
+        const vectorSize = await embeddingService.getVectorSize();
+        
+        // Ensure Qdrant collection exists with correct vector size
+        try {
+            await qdrant.createCollection(collection.qdrant_collection_name, vectorSize);
+        } catch (collectionError) {
+            console.error('❌ Failed to create/verify Qdrant collection:', collectionError.message);
+        }
+        
+        // Generate embeddings and store in Qdrant
+        if (chunks.length > 0) {
+            for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                try {
+                    const embedding = await embeddingService.generateEmbedding(chunk);
+                    const pointId = `${document.id}_chunk_${i}`;
+                    
+                    if (i === 0) firstPointId = pointId;
+                    
+                    await qdrant.upsertPoint(collection.qdrant_collection_name, {
+                        id: pointId,
+                        vector: embedding,
+                        payload: {
+                            document_id: document.id,
+                            text: chunk,
+                            filename: req.file.originalname,
+                            file_type: fileExtension.substring(1),
+                            chunk_index: i,
+                            collection_id: collection.id
+                        }
+                    });
+                    
+                    chunksStored++;
+                } catch (chunkError) {
+                    console.error(`❌ Failed to process chunk ${i}:`, chunkError.message);
+                    chunksSkipped++;
+                }
+            }
+        }
+        
+        // Update the document with the qdrant_point_id of the first chunk
+        if (firstPointId) {
+            await client.query(
+                'UPDATE documents SET qdrant_point_id = $1 WHERE id = $2',
+                [firstPointId, document.id]
+            );
+        }
+
+        await client.query('COMMIT');
+        
+        const processingTime = Date.now() - startTime;
+        console.log(`✅ Document processing completed in ${processingTime}ms`);
+        
         res.json({
             success: true,
-            message: 'File uploaded and processed successfully'
+            message: 'Document processed successfully',
+            document: {
+                id: document.id,
+                filename: req.file.originalname,
+                file_type: fileExtension.substring(1),
+                collection_id: collection.id
+            },
+            chunksStored,
+            totalChunks: chunks.length,
+            processingTime
         });
+
+        // Clean up uploaded file
+        try {
+            await fs.unlink(req.file.path);
+        } catch (unlinkError) {
+            console.warn('Failed to delete temporary file:', unlinkError.message);
+        }
+        
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('❌ File upload error:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to process file upload',
             error: error.message
         });
+    } finally {
+        client.release();
     }
 });
 

@@ -42,8 +42,15 @@ class CollectionController {
       const userId = req.user.id;
       const includeStats = req.query.include_stats === 'true';
       
+      console.log(`🔍 CollectionController.getUserCollections called for user ${userId}, includeStats: ${includeStats}`);
+      
       // Get collections using VectorService with database integration
       const collections = await this.vectorService.getUserCollections(userId, includeStats);
+      
+      console.log(`🔍 VectorService returned ${collections.length} collections`);
+      collections.forEach((collection, index) => {
+        console.log(`   ${index + 1}. Collection ${collection.id}: document_count=${collection.document_count}, documentsCount=${collection.documentsCount}`);
+      });
       
       res.json(collections);
     } catch (error) {
@@ -56,8 +63,16 @@ class CollectionController {
     try {
       const { id } = req.params;
       const userId = req.user.id;
-      // Always use id (UUID)
-      const collection = await this.vectorService.getCollection(userId, id);
+      
+      let collection;
+      if (req.collectionIdType === 'uuid') {
+        // Use UUID-based lookup (preferred)
+        collection = await this.vectorService.getCollectionByUuid(userId, id);
+      } else {
+        // Use legacy ID-based lookup (during transition)
+        collection = await this.vectorService.getCollection(userId, id);
+      }
+      
       if (!collection) {
         return res.status(404).json({ message: 'Collection not found' });
       }
@@ -74,7 +89,13 @@ class CollectionController {
       const { name, description } = req.body;
       const userId = req.user.id;
       
-      await this.vectorService.updateCollection(userId, id, { name, description });
+      if (req.collectionIdType === 'uuid') {
+        // Use UUID-based update (preferred)
+        await this.vectorService.updateCollectionByUuid(userId, id, { name, description });
+      } else {
+        // Use legacy ID-based update (during transition)
+        await this.vectorService.updateCollection(userId, id, { name, description });
+      }
       
       res.json({ success: true, message: 'Collection updated successfully' });
     } catch (error) {
@@ -88,7 +109,13 @@ class CollectionController {
       const { id } = req.params;
       const userId = req.user.id;
       
-      await this.vectorService.deleteCollection(userId, id);
+      if (req.collectionIdType === 'uuid') {
+        // Use UUID-based deletion (preferred)
+        await this.vectorService.deleteCollectionByUuid(userId, id);
+      } else {
+        // Use legacy ID-based deletion (during transition)
+        await this.vectorService.deleteCollection(userId, id);
+      }
       
       res.json({ success: true, message: 'Collection deleted successfully' });
     } catch (error) {
@@ -103,11 +130,22 @@ class CollectionController {
       const userId = req.user.id;
       const { type, limit = 50, offset = 0 } = req.query;
       
-      const documents = await this.vectorService.getCollectionDocuments(userId, id, {
-        type,
-        limit: parseInt(limit),
-        offset: parseInt(offset)
-      });
+      let documents;
+      if (req.collectionIdType === 'uuid') {
+        // Use UUID-based lookup (preferred)
+        documents = await this.vectorService.getCollectionDocumentsByUuid(userId, id, {
+          type,
+          limit: parseInt(limit),
+          offset: parseInt(offset)
+        });
+      } else {
+        // Use legacy ID-based lookup (during transition)
+        documents = await this.vectorService.getCollectionDocuments(userId, id, {
+          type,
+          limit: parseInt(limit),
+          offset: parseInt(offset)
+        });
+      }
       
       res.json(documents);
     } catch (error) {
@@ -121,7 +159,14 @@ class CollectionController {
       const { id } = req.params;
       const userId = req.user.id;
       
-      const stats = await this.vectorService.getCollectionStats(userId, id);
+      let stats;
+      if (req.collectionIdType === 'uuid') {
+        // Use UUID-based lookup (preferred)
+        stats = await this.vectorService.getCollectionStatsByUuid(userId, id);
+      } else {
+        // Use legacy ID-based lookup (during transition)
+        stats = await this.vectorService.getCollectionStats(userId, id);
+      }
       
       res.json(stats);
     } catch (error) {

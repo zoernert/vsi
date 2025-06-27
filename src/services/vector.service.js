@@ -67,16 +67,37 @@ class VectorService {
   async getUserCollections(userId, includeStats = false) {
     await this.initializeDatabase();
     
+    console.log(`🔍 VectorService.getUserCollections called for user ${userId}`);
+    
     let query = `
-      SELECT c.*, COUNT(d.id) as document_count 
+      SELECT c.*, 
+             COALESCE(d1.doc_count, d2.doc_count, 0) as document_count 
       FROM collections c 
-      LEFT JOIN documents d ON c.id = d.collection_id 
+      LEFT JOIN (
+        SELECT collection_id, COUNT(*) as doc_count 
+        FROM documents 
+        WHERE collection_id IS NOT NULL 
+        GROUP BY collection_id
+      ) d1 ON c.id = d1.collection_id
+      LEFT JOIN (
+        SELECT collection_uuid, COUNT(*) as doc_count 
+        FROM documents 
+        WHERE collection_uuid IS NOT NULL 
+        GROUP BY collection_uuid
+      ) d2 ON c.uuid = d2.collection_uuid
       WHERE c.user_id = $1 
-      GROUP BY c.id 
       ORDER BY c.created_at DESC
     `;
     
+    console.log(`🔍 Executing VectorService query: ${query}`);
+    console.log(`🔍 Parameters: [${userId}]`);
+    
     const result = await this.db.pool.query(query, [userId]);
+    
+    console.log(`🔍 VectorService query returned ${result.rows.length} rows:`);
+    result.rows.forEach((row, index) => {
+      console.log(`   ${index + 1}. Collection ${row.id} (${row.name}): ${row.document_count} documents`);
+    });
     
     if (includeStats) {
       // Add additional stats for each collection
@@ -99,6 +120,19 @@ class VectorService {
     return result.rows[0];
   }
 
+  /**
+   * Get collection by UUID (preferred method)
+   */
+  async getCollectionByUuid(userId, uuid) {
+    await this.initializeDatabase();
+    const result = await this.db.pool.query(
+      'SELECT * FROM collections WHERE uuid = $1 AND user_id = $2',
+      [uuid, userId]
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  }
+
   async updateCollection(userId, collectionId, updates) {
     await this.initializeDatabase();
     
@@ -111,6 +145,26 @@ class VectorService {
        WHERE id = $1 AND user_id = $2 
        RETURNING *`,
       [collectionId, userId, name, description]
+    );
+    
+    return result.rows[0];
+  }
+
+  /**
+   * Update collection by UUID (preferred method)
+   */
+  async updateCollectionByUuid(userId, uuid, updates) {
+    await this.initializeDatabase();
+    
+    const { name, description } = updates;
+    const result = await this.db.pool.query(
+      `UPDATE collections 
+       SET name = COALESCE($3, name), 
+           description = COALESCE($4, description),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE uuid = $1 AND user_id = $2 
+       RETURNING *`,
+      [uuid, userId, name, description]
     );
     
     return result.rows[0];
@@ -146,6 +200,39 @@ class VectorService {
     return true;
   }
 
+  /**
+   * Delete collection by UUID (preferred method)
+   */
+  async deleteCollectionByUuid(userId, uuid) {
+    await this.initializeDatabase();
+    
+    // Get collection info first
+    const collection = await this.getCollectionByUuid(userId, uuid);
+    if (!collection) {
+      throw new Error('Collection not found');
+    }
+    
+    // Delete from Qdrant
+    try {
+      await this.qdrantClient.deleteCollection(collection.qdrant_collection_name);
+    } catch (error) {
+      console.warn('Failed to delete Qdrant collection:', error.message);
+    }
+    
+    // Delete documents first, then collection using UUID relationships
+    await this.db.pool.query(
+      'DELETE FROM documents WHERE collection_uuid = $1',
+      [uuid]
+    );
+    
+    await this.db.pool.query(
+      'DELETE FROM collections WHERE uuid = $1 AND user_id = $2',
+      [uuid, userId]
+    );
+    
+    return true;
+  }
+
   async getCollectionStats(userId, collectionId) {
     await this.initializeDatabase();
     
@@ -169,6 +256,32 @@ class VectorService {
     };
   }
 
+  /**
+   * Get collection stats by UUID (preferred method)
+   */
+  async getCollectionStatsByUuid(userId, uuid) {
+    await this.initializeDatabase();
+    
+    const result = await this.db.pool.query(
+      `SELECT 
+        COUNT(d.id) as document_count,
+        SUM(length(d.content)) as total_content_size,
+        AVG(length(d.content)) as avg_content_size,
+        MAX(d.created_at) as last_updated
+       FROM documents d 
+       JOIN collections c ON d.collection_uuid = c.uuid
+       WHERE c.uuid = $1 AND c.user_id = $2`,
+      [uuid, userId]
+    );
+    
+    return result.rows[0] || { 
+      document_count: 0, 
+      total_content_size: 0,
+      avg_content_size: 0,
+      last_updated: null
+    };
+  }
+
   async getCollectionDocuments(userId, collectionId, options = {}) {
     await this.initializeDatabase();
     
@@ -182,6 +295,35 @@ class VectorService {
     `;
     
     const params = [collectionId, userId];
+    
+    if (type) {
+      query += ' AND d.file_type = $3';
+      params.push(type);
+    }
+    
+    query += ' ORDER BY d.created_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+    params.push(limit, offset);
+    
+    const result = await this.db.pool.query(query, params);
+    return result.rows;
+  }
+
+  /**
+   * Get collection documents by UUID (preferred method)
+   */
+  async getCollectionDocumentsByUuid(userId, uuid, options = {}) {
+    await this.initializeDatabase();
+    
+    const { type, limit = 50, offset = 0 } = options;
+    
+    let query = `
+      SELECT d.*, c.name as collection_name
+      FROM documents d
+      JOIN collections c ON d.collection_uuid = c.uuid
+      WHERE c.uuid = $1 AND c.user_id = $2
+    `;
+    
+    const params = [uuid, userId];
     
     if (type) {
       query += ' AND d.file_type = $3';
@@ -457,8 +599,8 @@ class VectorService {
       
       // Add metadata to PostgreSQL
       const documentResult = await this.db.pool.query(
-        `INSERT INTO documents (filename, content, content_preview, file_type, collection_id, qdrant_point_id, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `INSERT INTO documents (filename, content, content_preview, file_type, collection_id, collection_uuid, qdrant_point_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          RETURNING *`,
         [
           documentData.filename,
@@ -466,6 +608,7 @@ class VectorService {
           documentData.contentPreview,
           documentData.fileType,
           collectionId,
+          collection.uuid,  // Add collection UUID
           qdrantPointId
         ]
       );
