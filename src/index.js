@@ -1187,7 +1187,13 @@ console.log('📊 Registering analytics routes...');
 app.use('/api/admin/analytics', analyticsRoutes);
 console.log('✅ Analytics routes registered');
 
-// Cluster routes - Mount cluster management
+// Advanced clustering routes - Mount advanced features FIRST to avoid conflicts
+console.log('🤖 Registering advanced clustering routes...');
+const advancedClusteringRoutes = require('./routes/advancedClusteringRoutes');
+app.use('/api/clusters', advancedClusteringRoutes);
+console.log('✅ Advanced clustering routes registered');
+
+// Cluster routes - Mount cluster management AFTER advanced routes
 console.log('🗂️ Registering cluster routes...');
 app.use('/api/clusters', clusterRoutes);
 console.log('✅ Cluster routes registered');
