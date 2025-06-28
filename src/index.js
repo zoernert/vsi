@@ -32,6 +32,7 @@ const searchRoutes = require('./routes/searchRoutes'); // Add this line
 const adminRoutes = require('./routes/adminRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const clusterRoutes = require('./routes/clusterRoutes');
+const mcpRoutes = require('./routes/mcpRoutes');
 const { QdrantService } = require('./services/qdrantService');
 const { EmbeddingService } = require('./services/embeddingService');
 const { GeminiService } = require('./services/geminiService');
@@ -1191,6 +1192,11 @@ console.log('✅ Upload routes registered');
 console.log('🔍 Registering search routes...');
 app.use('/api', searchRoutes);
 console.log('✅ Search routes registered');
+
+// MCP routes - Mount MCP functionality
+console.log('🔗 Registering MCP routes...');
+app.use('/api/mcp', mcpRoutes);
+console.log('✅ MCP routes registered');
 
 // Admin routes - Mount admin functionality
 console.log('👑 Registering admin routes...');
