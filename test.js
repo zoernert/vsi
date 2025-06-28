@@ -11,6 +11,7 @@ class APITester {
         this.token = null;
         this.testCollection = null;
         this.documentId = null;
+        this.pngDocumentId = null;
         this.openApiSpec = null;
         this.startTime = Date.now();
         this.backendProcess = null;
@@ -254,6 +255,29 @@ class APITester {
         console.log(`📊 ${label}: ${value}`);
     }
 
+    // Helper method to create a simple PNG image
+    createTestPng(filepath) {
+        // Create a minimal PNG file (1x1 pixel transparent PNG)
+        const pngData = Buffer.from([
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+            0x00, 0x00, 0x00, 0x0D, // IHDR chunk length
+            0x49, 0x48, 0x44, 0x52, // IHDR
+            0x00, 0x00, 0x00, 0x01, // Width: 1
+            0x00, 0x00, 0x00, 0x01, // Height: 1
+            0x08, 0x06, 0x00, 0x00, 0x00, // Bit depth: 8, Color type: 6 (RGBA), Compression: 0, Filter: 0, Interlace: 0
+            0x1F, 0x15, 0xC4, 0x89, // CRC
+            0x00, 0x00, 0x00, 0x0B, // IDAT chunk length
+            0x49, 0x44, 0x41, 0x54, // IDAT
+            0x78, 0x9C, 0x62, 0x00, 0x02, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, // Compressed image data
+            0x0A, 0x2D, 0xB4, // CRC
+            0x00, 0x00, 0x00, 0x00, // IEND chunk length
+            0x49, 0x45, 0x4E, 0x44, // IEND
+            0xAE, 0x42, 0x60, 0x82  // CRC
+        ]);
+        
+        fs.writeFileSync(filepath, pngData);
+    }
+
     // Step 1: Download and validate OpenAPI spec
     async downloadOpenApiSpec() {
         this.logStep(1, 'Downloading OpenAPI Specification');
@@ -323,7 +347,7 @@ class APITester {
         this.logStep(3, 'Retrieving user collections');
         
         const response = await this.expectSuccess(() => 
-            axios.get(`${this.baseUrl}/api/collections`, {
+            axios.get(`${this.baseUrl}/api/collections?include_stats=true`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             })
         );
@@ -400,7 +424,15 @@ class APITester {
             throw new Error(`Test collection '${testCollectionName}' not found in collections list`);
         }
         
-        const documentCount = foundCollection.document_count || foundCollection.documentsCount || 0;
+        const documentCount = parseInt(foundCollection.document_count) || parseInt(foundCollection.documentsCount) || 0;
+        
+        console.log(`🔍 DEBUG: foundCollection =`, {
+            name: foundCollection.name,
+            id: foundCollection.id,
+            document_count: foundCollection.document_count,
+            documentsCount: foundCollection.documentsCount,
+            computed_documentCount: documentCount
+        });
         
         if (documentCount !== 0) {
             throw new Error(`Expected collection to be empty, but found ${documentCount} documents`);
@@ -502,9 +534,74 @@ The content should be retrievable through search and AI chat functionality.`;
         return uploadResult;
     }
 
-    // Step 7: Verify document upload and chunks
-    async verifyDocumentUpload() {
-        this.logStep(7, 'Verifying document upload and chunks');
+    // Step 7: Upload test PNG
+    async uploadTestPng() {
+        this.logStep(7, 'Uploading test PNG file');
+        
+        const testPngPath = path.join(__dirname, 'test.png');
+        
+        // Check if test.png exists
+        if (!fs.existsSync(testPngPath)) {
+            console.log('🖼️ test.png not found, creating a sample PNG file...');
+            this.createTestPng(testPngPath);
+            console.log('✅ Created test.png with sample image');
+        }
+        
+        const stats = fs.statSync(testPngPath);
+        console.log(`🖼️ File: ${testPngPath}`);
+        this.logMetric('File Size', `${(stats.size / 1024).toFixed(2)} KB`);
+        
+        const form = new FormData();
+        form.append('file', fs.createReadStream(testPngPath), {
+            filename: 'test.png',
+            contentType: 'image/png'
+        });
+        
+        const collectionId = this.testCollection.id;
+        console.log(`📤 Uploading PNG to collection ID: ${collectionId}`);
+        
+        const uploadUrl = `${this.baseUrl}/api/upload/${collectionId}`;
+        
+        const response = await this.expectSuccess(() => 
+            axios.post(uploadUrl, form, {
+                headers: { 
+                    'Authorization': `Bearer ${this.token}`,
+                    ...form.getHeaders()
+                },
+                timeout: 60000 // 60 second timeout
+            })
+        );
+        
+        // Handle SSE response or regular JSON response
+        let uploadResult;
+        if (typeof response.data === 'string') {
+            // Parse SSE data if needed
+            const lines = response.data.split('\n');
+            const dataLines = lines.filter(line => line.startsWith('data: '));
+            if (dataLines.length > 0) {
+                const lastDataLine = dataLines[dataLines.length - 1];
+                uploadResult = JSON.parse(lastDataLine.substring(6));
+            }
+        } else {
+            uploadResult = response.data;
+        }
+        
+        this.logSuccess('PNG upload completed');
+        this.logMetric('Upload Status', uploadResult?.success || uploadResult?.type || 'success');
+        
+        if (uploadResult?.data) {
+            this.logMetric('Chunks Stored', uploadResult.data.chunksStored || 'unknown');
+            this.logMetric('Total Chunks', uploadResult.data.totalChunks || 'unknown');
+            this.logMetric('Processing Time', `${uploadResult.data.processingTimeMs || 0}ms`);
+            this.pngDocumentId = uploadResult.data.document?.id;
+        }
+        
+        return uploadResult;
+    }
+
+    // Step 8: Verify document uploads and chunks
+    async verifyDocumentUploads() {
+        this.logStep(8, 'Verifying document uploads and chunks');
         
         // Get updated collection info
         const collections = await this.getCollections();
@@ -513,16 +610,16 @@ The content should be retrievable through search and AI chat functionality.`;
         );
         
         if (!updatedCollection) {
-            throw new Error('Test collection not found after upload');
+            throw new Error('Test collection not found after uploads');
         }
         
-        const documentCount = updatedCollection.document_count || updatedCollection.documentsCount || 0;
+        const documentCount = parseInt(updatedCollection.document_count) || parseInt(updatedCollection.documentsCount) || 0;
         
-        if (documentCount === 0) {
-            throw new Error('Expected at least 1 document after upload, but collection is still empty');
+        if (documentCount < 2) {
+            throw new Error(`Expected at least 2 documents after uploads (PDF + PNG), but found ${documentCount}`);
         }
         
-        this.logSuccess('Document upload verified');
+        this.logSuccess('Document uploads verified');
         this.logMetric('Documents in Collection', documentCount);
         
         // Get detailed collection info if available
@@ -550,9 +647,18 @@ The content should be retrievable through search and AI chat functionality.`;
             
             const documents = docsResponse.data.data || docsResponse.data;
             if (Array.isArray(documents) && documents.length > 0) {
-                this.documentId = documents[0].id;
-                this.logMetric('First Document ID', this.documentId);
-                this.logMetric('Document Filename', documents[0].filename || 'unknown');
+                console.log('\n📄 Uploaded Documents:');
+                documents.forEach((doc, index) => {
+                    console.log(`   ${index + 1}. ${doc.filename || doc.name || 'Unknown'} (ID: ${doc.id})`);
+                    
+                    // Store document IDs if not already set
+                    if (!this.documentId && doc.filename?.includes('test.pdf')) {
+                        this.documentId = doc.id;
+                    }
+                    if (!this.pngDocumentId && doc.filename?.includes('test.png')) {
+                        this.pngDocumentId = doc.id;
+                    }
+                });
             }
         } catch (error) {
             console.log('ℹ️ Could not fetch documents list');
@@ -561,11 +667,11 @@ The content should be retrievable through search and AI chat functionality.`;
         return updatedCollection;
     }
 
-    // Step 8: Test AI chat functionality
+    // Step 9: Test AI chat functionality
     async testAiChat() {
-        this.logStep(8, 'Testing AI chat functionality');
+        this.logStep(9, 'Testing AI chat functionality');
         
-        const question = 'Provide a summary of the key topics';
+        const question = 'Provide a summary of the uploaded files and their content';
         const chatData = {
             question: question,
             maxResults: 5
@@ -611,16 +717,16 @@ The content should be retrievable through search and AI chat functionality.`;
         return chatResult;
     }
 
-    // Step 9: Delete document
-    async deleteDocument() {
-        this.logStep(9, 'Deleting uploaded document');
+    // Step 10: Delete PDF document
+    async deletePdfDocument() {
+        this.logStep(10, 'Deleting uploaded PDF document');
         
         if (!this.documentId) {
-            console.log('⚠️ Document ID not available, skipping individual document deletion');
+            console.log('⚠️ PDF Document ID not available, skipping PDF document deletion');
             return;
         }
         
-        console.log(`🗑️ Deleting document ID: ${this.documentId}`);
+        console.log(`🗑️ Deleting PDF document ID: ${this.documentId}`);
         
         const response = await this.expectSuccess(() => 
             axios.delete(`${this.baseUrl}/api/collections/${this.testCollection.id}/documents/${this.documentId}`, {
@@ -628,23 +734,57 @@ The content should be retrievable through search and AI chat functionality.`;
             })
         );
         
-        this.logSuccess('Document deleted successfully');
+        this.logSuccess('PDF document deleted successfully');
         
-        // Verify document is gone
+        return response.data;
+    }
+
+    // Step 11: Delete PNG document
+    async deletePngDocument() {
+        this.logStep(11, 'Deleting uploaded PNG document');
+        
+        if (!this.pngDocumentId) {
+            console.log('⚠️ PNG Document ID not available, skipping PNG document deletion');
+            return;
+        }
+        
+        console.log(`🗑️ Deleting PNG document ID: ${this.pngDocumentId}`);
+        
+        const response = await this.expectSuccess(() => 
+            axios.delete(`${this.baseUrl}/api/collections/${this.testCollection.id}/documents/${this.pngDocumentId}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            })
+        );
+        
+        this.logSuccess('PNG document deleted successfully');
+        
+        return response.data;
+    }
+
+    // Step 12: Verify documents deletion
+    async verifyDocumentsDeletion() {
+        this.logStep(12, 'Verifying documents deletion');
+        
         const collections = await this.getCollections();
         const updatedCollection = collections.find(col => 
             col.name === this.testCollection.name || col.id === this.testCollection.id
         );
         
-        const documentCount = updatedCollection?.document_count || updatedCollection?.documentsCount || 0;
+        const documentCount = parseInt(updatedCollection?.document_count) || parseInt(updatedCollection?.documentsCount) || 0;
         this.logMetric('Documents Remaining', documentCount);
         
-        return response.data;
+        if (documentCount === 0) {
+            this.logSuccess('All documents deleted successfully');
+        } else {
+            console.log(`ℹ️ ${documentCount} documents still remain in collection`);
+        }
+        
+        return documentCount;
     }
 
-    // Step 10: Delete test collection
+    // Step 13: Delete test collection
     async deleteTestCollection() {
-        this.logStep(10, 'Deleting test collection');
+        this.logStep(13, 'Deleting test collection');
         
         console.log(`🗑️ Deleting collection: ${this.testCollection.name} (ID: ${this.testCollection.id})`);
         
@@ -659,9 +799,9 @@ The content should be retrievable through search and AI chat functionality.`;
         return response.data;
     }
 
-    // Step 11: Verify collection deletion
+    // Step 14: Verify collection deletion
     async verifyCollectionDeleted() {
-        this.logStep(11, 'Verifying collection deletion');
+        this.logStep(14, 'Verifying collection deletion');
         
         const collections = await this.getCollections();
         const foundCollection = collections.find(col => 
@@ -691,7 +831,8 @@ The content should be retrievable through search and AI chat functionality.`;
         console.log(`🌐 Backend URL: ${this.baseUrl}`);
         console.log(`🔑 Authentication: Working`);
         console.log(`📁 Collection Management: Working`);
-        console.log(`📄 File Upload: Working`);
+        console.log(`📄 PDF File Upload: Working`);
+        console.log(`🖼️ PNG File Upload: Working`);
         console.log(`🤖 AI Chat: Working`);
         console.log(`🗑️ Cleanup: Working`);
         
@@ -702,17 +843,6 @@ The content should be retrievable through search and AI chat functionality.`;
         }
         
         console.log('='.repeat(60));
-        
-        // Cleanup test file
-        const testPdfPath = path.join(__dirname, 'test.pdf');
-        if (fs.existsSync(testPdfPath)) {
-            try {
-                fs.unlinkSync(testPdfPath);
-                console.log('🧹 Cleaned up test.pdf file');
-            } catch (error) {
-                console.log('⚠️ Could not clean up test.pdf file');
-            }
-        }
         
         // Stop backend if we started it
         if (this.backendStarted && this.backendProcess) {
@@ -733,9 +863,12 @@ The content should be retrievable through search and AI chat functionality.`;
             await this.createTestCollection();
             await this.verifyCollectionExists();
             await this.uploadTestPdf();
-            await this.verifyDocumentUpload();
+            await this.uploadTestPng();
+            await this.verifyDocumentUploads();
             await this.testAiChat();
-            await this.deleteDocument();
+            await this.deletePdfDocument();
+            await this.deletePngDocument();
+            await this.verifyDocumentsDeletion();
             await this.deleteTestCollection();
             await this.verifyCollectionDeleted();
             await this.printSummary();

@@ -252,13 +252,13 @@
                             </div>
                             <div>
                                 <span class="badge bg-primary me-2" id="clusterType"></span>
-                                <button class="btn btn-outline-primary me-2" onclick="app.clusters.showAddCollectionModal()">
+                                <button class="btn btn-outline-primary me-2" onclick="app.clusters.showAddCollectionModal(document.getElementById('clusterDetailId').value)">
                                     <i class="fas fa-plus me-2"></i>Add Collection
                                 </button>
-                                <button class="btn btn-outline-secondary me-2" onclick="app.clusters.editCluster()">
+                                <button class="btn btn-outline-secondary me-2" onclick="app.clusters.editCluster(document.getElementById('clusterDetailId').value)">
                                     <i class="fas fa-edit me-2"></i>Edit
                                 </button>
-                                <button class="btn btn-danger" onclick="app.clusters.deleteCluster()">
+                                <button class="btn btn-danger" onclick="app.clusters.deleteCluster(document.getElementById('clusterDetailId').value)">
                                     <i class="fas fa-trash me-2"></i>Delete
                                 </button>
                             </div>
@@ -347,6 +347,9 @@
                                 </button>
                                 <button class="btn btn-outline-success me-2" onclick="app.collections.showDeveloperIntegration()">
                                     <i class="fas fa-code me-2"></i>Developer API
+                                </button>
+                                <button class="btn btn-outline-warning me-2" onclick="app.collections.showBookmarklet()">
+                                    <i class="fas fa-bookmark me-2"></i>Get Bookmarklet
                                 </button>
                                 <button class="btn btn-danger" onclick="app.collections.deleteCurrentCollection()">
                                     <i class="fas fa-trash me-2"></i>Delete Collection
@@ -594,8 +597,8 @@
                     <div class="upload-zone" id="uploadZone">
                         <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
                         <h5>Drop files here or click to browse</h5>
-                        <p class="text-muted">Supports: PDF, Word, Text, Markdown, Images</p>
-                        <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.md,.jpg,.jpeg,.png" style="display: none;">
+                        <p class="text-muted">Supports: PDF, Word, Text, Markdown, Images (JPG, PNG, GIF, BMP, WebP)</p>
+                        <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.md,.jpg,.jpeg,.png,.gif,.bmp,.webp" style="display: none;">
                         <button class="btn btn-outline-primary">
                             Choose Files
                         </button>                      
@@ -815,7 +818,7 @@
                                             <li><code>DOC</code> - Legacy Word Documents</li>
                                             <li><code>TXT</code> - Plain Text Files</li>
                                             <li><code>MD</code> - Markdown Files</li>
-                                            <li><code>Images</code> - JPG, PNG (with OCR processing)</li>
+                                            <li><code>Images</code> - JPG, JPEG, PNG, GIF, BMP, WebP (with AI analysis)</li>
                                         </ul>
                                     </div>
                                     
@@ -879,7 +882,7 @@ Form Data:
                                 <div class="card border-success">
                                     <div class="card-body">
                                         <h6><i class="fas fa-file-alt me-2"></i>Supported Formats</h6>
-                                        <p class="small mb-0">PDF, Word Documents (DOCX), Text files (TXT), Markdown (MD), Images (JPG, PNG) for OCR processing, and Excel files (XLSX).</p>
+                                        <p class="small mb-0">PDF, Word Documents (DOCX), Text files (TXT), Markdown (MD), and Images (JPG, JPEG, PNG, GIF, BMP, WebP) for AI analysis.</p>
                                     </div>
                                 </div>
                             </div>
@@ -923,6 +926,103 @@ Form Data:
                         </div>
                         <button type="submit" class="btn btn-warning">Change Password</button>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bookmarklet Modal -->
+    <div class="modal fade" id="bookmarkletModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-bookmark me-2"></i>
+                        Quick Upload Bookmarklet - <span id="bookmarkletCollectionName">Collection</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>How it works:</strong><br>
+                        Drag the bookmarklet below to your browser's bookmark bar. When you click it on any webpage, it will:
+                        <ul class="mt-2 mb-0">
+                            <li><strong>Selected text:</strong> Upload the selected text as a new document to this collection</li>
+                            <li><strong>No selection:</strong> Take a screenshot of the visible area and upload it as an image</li>
+                        </ul>
+                    </div>
+
+                    <div class="card bg-light mb-4">
+                        <div class="card-body">
+                            <h6><i class="fas fa-drag me-2"></i>Drag this to your bookmark bar:</h6>
+                            <div class="d-flex align-items-center mt-3">
+                                <a href="#" id="bookmarkletLink" class="btn btn-warning btn-lg me-3" 
+                                   style="text-decoration: none; border: 2px dashed #ffc107; background: linear-gradient(45deg, #ffc107, #fd7e14);">
+                                    <i class="fas fa-magic me-2"></i>📋 Quick Upload to <span id="bookmarkletLinkText">Collection</span>
+                                </a>
+                                <div class="text-muted small">
+                                    ← Drag this button to your bookmark bar
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Or right-click and "Add to bookmarks" / "Bookmark this link"
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card border-primary">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-text-height me-2"></i>Text Selection</h6>
+                                    <p class="small mb-0">
+                                        Select any text on a webpage and click the bookmarklet. 
+                                        The selected text will be uploaded as a new document with the page title and URL as metadata.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-success">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-camera me-2"></i>Screenshot Capture</h6>
+                                    <p class="small mb-0">
+                                        If no text is selected, the bookmarklet will capture a screenshot of the visible area 
+                                        and upload it as an image for AI analysis.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h6><i class="fas fa-shield-alt me-2"></i>Security & Privacy</h6>
+                        <div class="alert alert-warning">
+                            <ul class="mb-0 small">
+                                <li><strong>Authentication:</strong> Your personal JWT token is embedded in the bookmarklet</li>
+                                <li><strong>Collection-specific:</strong> Only uploads to this specific collection</li>
+                                <li><strong>Privacy:</strong> No data is sent to third parties - only to your tydids instance</li>
+                                <li><strong>HTTPS required:</strong> Screenshots only work on HTTPS websites due to browser security</li>
+                                <li><strong>Permissions:</strong> Browser may ask for screenshot permission on first use</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <h6><i class="fas fa-cog me-2"></i>Bookmarklet Code</h6>
+                        <div class="form-group">
+                            <label class="form-label small">Raw JavaScript (for manual setup):</label>
+                            <textarea class="form-control small" id="bookmarkletCode" rows="8" readonly 
+                                      style="font-family: monospace; font-size: 11px;"></textarea>
+                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="app.collections.copyBookmarkletCode()">
+                                <i class="fas fa-copy me-1"></i>Copy Code
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -997,6 +1097,31 @@ Form Data:
                             <textarea class="form-control" id="editClusterDescription" name="description" rows="3"></textarea>
                         </div>
                         <button type="button" class="btn btn-primary" onclick="app.clusters.updateCluster()">Update Cluster</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Collection Modal -->
+    <div class="modal fade" id="createCollectionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Collection</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createCollectionForm">
+                        <div class="mb-3">
+                            <label class="form-label">Collection Name</label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" name="description" rows="3"></textarea>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="app.collections.createCollection()">Create Collection</button>
                     </form>
                 </div>
             </div>

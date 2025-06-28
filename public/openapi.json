@@ -1,0 +1,2266 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "VSI Vector Store API",
+    "version": "1.0.0",
+    "description": "Turn documents into intelligence. VSI Vector Store - Because your documents have stories to tell."
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Main API server"
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Authentication and authorization" },
+    { "name": "Users", "description": "User profile and usage management" },
+    { "name": "Collections", "description": "Vector collection management" },
+    { "name": "Clusters", "description": "Named cluster management" },
+    { "name": "Documents", "description": "Document upload and management" },
+    { "name": "Search", "description": "Search and AI-powered Q&A" },
+    { "name": "Admin", "description": "Administrative operations" },
+    { "name": "Files", "description": "File storage and retrieval" },
+    { "name": "Analytics", "description": "Usage analytics and metrics" },
+    { "name": "MCP", "description": "Model Context Protocol integration" }
+  ],
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "username": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "isAdmin": { "type": "boolean" },
+          "tier": { "type": "string", "enum": ["free", "pro", "unlimited"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "lastLogin": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Collection": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "user_id": { "type": "integer" },
+          "qdrant_collection_name": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "document_count": { "type": "string", "description": "String representation of document count" },
+          "stats": {
+            "type": "object",
+            "properties": {
+              "document_count": { "type": "string" },
+              "total_content_size": { "type": "integer", "nullable": true },
+              "avg_content_size": { "type": "number", "nullable": true },
+              "last_updated": { "type": "string", "format": "date-time", "nullable": true }
+            }
+          }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "filename": { "type": "string" },
+          "fileType": { "type": "string" },
+          "contentPreview": { "type": "string" },
+          "qdrantPointId": { "type": "string" },
+          "collectionId": { "type": "integer" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UsageMetric": {
+        "type": "object",
+        "properties": {
+          "current": { "type": "integer" },
+          "limit": { "type": "integer", "description": "-1 for unlimited" },
+          "percentage": { "type": "integer" }
+        }
+      },
+      "UsageStats": {
+        "type": "object",
+        "properties": {
+          "collections": { "$ref": "#/components/schemas/UsageMetric" },
+          "documents": { "$ref": "#/components/schemas/UsageMetric" },
+          "searches": { "$ref": "#/components/schemas/UsageMetric" },
+          "uploads": { "$ref": "#/components/schemas/UsageMetric" },
+          "tier": { "type": "string" },
+          "billingPeriod": {
+            "type": "object",
+            "properties": {
+              "start": { "type": "string", "format": "date" },
+              "end": { "type": "string", "format": "date" }
+            }
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "filename": { "type": "string" },
+          "contentPreview": { "type": "string" },
+          "fileType": { "type": "string" },
+          "collectionId": { "type": "integer" },
+          "collectionName": { "type": "string" },
+          "similarity": { "type": "number", "minimum": 0, "maximum": 1 },
+          "qdrantPointId": { "type": "string" }
+        }
+      },
+      "QAResponse": {
+        "type": "object",
+        "properties": {
+          "answer": { "type": "string" },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "filename": { "type": "string" },
+                "similarity": { "type": "number" },
+                "collectionName": { "type": "string" }
+              }
+            }
+          },
+          "generatedQueries": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "contextUsed": { "type": "boolean" },
+          "retrievedContext": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "FileInfo": {
+        "type": "object",
+        "properties": {
+          "uuid": { "type": "string" },
+          "originalName": { "type": "string" },
+          "mimeType": { "type": "string" },
+          "fileSize": { "type": "integer" },
+          "uploadedBy": { "type": "string" },
+          "uploadedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SystemHealth": {
+        "type": "object",
+        "properties": {
+          "database": {
+            "type": "object",
+            "properties": {
+              "status": { "type": "string" },
+              "lastCheck": { "type": "string", "format": "date-time" }
+            }
+          },
+          "qdrant": {
+            "type": "object",
+            "properties": {
+              "status": { "type": "string" },
+              "lastCheck": { "type": "string", "format": "date-time" }
+            }
+          },
+          "embeddings": {
+            "type": "object",
+            "properties": {
+              "status": { "type": "string" },
+              "lastCheck": { "type": "string", "format": "date-time" }
+            }
+          },
+          "uptime": { "type": "number" }
+        }
+      },
+      "Cluster": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "user_id": { "type": "integer" },
+          "cluster_type": { "type": "string", "enum": ["logical", "sharded", "replicated"] },
+          "settings": { "type": "object" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "collections": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Collection" }
+          }
+        }
+      },
+      "ClusterStats": {
+        "type": "object",
+        "properties": {
+          "collection_count": { "type": "integer" },
+          "document_count": { "type": "integer" },
+          "total_content_size": { "type": "integer" },
+          "last_updated": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "summary": "Register a new user",
+        "tags": ["Auth"],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": { "type": "string", "minLength": 3 },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 6 }
+                },
+                "required": ["username", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "data": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid input or user already exists" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Login a user",
+        "tags": ["Auth"],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": { "type": "string" },
+                  "password": { "type": "string" }
+                },
+                "required": ["username", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "token": { "type": "string" },
+                    "user": { "$ref": "#/components/schemas/User" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/users/profile": {
+      "get": {
+        "summary": "Get current user profile",
+        "tags": ["Users"],
+        "responses": {
+          "200": {
+            "description": "User profile data with statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "allOf": [
+                        { "$ref": "#/components/schemas/User" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "stats": {
+                              "type": "object",
+                              "properties": {
+                                "collectionsCount": { "type": "integer" },
+                                "documentsCount": { "type": "integer" }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update user profile",
+        "tags": ["Users"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": { "type": "string" },
+                  "email": { "type": "string", "format": "email" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Profile updated successfully" }
+        }
+      }
+    },
+    "/users/change-password": {
+      "post": {
+        "summary": "Change user password",
+        "tags": ["Users"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": { "type": "string" },
+                  "newPassword": { "type": "string", "minLength": 6 }
+                },
+                "required": ["currentPassword", "newPassword"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Password changed successfully" },
+          "400": { "description": "Invalid current password" }
+        }
+      }
+    },
+    "/users/usage": {
+      "get": {
+        "summary": "Get current user's usage statistics",
+        "tags": ["Users"],
+        "responses": {
+          "200": {
+            "description": "Personal usage data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/UsageStats" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/delete": {
+      "delete": {
+        "summary": "Delete user account",
+        "tags": ["Users"],
+        "responses": {
+          "200": { "description": "Account deleted successfully" }
+        }
+      }
+    },
+    "/collections": {
+      "get": {
+        "summary": "List user's collections",
+        "tags": ["Collections"],
+        "parameters": [
+          {
+            "name": "include_stats",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "Include collection statistics"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of collections with statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Collection" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new collection",
+        "tags": ["Collections"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$" },
+                  "description": { "type": "string" }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Collection created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Collection" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}": {
+      "get": {
+        "summary": "Get collection details",
+        "tags": ["Collections"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection details with statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Collection" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update collection",
+        "tags": ["Collections"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Collection updated" }
+        }
+      },
+      "delete": {
+        "summary": "Delete collection and all its documents",
+        "tags": ["Collections"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Collection deleted" }
+        }
+      }
+    },
+    "/collections/{id}/stats": {
+      "get": {
+        "summary": "Get collection statistics",
+        "tags": ["Collections"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "documentCount": { "type": "integer" },
+                        "totalContentSize": { "type": "integer" },
+                        "avgContentSize": { "type": "number" },
+                        "lastUpdated": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/documents": {
+      "get": {
+        "summary": "List documents in collection",
+        "tags": ["Documents"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" }, "description": "Filter by document type" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of documents with pagination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Document" }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "total": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/documents/create-text": {
+      "post": {
+        "summary": "Create a text document in collection",
+        "tags": ["Documents"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "content": { "type": "string" },
+                  "type": { "type": "string", "default": "txt", "enum": ["txt", "md"] }
+                },
+                "required": ["title", "content"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Text document created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "document": { "$ref": "#/components/schemas/Document" },
+                    "collection": { "type": "string" },
+                    "chunksStored": { "type": "integer" },
+                    "chunksSkipped": { "type": "integer" },
+                    "totalChunks": { "type": "integer" },
+                    "processingMethod": { "type": "string", "enum": ["recursive", "standard"] },
+                    "contentLength": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/{collectionId}": {
+      "post": {
+        "summary": "Upload file to collection (Primary endpoint)",
+        "tags": ["Documents"],
+        "description": "Primary file upload endpoint with real-time processing feedback",
+        "parameters": [
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { 
+                    "type": "string", 
+                    "format": "binary",
+                    "description": "File to upload (PDF, Word, Text, Markdown, etc.)"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File uploaded and processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "document": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "integer" },
+                        "filename": { "type": "string" },
+                        "file_type": { "type": "string" },
+                        "collection_id": { "type": "integer" }
+                      }
+                    },
+                    "chunksStored": { "type": "integer" },
+                    "totalChunks": { "type": "integer" },
+                    "processingTime": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/documents/upload": {
+      "post": {
+        "summary": "Upload file to collection (Alternative endpoint)",
+        "tags": ["Documents"],
+        "description": "Alternative file upload endpoint - should work the same as /upload/{collectionId}",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { 
+                    "type": "string", 
+                    "format": "binary",
+                    "description": "File to upload (PDF, Word, Text, Markdown, etc.)"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File uploaded and processed successfully"
+          },
+          "400": {
+            "description": "Invalid file or processing error"
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/documents/{documentId}": {
+      "delete": {
+        "summary": "Delete document from collection",
+        "tags": ["Documents"],
+        "parameters": [
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "documentId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/search": {
+      "post": {
+        "summary": "Search documents in collection",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": { "type": "string" },
+                  "limit": { "type": "integer", "default": 10, "maximum": 100 },
+                  "threshold": { "type": "number", "default": 0.5, "minimum": 0, "maximum": 1 }
+                },
+                "required": ["query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/SearchResult" }
+                        },
+                        "query": { "type": "string" },
+                        "total": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/ask": {
+      "post": {
+        "summary": "Ask AI question about collection documents",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": { "type": "string" },
+                  "systemPrompt": { "type": "string", "description": "Custom system prompt for AI" },
+                  "maxResults": { "type": "integer", "default": 5, "maximum": 20 },
+                  "maxQueries": { "type": "integer", "default": 3, "maximum": 10 }
+                },
+                "required": ["question"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "AI response with sources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/QAResponse" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/snippets/{chunkId}": {
+      "get": {
+        "summary": "Get document snippet by chunk ID",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "chunkId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document snippet content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "content": { "type": "string" },
+                        "filename": { "type": "string" },
+                        "chunkIndex": { "type": "integer" },
+                        "collectionName": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Snippet not found or access denied" }
+        }
+      }
+    },
+    "/clusters": {
+      "get": {
+        "summary": "Get user's clusters",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of user clusters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Cluster" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new cluster",
+        "tags": ["Clusters"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "type": { "type": "string", "enum": ["logical", "sharded", "replicated"], "default": "logical" },
+                  "settings": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cluster created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Cluster" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/auto-generate/{collectionId}": {
+      "post": {
+        "summary": "Auto-generate cluster for collection",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Auto-generated cluster created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Cluster" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/content-analysis/{collectionId}": {
+      "get": {
+        "summary": "Get content-based cluster analysis for collection",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "maxClusters", "in": "query", "schema": { "type": "integer", "default": 5 } },
+          { "name": "minClusterSize", "in": "query", "schema": { "type": "integer", "default": 3 } },
+          { "name": "similarityThreshold", "in": "query", "schema": { "type": "number", "default": 0.75 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Content-based cluster analysis",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "collectionId": { "type": "integer" },
+                        "totalDocuments": { "type": "integer" },
+                        "clusters": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "integer" },
+                              "name": { "type": "string" },
+                              "description": { "type": "string" },
+                              "size": { "type": "integer" },
+                              "documents": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": { "type": "string" },
+                                    "content_preview": { "type": "string" },
+                                    "filename": { "type": "string" }
+                                  }
+                                }
+                              },
+                              "stats": {
+                                "type": "object",
+                                "properties": {
+                                  "size": { "type": "integer" },
+                                  "cohesion": { "type": "number" },
+                                  "avgDistanceFromCentroid": { "type": "number" }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "analysisMetadata": {
+                          "type": "object",
+                          "properties": {
+                            "clusteringMethod": { "type": "string" },
+                            "maxClusters": { "type": "integer" },
+                            "minClusterSize": { "type": "integer" },
+                            "similarityThreshold": { "type": "number" },
+                            "analyzedAt": { "type": "string", "format": "date-time" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/for-collection/{collectionId}": {
+      "get": {
+        "summary": "Get or create cluster for collection",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cluster for collection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Cluster" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/{id}": {
+      "get": {
+        "summary": "Get cluster details",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cluster details with collections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Cluster" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update cluster",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "settings": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cluster updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/Cluster" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete cluster",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cluster deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/{id}/collections/{collectionId}": {
+      "post": {
+        "summary": "Add collection to cluster",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection added to cluster successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/{id}/stats": {
+      "get": {
+        "summary": "Get cluster statistics",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cluster statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/ClusterStats" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/collections/{id}/cluster": {
+      "delete": {
+        "summary": "Remove collection from cluster",
+        "tags": ["Clusters"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection removed from cluster successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "summary": "Search across user's collections",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10, "maximum": 50 } },
+          { "name": "threshold", "in": "query", "schema": { "type": "number", "default": 0.5 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results across user collections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/SearchResult" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/documents/{id}": {
+      "get": {
+        "summary": "Get document content",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "allOf": [
+                        { "$ref": "#/components/schemas/Document" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "content": { "type": "string" },
+                            "collectionName": { "type": "string" }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/documents/{id}/similar": {
+      "get": {
+        "summary": "Get similar documents",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 5, "maximum": 20 } },
+          { "name": "threshold", "in": "query", "schema": { "type": "number", "default": 0.7 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Similar documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "sourceDocument": { "$ref": "#/components/schemas/Document" },
+                        "similarDocuments": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/SearchResult" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{uuid}": {
+      "get": {
+        "summary": "Download file by UUID",
+        "tags": ["Files"],
+        "parameters": [
+          { "name": "uuid", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "File content",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": { "description": "File not found" }
+        }
+      }
+    },
+    "/files/{uuid}/info": {
+      "get": {
+        "summary": "Get file information",
+        "tags": ["Files"],
+        "parameters": [
+          { "name": "uuid", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "File information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/FileInfo" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/dashboard": {
+      "get": {
+        "summary": "Admin dashboard with analytics overview",
+        "tags": ["Admin"],
+        "responses": {
+          "200": {
+            "description": "Complete dashboard data with analytics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "overview": {
+                      "type": "object",
+                      "properties": {
+                        "totalUsers": { "type": "integer" },
+                        "adminUsers": { "type": "integer" },
+                        "activeUsers": { "type": "integer" }
+                      }
+                    },
+                    "usageStats": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "resource_type": { "type": "string" },
+                          "total_usage": { "type": "integer" },
+                          "active_users": { "type": "integer" }
+                        }
+                      }
+                    },
+                    "tierDistribution": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tier": { "type": "string" },
+                          "count": { "type": "integer" }
+                        }
+                      }
+                    },
+                    "recentActivity": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "username": { "type": "string" },
+                          "resource_type": { "type": "string" },
+                          "total": { "type": "integer" },
+                          "activity_date": { "type": "string", "format": "date" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "summary": "List all users (admin only)",
+        "tags": ["Admin"],
+        "responses": {
+          "200": {
+            "description": "List of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/User" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create user (admin only)",
+        "tags": ["Admin"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" },
+                  "isAdmin": { "type": "boolean", "default": false },
+                  "tier": { "type": "string", "enum": ["free", "pro", "unlimited"], "default": "free" }
+                },
+                "required": ["username", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created" }
+        }
+      }
+    },
+    "/admin/users/{username}": {
+      "put": {
+        "summary": "Update user (admin only)",
+        "tags": ["Admin"],
+        "parameters": [
+          { "name": "username", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": { "type": "string" },
+                  "isAdmin": { "type": "boolean" },
+                  "tier": { "type": "string", "enum": ["free", "pro", "unlimited"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "User updated" }
+        }
+      },
+      "delete": {
+        "summary": "Delete user (admin only)",
+        "tags": ["Admin"],
+        "parameters": [
+          { "name": "username", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "User deleted" }
+        }
+      }
+    },
+    "/admin/users/active": {
+      "get": {
+        "summary": "Get active users (admin only)",
+        "tags": ["Admin"],
+        "parameters": [
+          { "name": "days", "in": "query", "schema": { "type": "integer", "default": 30 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/User" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/system/health": {
+      "get": {
+        "summary": "System health check (admin only)",
+        "tags": ["Admin"],
+        "responses": {
+          "200": {
+            "description": "System health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/SystemHealth" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/analytics/monthly": {
+      "get": {
+        "summary": "Get monthly analytics trends",
+        "tags": ["Analytics"],
+        "responses": {
+          "200": {
+            "description": "Monthly trends data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "month": { "type": "string" },
+                      "apiCalls": { "type": "integer" },
+                      "fileUploads": { "type": "integer" },
+                      "newUsers": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/analytics/top-users": {
+      "get": {
+        "summary": "Get top users by usage",
+        "tags": ["Analytics"],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top users data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "username": { "type": "string" },
+                      "tier": { "type": "string" },
+                      "totalUsage": { "type": "integer" },
+                      "lastActivity": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/analytics/collections": {
+      "get": {
+        "summary": "Get collection analytics",
+        "tags": ["Analytics"],
+        "responses": {
+          "200": {
+            "description": "Collection statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": { "type": "string" },
+                      "documentCount": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/analytics/endpoints": {
+      "get": {
+        "summary": "Get endpoint usage statistics",
+        "tags": ["Analytics"],
+        "responses": {
+          "200": {
+            "description": "Endpoint usage data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "endpoint": { "type": "string" },
+                      "count": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/analytics/user-growth": {
+      "get": {
+        "summary": "Get user growth analytics",
+        "tags": ["Analytics"],
+        "responses": {
+          "200": {
+            "description": "User growth data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "month": { "type": "string" },
+                      "totalUsers": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/analytics/storage": {
+      "get": {
+        "summary": "Get storage analytics",
+        "tags": ["Analytics"],
+        "responses": {
+          "200": {
+            "description": "Storage analytics data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalFiles": { "type": "integer" },
+                    "avgFileSize": { "type": "integer" },
+                    "totalStorage": { "type": "integer" },
+                    "usersWithStorage": { "type": "integer" },
+                    "topFileTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": { "type": "string" },
+                          "count": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/users/{userId}/analytics": {
+      "get": {
+        "summary": "Get detailed user analytics",
+        "tags": ["Analytics"],
+        "parameters": [
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detailed user analytics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": { "$ref": "#/components/schemas/User" },
+                    "monthlyUsage": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "month": { "type": "string", "format": "date-time" },
+                          "resource_type": { "type": "string" },
+                          "total": { "type": "integer" }
+                        }
+                      }
+                    },
+                    "dailyUsage": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": { "type": "string", "format": "date" },
+                          "resource_type": { "type": "string" },
+                          "total": { "type": "integer" }
+                        }
+                      }
+                    },
+                    "limits": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/intelligence/suggestions/{collectionId}": {
+      "get": {
+        "summary": "Get intelligent cluster suggestions for a collection",
+        "tags": ["Clusters"],
+        "parameters": [
+          {
+            "name": "collectionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "threshold",
+            "in": "query",
+            "schema": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.7 }
+          },
+          {
+            "name": "maxSuggestions",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 10, "default": 5 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cluster suggestions returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "collectionId": { "type": "integer" },
+                        "suggestions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": { "type": "string", "enum": ["move_to_existing", "create_new"] },
+                              "clusterId": { "type": "integer" },
+                              "clusterName": { "type": "string" },
+                              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                              "reasoning": { "type": "string" },
+                              "suggestedName": { "type": "string" }
+                            }
+                          }
+                        },
+                        "timestamp": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/intelligence/suggestions/{suggestionId}/accept": {
+      "post": {
+        "summary": "Accept a cluster suggestion",
+        "tags": ["Clusters"],
+        "parameters": [
+          {
+            "name": "suggestionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggestion accepted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "suggestionId": { "type": "integer" },
+                        "action": { "type": "object" },
+                        "message": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/intelligence/suggestions/{suggestionId}/dismiss": {
+      "post": {
+        "summary": "Dismiss a cluster suggestion",
+        "tags": ["Clusters"],
+        "parameters": [
+          {
+            "name": "suggestionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggestion dismissed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "suggestionId": { "type": "integer" },
+                        "message": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/analytics/overlaps": {
+      "get": {
+        "summary": "Get cluster overlap analysis",
+        "tags": ["Clusters"],
+        "responses": {
+          "200": {
+            "description": "Cluster overlap analysis",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "overlaps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "cluster1": { "type": "object" },
+                              "cluster2": { "type": "object" },
+                              "similarity": { "type": "number" },
+                              "overlapType": { "type": "string" },
+                              "recommendations": { "type": "string" }
+                            }
+                          }
+                        },
+                        "summary": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/analytics/bridges": {
+      "get": {
+        "summary": "Find bridge documents across clusters",
+        "tags": ["Clusters"],
+        "parameters": [
+          {
+            "name": "minClusters",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 2, "default": 2 }
+          },
+          {
+            "name": "similarityThreshold",
+            "in": "query",
+            "schema": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.7 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bridge documents analysis",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "bridgeDocuments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sourceDocument": { "type": "object" },
+                              "targetDocument": { "type": "object" },
+                              "bridgeStrength": { "type": "number" },
+                              "bridgeType": { "type": "string" }
+                            }
+                          }
+                        },
+                        "analysis": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/health": {
+      "get": {
+        "summary": "Get cluster health analysis",
+        "tags": ["Clusters"],
+        "responses": {
+          "200": {
+            "description": "Cluster health analysis",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "healthScore": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "clusters": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "clusterId": { "type": "integer" },
+                              "clusterName": { "type": "string" },
+                              "healthScore": { "type": "number" },
+                              "status": { "type": "string", "enum": ["healthy", "fair", "poor", "critical"] },
+                              "metrics": { "type": "object" },
+                              "issues": { "type": "array", "items": { "type": "string" } },
+                              "recommendations": { "type": "array", "items": { "type": "string" } }
+                            }
+                          }
+                        },
+                        "recommendations": { "type": "array", "items": { "type": "string" } },
+                        "actionItems": { "type": "array" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/{clusterId}/split": {
+      "post": {
+        "summary": "Split a cluster into smaller clusters",
+        "tags": ["Clusters"],
+        "parameters": [
+          {
+            "name": "clusterId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "maxClusters": { "type": "integer", "minimum": 2, "maximum": 5, "default": 3 },
+                  "minCollections": { "type": "integer", "minimum": 1, "default": 2 },
+                  "preserveOriginal": { "type": "boolean", "default": false }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cluster split successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "originalCluster": { "type": "object" },
+                        "newClusters": { "type": "array" },
+                        "summary": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/merge": {
+      "post": {
+        "summary": "Merge multiple clusters into one",
+        "tags": ["Clusters"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["clusterIds"],
+                "properties": {
+                  "clusterIds": {
+                    "type": "array",
+                    "items": { "type": "integer" },
+                    "minItems": 2,
+                    "description": "Array of cluster IDs to merge"
+                  },
+                  "newClusterName": { "type": "string", "description": "Optional name for merged cluster" },
+                  "newClusterDescription": { "type": "string", "description": "Optional description for merged cluster" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Clusters merged successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "mergedCluster": { "type": "object" },
+                        "originalClusters": { "type": "array" },
+                        "summary": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clusters/rebalance": {
+      "post": {
+        "summary": "Trigger cluster rebalancing",
+        "tags": ["Clusters"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "maxClusterSize": { "type": "integer", "minimum": 3, "default": 8 },
+                  "minClusterSize": { "type": "integer", "minimum": 1, "default": 2 },
+                  "similarityThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.6 },
+                  "dryRun": { "type": "boolean", "default": false, "description": "Preview changes without applying them" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cluster rebalancing completed or preview generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "dryRun": { "type": "boolean" },
+                        "analysis": { "type": "object" },
+                        "changes": { "type": "array" },
+                        "summary": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "API health check",
+        "tags": ["Admin"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "timestamp": { "type": "string", "format": "date-time" },
+                    "version": { "type": "string" },
+                    "environment": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

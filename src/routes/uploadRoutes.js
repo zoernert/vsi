@@ -103,10 +103,49 @@ router.post('/upload/:collection', (req, res, next) => {
                 extractedText = result;
             } else if (['.txt', '.md'].includes(fileExtension)) {
                 extractedText = fs.readFileSync(req.file.path, 'utf-8');
+            } else if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'].includes(fileExtension)) {
+                // Process image with LLM to extract description
+                sendProgress({
+                    type: 'progress',
+                    stage: 'processing',
+                    message: 'Processing image with AI to extract description...',
+                    progress: 15
+                });
+                
+                try {
+                    // Import Gemini service for image processing
+                    const { GoogleGenerativeAI } = require('@google/generative-ai');
+                    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+                    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                    
+                    // Convert image to base64 for Gemini
+                    const imageData = fs.readFileSync(req.file.path);
+                    const imagePart = {
+                        inlineData: {
+                            data: Buffer.from(imageData).toString('base64'),
+                            mimeType: req.file.mimetype
+                        }
+                    };
+                    
+                    const result = await model.generateContent([
+                        "Describe this image in detail, focusing on key objects, actions, and context. Provide a comprehensive description that would be useful for search and retrieval. Include details about colors, text content (if any), people, objects, setting, and any other notable features.",
+                        imagePart
+                    ]);
+                    
+                    const response = await result.response;
+                    extractedText = response.text();
+                    
+                    // Add metadata about the image processing
+                    extractedText = `# Image Analysis\n\n**Filename:** ${req.file.originalname}\n**File Type:** ${fileExtension.substring(1).toUpperCase()}\n**Processed with:** AI Image Analysis\n\n## Description\n\n${extractedText}`;
+                    
+                } catch (imageError) {
+                    console.error('Image processing error:', imageError);
+                    extractedText = `Image file: ${req.file.originalname}\nFile type: ${fileExtension.substring(1).toUpperCase()}\nNote: Could not process image content due to error: ${imageError.message}`;
+                }
             } else {
                 sendProgress({
                     type: 'error',
-                    message: `Unsupported file type: ${fileExtension}`
+                    message: `Unsupported file type: ${fileExtension}. Supported types: PDF, DOCX, TXT, MD, PNG, JPG, JPEG, GIF, BMP, WEBP`
                 });
                 return res.end();
             }
@@ -228,6 +267,15 @@ router.post('/upload/:collection', (req, res, next) => {
             ? extractedText.substring(0, 500) + '...' 
             : extractedText;
 
+        console.log('🔍 About to insert document metadata:', {
+            filename: req.file.originalname,
+            fileType: fileExtension.substring(1),
+            collectionId: collection.id,
+            collectionUuid: collection.uuid,
+            previewLength: preview.length,
+            contentLength: extractedText.length
+        });
+
         const insertResult = await db.query(
             `INSERT INTO documents 
                 (filename, file_type, collection_id, collection_uuid, created_at, updated_at, content_preview, content) 
@@ -242,6 +290,8 @@ router.post('/upload/:collection', (req, res, next) => {
                 extractedText
             ]
         );
+
+        console.log('✅ Document metadata inserted successfully:', insertResult.rows[0]);
 
         const document = insertResult.rows[0];
         const processingTime = Date.now() - startTime;

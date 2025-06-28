@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 
 class DocumentProcessor {
     constructor(embeddingService, qdrantService) {
-        this.supportedTypes = ['.pdf', '.txt', '.md', '.doc', '.docx'];
+        this.supportedTypes = ['.pdf', '.txt', '.md', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
         console.log('📄 DocumentProcessor initialized with supported types:', this.supportedTypes);
 
         this.embeddingService = embeddingService || new EmbeddingService();
@@ -26,6 +26,13 @@ class DocumentProcessor {
                 case '.txt':
                 case '.md':
                     return await this.extractFromText(filePath);
+                case '.png':
+                case '.jpg':
+                case '.jpeg':
+                case '.gif':
+                case '.bmp':
+                case '.webp':
+                    return await this.extractFromImage(filePath, mimeType);
                 default:
                     // Check by MIME type if extension doesn't match
                     if (mimeType && mimeType.includes('pdf')) {
@@ -35,6 +42,10 @@ class DocumentProcessor {
                     if (mimeType && mimeType.includes('text')) {
                         console.log('🔄 MIME type indicates text, attempting text extraction...');
                         return await this.extractFromText(filePath);
+                    }
+                    if (mimeType && mimeType.includes('image')) {
+                        console.log('🔄 MIME type indicates image, attempting image extraction...');
+                        return await this.extractFromImage(filePath, mimeType);
                     }
                     throw new Error(`Unsupported file type: ${ext} (MIME: ${mimeType})`);
             }
@@ -119,6 +130,81 @@ class DocumentProcessor {
         }
     }
 
+    async extractFromImage(filePath, mimeType) {
+        try {
+            console.log(`🖼️ Processing image file: ${filePath}`);
+            const stats = fs.statSync(filePath);
+            console.log(`📊 Image file size: ${stats.size} bytes, MIME type: ${mimeType}`);
+            
+            // Import Gemini service for image processing
+            const { GoogleGenerativeAI } = require('@google/generative-ai');
+            
+            if (!process.env.GEMINI_API_KEY) {
+                throw new Error('GEMINI_API_KEY environment variable is required for image processing');
+            }
+            
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            
+            // Convert image to base64 for Gemini
+            const imageData = fs.readFileSync(filePath);
+            const imagePart = {
+                inlineData: {
+                    data: Buffer.from(imageData).toString('base64'),
+                    mimeType: mimeType || 'image/png'
+                }
+            };
+            
+            console.log('🤖 Sending image to Gemini AI for analysis...');
+            const result = await model.generateContent([
+                "Describe this image in detail, focusing on key objects, actions, and context. Provide a comprehensive description that would be useful for search and retrieval. Include details about colors, text content (if any), people, objects, setting, and any other notable features.",
+                imagePart
+            ]);
+            
+            const response = await result.response;
+            const aiDescription = response.text();
+            
+            console.log(`✅ Gemini AI analysis completed: ${aiDescription.length} characters`);
+            
+            // Get the original filename from the path
+            const filename = path.basename(filePath);
+            const fileExtension = path.extname(filePath).substring(1).toUpperCase();
+            
+            // Format the final text content with metadata
+            const extractedText = `# Image Analysis
+
+**Filename:** ${filename}
+**File Type:** ${fileExtension}
+**Processed with:** AI Image Analysis (Gemini 1.5 Flash)
+**Analysis Date:** ${new Date().toISOString()}
+
+## AI-Generated Description
+
+${aiDescription}`;
+            
+            console.log(`📄 Final extracted text length: ${extractedText.length} characters`);
+            
+            return extractedText;
+            
+        } catch (error) {
+            console.error('❌ Error processing image:', error.message);
+            
+            // Fallback to basic metadata if AI processing fails
+            const filename = path.basename(filePath);
+            const fileExtension = path.extname(filePath).substring(1).toUpperCase();
+            const fallbackText = `# Image File
+
+**Filename:** ${filename}
+**File Type:** ${fileExtension}
+**Note:** Could not process image content due to error: ${error.message}
+
+This is an image file that could not be analyzed automatically. You may need to add a manual description of its contents.`;
+            
+            console.log('⚠️ Using fallback text due to processing error');
+            return fallbackText;
+        }
+    }
+
     isSupported(filePath) {
         const ext = path.extname(filePath).toLowerCase();
         const supported = this.supportedTypes.includes(ext);
@@ -142,7 +228,8 @@ class DocumentProcessor {
             mimeType.includes('pdf') ||
             mimeType.includes('text') ||
             mimeType.includes('plain') ||
-            mimeType.includes('markdown')
+            mimeType.includes('markdown') ||
+            mimeType.includes('image')
         );
         
         const supported = extSupported || mimeSupported;
