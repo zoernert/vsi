@@ -15,16 +15,30 @@ class MigrationService {
                 '001_initial_schema.sql',
                 '002_add_usage_tracking.sql', 
                 '003_add_user_tiers.sql',
-                '004_make_qdrant_collection_name_nullable.sql' // Add the new migration
+                '004_make_qdrant_collection_name_nullable.sql',
+                '005_add_collection_uuid.sql',
+                '006_add_collection_uuid_to_documents.sql',
+                '007_add_cluster_support.sql'
             ];
 
+            let failedMigrations = 0;
+            
             for (const migration of migrations) {
-                await this.runMigration(migration);
+                try {
+                    await this.runMigration(migration);
+                } catch (error) {
+                    console.error(`⚠️ Migration ${migration} failed but continuing with next migrations...`);
+                    failedMigrations++;
+                }
             }
 
-            console.log('✅ All migrations completed successfully');
+            if (failedMigrations > 0) {
+                console.log(`⚠️ ${failedMigrations} migrations failed, but database initialization completed`);
+            } else {
+                console.log('✅ All migrations completed successfully');
+            }
         } catch (error) {
-            console.error('❌ Migration failed:', error);
+            console.error('❌ Migration service failed:', error);
             throw error;
         }
     }

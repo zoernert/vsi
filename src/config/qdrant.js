@@ -11,7 +11,7 @@ const qdrantClient = new QdrantClient({
 // Wrap the client with helper methods
 const qdrantWrapper = {
     // Collection management
-    async createCollection(collectionName, config) {
+    async createCollection(collectionName, config = {}) {
         console.log(`Creating collection ${collectionName} with config:`, config);
         try {
             return await qdrantClient.createCollection(collectionName, {
@@ -21,7 +21,16 @@ const qdrantWrapper = {
                 }
             });
         } catch (error) {
-            if (error.message?.includes('already exists')) {
+            console.log(`Error details for ${collectionName}:`, {
+                message: error.message,
+                status: error.status,
+                response: error.response?.data,
+                stack: error.stack?.split('\n')[0]
+            });
+            
+            if (error.message?.includes('already exists') || 
+                error.response?.data?.includes('already exists') ||
+                error.status === 409) {
                 console.log(`Collection ${collectionName} already exists`);
                 return { status: 'ok', result: true };
             }

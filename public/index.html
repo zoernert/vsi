@@ -101,6 +101,9 @@
                         <a class="nav-link" href="#" onclick="showCollections()">
                             <i class="fas fa-folder me-2"></i> Collections
                         </a>
+                        <a class="nav-link" href="#" onclick="showClusters()">
+                            <i class="fas fa-layer-group me-2"></i> Clusters
+                        </a>
                         <a class="nav-link" href="#" onclick="showSearch()">
                             <i class="fas fa-search me-2"></i> Search
                         </a>
@@ -218,6 +221,50 @@
                         </div>
                         <div id="collectionsGrid" class="row">
                             <!-- Collections will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Clusters View -->
+                    <div id="clustersView" class="hidden">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h3>My Clusters</h3>
+                            <button class="btn btn-primary" onclick="app.clusters.showCreateModal()">
+                                <i class="fas fa-plus me-2"></i>Create Cluster
+                            </button>
+                        </div>
+                        <div id="clustersGrid" class="row">
+                            <!-- Clusters will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Cluster Detail View -->
+                    <div id="clusterDetailView" class="hidden">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div>
+                                <button class="btn btn-outline-secondary me-3" onclick="app.clusters.showClusters()">
+                                    <i class="fas fa-arrow-left me-2"></i>Back to Clusters
+                                </button>
+                                <h3 id="clusterDetailTitle">Cluster Details</h3>
+                                <p class="text-muted" id="clusterDescription"></p>
+                            </div>
+                            <div>
+                                <span class="badge bg-primary me-2" id="clusterType"></span>
+                                <button class="btn btn-outline-primary me-2" onclick="app.clusters.showAddCollectionModal()">
+                                    <i class="fas fa-plus me-2"></i>Add Collection
+                                </button>
+                                <button class="btn btn-outline-secondary me-2" onclick="app.clusters.editCluster()">
+                                    <i class="fas fa-edit me-2"></i>Edit
+                                </button>
+                                <button class="btn btn-danger" onclick="app.clusters.deleteCluster()">
+                                    <i class="fas fa-trash me-2"></i>Delete
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <input type="hidden" id="clusterDetailId">
+                        
+                        <div class="row" id="clusterCollectionsGrid">
+                            <!-- Collections in cluster will be loaded here -->
                         </div>
                     </div>
 
@@ -845,6 +892,105 @@ Form Data:
         </div>
     </div>
 
+    <!-- Create Cluster Modal -->
+    <div class="modal fade" id="createClusterModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Cluster</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createClusterForm">
+                        <div class="mb-3">
+                            <label class="form-label">Cluster Name</label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" name="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Cluster Type</label>
+                            <select class="form-control" name="type" onchange="toggleAdvancedSettings(this.value)">
+                                <option value="logical">Logical (Simple grouping)</option>
+                                <option value="sharded">Sharded (Distributed storage)</option>
+                                <option value="replicated">Replicated (High availability)</option>
+                            </select>
+                        </div>
+                        <div id="shardedSettings" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Shard Count</label>
+                                <input type="number" class="form-control" name="shardCount" min="2" max="16" value="2">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Replication Factor</label>
+                                <input type="number" class="form-control" name="replicationFactor" min="1" max="5" value="1">
+                            </div>
+                        </div>
+                        <div id="replicatedSettings" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Replication Factor</label>
+                                <input type="number" class="form-control" name="replicationFactor" min="2" max="5" value="2">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="app.clusters.createCluster()">Create Cluster</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Cluster Modal -->
+    <div class="modal fade" id="editClusterModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Cluster</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editClusterForm">
+                        <input type="hidden" id="editClusterId">
+                        <div class="mb-3">
+                            <label class="form-label">Cluster Name</label>
+                            <input type="text" class="form-control" id="editClusterName" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" id="editClusterDescription" name="description" rows="3"></textarea>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="app.clusters.updateCluster()">Update Cluster</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Collection to Cluster Modal -->
+    <div class="modal fade" id="addCollectionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Collection to Cluster</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <input type="hidden" id="addCollectionClusterId">
+                        <div class="mb-3">
+                            <label class="form-label">Select Collection</label>
+                            <select class="form-control" id="availableCollections" required>
+                                <option value="">Select a collection...</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="app.clusters.addCollectionToCluster()">Add to Cluster</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts - Load in dependency order -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
@@ -863,11 +1009,13 @@ Form Data:
     <script src="js/modules/chat-module.js"></script>
     <script src="js/modules/admin-module.js"></script>
     <script src="js/modules/usage-module.js"></script>
+    <script src="js/modules/clusters-module.js"></script>
     
     <!-- Core after all modules are loaded -->
     <script src="js/core/vsi-core.js"></script>
     
-    <!-- Global functions and initialization last -->
+    <!-- Global functions and initialization -->
+    <script src="app.js"></script>
     <script src="js/vsi-init.js"></script>
 </body>
 </html>

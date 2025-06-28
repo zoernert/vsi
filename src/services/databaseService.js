@@ -83,24 +83,25 @@ class DatabaseService {
         }
     }
 
-    async createUser(username, passwordHash, isAdmin = false) {
+    async createUser(username, passwordHash, isAdmin = false, email = null) {
         try {
-            console.log('Creating user:', { username, isAdmin, hasPasswordHash: !!passwordHash });
+            console.log('Creating user:', { username, isAdmin, email, hasPasswordHash: !!passwordHash });
             
             if (!username || !passwordHash) {
                 throw new Error('Username and password hash are required');
             }
             
             const result = await this.pool.query(
-                'INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, $3) RETURNING *',
-                [username, passwordHash, isAdmin]
+                'INSERT INTO users (username, password_hash, is_admin, email) VALUES ($1, $2, $3, $4) RETURNING *',
+                [username, passwordHash, isAdmin, email]
             );
             
             const user = result.rows[0];
             console.log('User created successfully:', {
                 id: user.id,
                 username: user.username,
-                isAdmin: user.is_admin
+                isAdmin: user.is_admin,
+                email: user.email
             });
             
             return user;

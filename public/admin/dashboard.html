@@ -251,6 +251,166 @@
             gap: 8px;
         }
         
+        .user-controls {
+            margin-top: 16px;
+        }
+        
+        .search-filter-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 16px;
+            background: var(--fiori-bg-secondary);
+            border-radius: 8px;
+            border: 1px solid var(--fiori-border);
+        }
+        
+        .search-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 1px solid var(--fiori-border);
+            border-radius: 6px;
+            font-size: 14px;
+            background: var(--fiori-bg-primary);
+            color: var(--fiori-text-primary);
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: var(--fiori-primary);
+            box-shadow: 0 0 0 2px rgba(0, 101, 204, 0.1);
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid var(--fiori-border);
+            border-radius: 6px;
+            font-size: 14px;
+            background: var(--fiori-bg-primary);
+            color: var(--fiori-text-primary);
+            cursor: pointer;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--fiori-primary);
+        }
+        
+        .user-stats {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            background: var(--fiori-bg-secondary);
+            border-radius: 6px;
+            border: 1px solid var(--fiori-border);
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .stat-item .stat-label {
+            font-weight: 500;
+            color: var(--fiori-text-secondary);
+        }
+        
+        .stat-item .stat-value {
+            font-weight: 600;
+            color: var(--fiori-text-primary);
+        }
+        
+        .pagination-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 16px;
+            padding: 16px;
+            background: var(--fiori-bg-secondary);
+            border-radius: 6px;
+        }
+        
+        .pagination-info {
+            font-size: 14px;
+            color: var(--fiori-text-secondary);
+        }
+        
+        .pagination-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .page-numbers {
+            display: flex;
+            gap: 4px;
+            margin: 0 12px;
+        }
+        
+        .admin-btn-primary {
+            background: var(--fiori-primary);
+            color: white;
+            border: 1px solid var(--fiori-primary);
+        }
+        
+        .admin-btn-primary:hover {
+            background: #004a94;
+            border-color: #004a94;
+        }
+        
+        @media (max-width: 768px) {
+            .search-filter-section {
+                padding: 12px;
+            }
+            
+            .search-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filter-select {
+                width: 100%;
+            }
+            
+            .user-stats {
+                flex-direction: column;
+                gap: 12px;
+            }
+            
+            .pagination-controls {
+                flex-direction: column;
+                gap: 12px;
+                text-align: center;
+            }
+            
+            .pagination-buttons {
+                justify-content: center;
+            }
+            
+            .page-numbers {
+                justify-content: center;
+            }
+        }
+        
         @media (max-width: 768px) {
             .admin-container {
                 padding: 16px;
@@ -386,23 +546,94 @@
             <div class="admin-card">
                 <div class="admin-card-header">
                     <h3><i class="fas fa-users-cog"></i> User Management</h3>
+                    <!-- Search and Filter Controls -->
+                    <div class="user-controls">
+                        <div class="search-filter-section">
+                            <div class="search-group">
+                                <input type="text" id="userSearch" placeholder="Search by username or email..." class="search-input">
+                                <button onclick="searchUsers()" class="admin-btn admin-btn-secondary">
+                                    <i class="fas fa-search"></i> Search
+                                </button>
+                            </div>
+                            <div class="filter-group">
+                                <select id="tierFilter" onchange="filterUsers()" class="filter-select">
+                                    <option value="">All Tiers</option>
+                                    <option value="free">Free</option>
+                                    <option value="starter">Starter</option>
+                                    <option value="professional">Professional</option>
+                                    <option value="enterprise">Enterprise</option>
+                                    <option value="unlimited">Unlimited</option>
+                                </select>
+                                <select id="roleFilter" onchange="filterUsers()" class="filter-select">
+                                    <option value="">All Roles</option>
+                                    <option value="true">Admin</option>
+                                    <option value="false">User</option>
+                                </select>
+                                <select id="sortBy" onchange="filterUsers()" class="filter-select">
+                                    <option value="created_at">Sort by Created</option>
+                                    <option value="username">Sort by Username</option>
+                                    <option value="tier">Sort by Tier</option>
+                                    <option value="is_admin">Sort by Role</option>
+                                </select>
+                                <select id="sortOrder" onchange="filterUsers()" class="filter-select">
+                                    <option value="desc">Descending</option>
+                                    <option value="asc">Ascending</option>
+                                </select>
+                                <button onclick="clearFilters()" class="admin-btn admin-btn-secondary">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="admin-card-content">
+                    <!-- User Statistics -->
+                    <div class="user-stats" id="userStats">
+                        <div class="stat-item">
+                            <span class="stat-label">Total Users:</span>
+                            <span class="stat-value" id="filteredUserCount">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Showing:</span>
+                            <span class="stat-value" id="currentPageInfo">-</span>
+                        </div>
+                    </div>
+                    
                     <div class="admin-table-container">
                         <table class="admin-table" id="usersTable">
                             <thead>
                                 <tr>
                                     <th>Username</th>
+                                    <th>Email</th>
                                     <th>Tier</th>
-                                    <th>Admin</th>
+                                    <th>Role</th>
+                                    <th>Collections</th>
+                                    <th>Documents</th>
+                                    <th>Last Active</th>
                                     <th>Created</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="usersTableBody">
                                 <!-- Populated by JavaScript -->
                             </tbody>
                         </table>
+                    </div>
+                    
+                    <!-- Pagination Controls -->
+                    <div class="pagination-controls" id="usersPagination">
+                        <div class="pagination-info" id="paginationInfo">
+                            Showing 0 - 0 of 0 users
+                        </div>
+                        <div class="pagination-buttons">
+                            <button id="prevPageBtn" onclick="previousPage()" class="admin-btn admin-btn-secondary" disabled>
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </button>
+                            <span id="pageNumbers" class="page-numbers"></span>
+                            <button id="nextPageBtn" onclick="nextPage()" class="admin-btn admin-btn-secondary" disabled>
+                                Next <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -438,6 +669,16 @@
         let dashboardData = null;
         let charts = {};
         let currentEditingUser = null;
+        let currentUserFilters = {
+            search: '',
+            tier: '',
+            isAdmin: '',
+            sortBy: 'created_at',
+            sortOrder: 'desc',
+            page: 1,
+            limit: 10
+        };
+        let usersPagination = null;
 
         // Tab switching
         function showTab(tabName) {
@@ -616,11 +857,24 @@
             `).join('');
         }
 
-        // Load users
-        async function loadUsers() {
+        // Load users with search and filtering
+        async function loadUsers(resetPage = false) {
             try {
+                if (resetPage) {
+                    currentUserFilters.page = 1;
+                }
+                
                 const token = localStorage.getItem('token');
-                const response = await fetch('/api/v1/admin/users', {
+                const params = new URLSearchParams();
+                
+                // Add filters to params
+                Object.keys(currentUserFilters).forEach(key => {
+                    if (currentUserFilters[key]) {
+                        params.append(key, currentUserFilters[key]);
+                    }
+                });
+                
+                const response = await fetch(`/api/admin/users?${params.toString()}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -629,24 +883,92 @@
                 if (!response.ok) throw new Error('Failed to load users');
                 
                 const data = await response.json();
-                updateUsersTable(data.users);
+                
+                if (data.success) {
+                    updateUsersTable(data.data);
+                    updateUsersPagination(data.pagination);
+                    updateUserStats(data.pagination, data.filters);
+                } else {
+                    throw new Error(data.message || 'Failed to load users');
+                }
                 
             } catch (error) {
                 console.error('Users error:', error);
-                document.querySelector('#usersTable tbody').innerHTML = 
-                    '<tr><td colspan="5">Failed to load users</td></tr>';
+                document.getElementById('usersTableBody').innerHTML = 
+                    '<tr><td colspan="9">Failed to load users</td></tr>';
             }
+        }
+
+        // Search users
+        function searchUsers() {
+            const searchValue = document.getElementById('userSearch').value.trim();
+            currentUserFilters.search = searchValue;
+            loadUsers(true);
+        }
+
+        // Filter users
+        function filterUsers() {
+            currentUserFilters.tier = document.getElementById('tierFilter').value;
+            currentUserFilters.isAdmin = document.getElementById('roleFilter').value;
+            currentUserFilters.sortBy = document.getElementById('sortBy').value;
+            currentUserFilters.sortOrder = document.getElementById('sortOrder').value;
+            loadUsers(true);
+        }
+
+        // Clear filters
+        function clearFilters() {
+            document.getElementById('userSearch').value = '';
+            document.getElementById('tierFilter').value = '';
+            document.getElementById('roleFilter').value = '';
+            document.getElementById('sortBy').value = 'created_at';
+            document.getElementById('sortOrder').value = 'desc';
+            
+            currentUserFilters = {
+                search: '',
+                tier: '',
+                isAdmin: '',
+                sortBy: 'created_at',
+                sortOrder: 'desc',
+                page: 1,
+                limit: 10
+            };
+            
+            loadUsers();
+        }
+
+        // Pagination functions
+        function previousPage() {
+            if (currentUserFilters.page > 1) {
+                currentUserFilters.page--;
+                loadUsers();
+            }
+        }
+
+        function nextPage() {
+            if (usersPagination && usersPagination.hasNext) {
+                currentUserFilters.page++;
+                loadUsers();
+            }
+        }
+
+        function goToPage(page) {
+            currentUserFilters.page = page;
+            loadUsers();
         }
 
         // Update users table
         function updateUsersTable(users) {
-            const tbody = document.querySelector('#usersTable tbody');
+            const tbody = document.getElementById('usersTableBody');
             tbody.innerHTML = users.map(user => `
                 <tr>
-                    <td>${user.username}</td>
+                    <td><strong>${user.username}</strong></td>
+                    <td>${user.email || '<span style="color: #888;">Not provided</span>'}</td>
                     <td><span class="tier-badge tier-${user.tier}">${user.tier}</span></td>
-                    <td>${user.isAdmin ? '✅' : '❌'}</td>
-                    <td>${new Date(user.createdAt).toLocaleDateString()}</td>
+                    <td>${user.is_admin ? '<span style="color: #059669;">Admin</span>' : '<span style="color: #6b7280;">User</span>'}</td>
+                    <td>${user.stats?.collections || 0}</td>
+                    <td>${user.stats?.documents || 0}</td>
+                    <td>${user.stats?.last_activity ? new Date(user.stats.last_activity).toLocaleDateString() : '<span style="color: #888;">Never</span>'}</td>
+                    <td>${new Date(user.created_at).toLocaleDateString()}</td>
                     <td>
                         <div class="user-actions">
                             <button class="admin-btn admin-btn-secondary admin-btn-small" onclick="editUser('${user.username}')">
@@ -656,6 +978,43 @@
                     </td>
                 </tr>
             `).join('');
+        }
+
+        // Update pagination controls
+        function updateUsersPagination(pagination) {
+            usersPagination = pagination;
+            
+            document.getElementById('prevPageBtn').disabled = !pagination.hasPrev;
+            document.getElementById('nextPageBtn').disabled = !pagination.hasNext;
+            
+            // Update pagination info
+            const start = ((pagination.page - 1) * pagination.limit) + 1;
+            const end = Math.min(pagination.page * pagination.limit, pagination.total);
+            document.getElementById('paginationInfo').textContent = 
+                `Showing ${start} - ${end} of ${pagination.total} users`;
+            
+            // Update page numbers
+            const pageNumbers = document.getElementById('pageNumbers');
+            pageNumbers.innerHTML = '';
+            
+            const maxPages = Math.min(pagination.totalPages, 5);
+            const startPage = Math.max(1, pagination.page - Math.floor(maxPages / 2));
+            const endPage = Math.min(pagination.totalPages, startPage + maxPages - 1);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const button = document.createElement('button');
+                button.textContent = i;
+                button.className = `admin-btn ${i === pagination.page ? 'admin-btn-primary' : 'admin-btn-secondary'} admin-btn-small`;
+                button.onclick = () => goToPage(i);
+                pageNumbers.appendChild(button);
+            }
+        }
+
+        // Update user statistics
+        function updateUserStats(pagination, filters) {
+            document.getElementById('filteredUserCount').textContent = pagination.total;
+            document.getElementById('currentPageInfo').textContent = 
+                `Page ${pagination.page} of ${pagination.totalPages}`;
         }
 
         // Load system health
@@ -724,7 +1083,19 @@
         }
 
         // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', loadDashboard);
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listener for search input
+            const searchInput = document.getElementById('userSearch');
+            if (searchInput) {
+                searchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        searchUsers();
+                    }
+                });
+            }
+            
+            loadDashboard();
+        });
     </script>
 </body>
 </html>

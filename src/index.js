@@ -31,6 +31,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const searchRoutes = require('./routes/searchRoutes'); // Add this line
 const adminRoutes = require('./routes/adminRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const clusterRoutes = require('./routes/clusterRoutes');
 const { QdrantService } = require('./services/qdrantService');
 const { EmbeddingService } = require('./services/embeddingService');
 const { GeminiService } = require('./services/geminiService');
@@ -153,7 +154,7 @@ app.post('/api/auth/register', async (req, res) => {
         const { username, password, email } = req.body;
         const passwordHash = await bcrypt.hash(password, 10);
         
-        const user = await db.createUser(username, passwordHash, false);
+        const user = await db.createUser(username, passwordHash, false, email);
         res.status(201).json({
             success: true,
             message: 'User created successfully',
@@ -580,10 +581,14 @@ app.post('/api/collections', auth, async (req, res) => {
             [qdrantCollectionName, collection.id]
         );
 
-        // 4. Create collection in Qdrant
+        // 4. Create collection in Qdrant with proper vector configuration
         try {
-            await qdrant.createCollection(qdrantCollectionName);
-            console.log(`✅ Created Qdrant collection: ${qdrantCollectionName}`);
+            // Get the correct vector size for the embedding model
+            const vectorSize = await embeddingService.getVectorSize();
+            console.log(`Creating Qdrant collection: ${qdrantCollectionName} with vector size:`, vectorSize);
+            console.log(`Vector size type:`, typeof vectorSize);
+            await qdrant.createCollection(qdrantCollectionName, vectorSize);
+            console.log(`✅ Created Qdrant collection: ${qdrantCollectionName} with vector size ${vectorSize}`);
         } catch (qdrantError) {
             console.error('❌ Failed to create Qdrant collection:', qdrantError.message);
             await client.query('ROLLBACK');
@@ -797,11 +802,27 @@ app.post('/api/collections/:id/documents/create-text', auth, async (req, res) =>
         // Get the correct vector size for the embedding model
         const vectorSize = await embeddingService.getVectorSize();
         
-        // Ensure Qdrant collection exists with correct vector size
+        // Check if Qdrant collection exists, create if needed
         try {
-            await qdrant.createCollection(collection.qdrant_collection_name, vectorSize);
+            console.log(`Checking if Qdrant collection exists: ${collection.qdrant_collection_name}`);
+            
+            // First check if collection exists
+            const exists = await qdrant.collectionExists(collection.qdrant_collection_name);
+            console.log(`Collection ${collection.qdrant_collection_name} exists: ${exists}`);
+            
+            if (!exists) {
+                console.log(`Creating missing Qdrant collection: ${collection.qdrant_collection_name} with vector size: ${vectorSize}`);
+                await qdrant.createCollection(collection.qdrant_collection_name, vectorSize);
+                console.log(`✅ Qdrant collection created: ${collection.qdrant_collection_name}`);
+            } else {
+                console.log(`✅ Qdrant collection already exists: ${collection.qdrant_collection_name}`);
+            }
         } catch (collectionError) {
-            console.error('❌ Failed to create/verify Qdrant collection:', collectionError.message);
+            console.error('❌ Failed to create/verify Qdrant collection:', {
+                collection: collection.qdrant_collection_name,
+                error: collectionError.message,
+                stack: collectionError.stack
+            });
             await client.query('ROLLBACK');
             return res.status(500).json({
                 success: false,
@@ -1165,6 +1186,11 @@ console.log('✅ Admin routes registered');
 console.log('📊 Registering analytics routes...');
 app.use('/api/admin/analytics', analyticsRoutes);
 console.log('✅ Analytics routes registered');
+
+// Cluster routes - Mount cluster management
+console.log('🗂️ Registering cluster routes...');
+app.use('/api/clusters', clusterRoutes);
+console.log('✅ Cluster routes registered');
 
 // Health check - Must be before catch-all route
 app.get('/api/health', (req, res) => {

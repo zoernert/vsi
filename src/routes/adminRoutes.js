@@ -65,9 +65,9 @@ router.get('/dashboard', async (req, res) => {
                 totalUsers,
                 adminUsers,
                 activeUsers: usageStats.rows.length > 0 ? Math.max(...usageStats.rows.map(s => parseInt(s.active_users))) : 0,
-                totalCollections: usageStats.rows.find(s => s.resource_type === 'collections')?.total_usage || 0,
-                totalDocuments: usageStats.rows.find(s => s.resource_type === 'documents')?.total_usage || 0,
-                storageUsed: usageStats.rows.find(s => s.resource_type === 'storage_bytes')?.total_usage || 0,
+                totalCollections: parseInt(usageStats.rows.find(s => s.resource_type === 'collections')?.total_usage || 0),
+                totalDocuments: parseInt(usageStats.rows.find(s => s.resource_type === 'documents')?.total_usage || 0),
+                storageUsed: parseInt(usageStats.rows.find(s => s.resource_type === 'storage_bytes')?.total_usage || 0),
                 usageStats: usageStats.rows,
                 tierDistribution: tierDistribution.rows,
                 recentActivity: recentActivity.rows
@@ -173,6 +173,37 @@ router.get('/system/health', async (req, res) => {
             FROM usage_tracking 
             WHERE resource_type = 'storage_bytes'
         `);
+
+        // Check Qdrant health
+        let qdrantStatus = 'unknown';
+        let qdrantLastCheck = null;
+        try {
+            const qdrant = require('../config/qdrant');
+            // Test if we can list collections
+            await qdrant.getCollections();
+            qdrantStatus = 'healthy';
+            qdrantLastCheck = new Date().toISOString();
+        } catch (error) {
+            console.warn('Qdrant health check failed:', error.message);
+            qdrantStatus = 'error';
+            qdrantLastCheck = new Date().toISOString();
+        }
+
+        // Check Embeddings service health
+        let embeddingsStatus = 'unknown';
+        let embeddingsLastCheck = null;
+        try {
+            const { EmbeddingService } = require('../services/embeddingService');
+            const embeddingService = new EmbeddingService();
+            // Test with a simple embedding
+            await embeddingService.generateEmbedding('health check test');
+            embeddingsStatus = 'healthy';
+            embeddingsLastCheck = new Date().toISOString();
+        } catch (error) {
+            console.warn('Embeddings health check failed:', error.message);
+            embeddingsStatus = 'error';
+            embeddingsLastCheck = new Date().toISOString();
+        }
         
         res.json({
             success: true,
@@ -180,6 +211,14 @@ router.get('/system/health', async (req, res) => {
                 database: {
                     status: 'healthy',
                     lastCheck: dbHealth.rows[0].now
+                },
+                qdrant: {
+                    status: qdrantStatus,
+                    lastCheck: qdrantLastCheck
+                },
+                embeddings: {
+                    status: embeddingsStatus,
+                    lastCheck: embeddingsLastCheck
                 },
                 usageTracking: {
                     events24h: parseInt(usageHealth.rows[0].events_24h)
@@ -202,8 +241,56 @@ router.get('/system/health', async (req, res) => {
 // Get all users
 router.get('/users', async (req, res) => {
     try {
-        const users = await db.getAllUsers();
-        const usersWithStats = await Promise.all(users.map(async (user) => {
+        const { search, tier, isAdmin, sortBy = 'created_at', sortOrder = 'desc', page = 1, limit = 50 } = req.query;
+        
+        let whereConditions = [];
+        let queryParams = [];
+        let paramCount = 1;
+        
+        // Search filter
+        if (search) {
+            whereConditions.push(`(u.username ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`);
+            queryParams.push(`%${search}%`);
+            paramCount++;
+        }
+        
+        // Tier filter
+        if (tier) {
+            whereConditions.push(`u.tier = $${paramCount}`);
+            queryParams.push(tier);
+            paramCount++;
+        }
+        
+        // Admin filter
+        if (isAdmin !== undefined) {
+            whereConditions.push(`u.is_admin = $${paramCount}`);
+            queryParams.push(isAdmin === 'true');
+            paramCount++;
+        }
+        
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+        
+        // Validate sort column
+        const validSortColumns = ['username', 'created_at', 'tier', 'is_admin'];
+        const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'created_at';
+        const order = sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+        
+        // Pagination
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        queryParams.push(parseInt(limit), offset);
+        
+        const usersQuery = `
+            SELECT u.*, 
+                   COUNT(*) OVER() as total_count
+            FROM users u
+            ${whereClause}
+            ORDER BY u.${sortColumn} ${order}
+            LIMIT $${paramCount} OFFSET $${paramCount + 1}
+        `;
+        
+        const users = await db.pool.query(usersQuery, queryParams);
+        
+        const usersWithStats = await Promise.all(users.rows.map(async (user) => {
             // Get user statistics
             const stats = await db.pool.query(`
                 SELECT 
@@ -219,15 +306,34 @@ router.get('/users', async (req, res) => {
                 GROUP BY u.id
             `, [user.id]);
             
+            const { total_count, ...userWithoutCount } = user;
             return {
-                ...user,
+                ...userWithoutCount,
                 stats: stats.rows[0] || { collections: 0, documents: 0, searches: 0, last_activity: null }
             };
         }));
         
+        const totalCount = users.rows.length > 0 ? parseInt(users.rows[0].total_count) : 0;
+        const totalPages = Math.ceil(totalCount / parseInt(limit));
+        
         res.json({
             success: true,
-            data: usersWithStats
+            data: usersWithStats,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: totalCount,
+                totalPages,
+                hasNext: parseInt(page) < totalPages,
+                hasPrev: parseInt(page) > 1
+            },
+            filters: {
+                search,
+                tier,
+                isAdmin,
+                sortBy: sortColumn,
+                sortOrder: order.toLowerCase()
+            }
         });
     } catch (error) {
         console.error('Get users error:', error);

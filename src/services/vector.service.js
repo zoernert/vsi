@@ -71,8 +71,11 @@ class VectorService {
     
     let query = `
       SELECT c.*, 
+             cl.name as cluster_name,
+             cl.id as cluster_id,
              COALESCE(d1.doc_count, d2.doc_count, 0) as document_count 
       FROM collections c 
+      LEFT JOIN clusters cl ON c.cluster_id = cl.id
       LEFT JOIN (
         SELECT collection_id, COUNT(*) as doc_count 
         FROM documents 
@@ -86,7 +89,7 @@ class VectorService {
         GROUP BY collection_uuid
       ) d2 ON c.uuid = d2.collection_uuid
       WHERE c.user_id = $1 
-      ORDER BY c.created_at DESC
+      ORDER BY cl.name NULLS LAST, c.created_at DESC
     `;
     
     console.log(`🔍 Executing VectorService query: ${query}`);
