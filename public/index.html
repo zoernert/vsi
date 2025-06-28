@@ -913,8 +913,18 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#smartContextExample">
+                                <i class="fas fa-brain me-2"></i>Smart Context
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="tab" href="#clusteringExample">
+                                <i class="fas fa-layer-group me-2"></i>Clustering
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" data-bs-toggle="tab" href="#descriptionExample">
-                                <i class="fas fa-book me-2"></i>Description
+                                <i class="fas fa-book me-2"></i>Overview
                             </a>
                         </li>
                     </ul>
@@ -968,13 +978,79 @@
                         <div class="tab-pane fade" id="descriptionExample">
                             <div class="card">
                                 <div class="card-body">
-                                    <h6><i class="fas fa-upload me-2"></i>Simple File Upload API</h6>
+                                    <h6><i class="fas fa-rocket me-2"></i>VSI Vector Store API</h6>
+                                    <div class="mb-4">
+                                        <p>Comprehensive API suite for document management, AI interactions, and intelligent content organization. Upload documents, ask AI questions, generate smart context, and organize content with clustering.</p>
+                                    </div>
+                                    
+                                    <div class="row mb-4">
+                                        <div class="col-md-6">
+                                            <div class="card border-primary">
+                                                <div class="card-body">
+                                                    <h6><i class="fas fa-upload me-2"></i>Document Upload</h6>
+                                                    <p class="small mb-2"><strong>Simple file upload with automatic processing:</strong></p>
+                                                    <ul class="small mb-0">
+                                                        <li>PDF, Word, Text, Markdown, Images</li>
+                                                        <li>Automatic text extraction</li>
+                                                        <li>Vector embeddings generation</li>
+                                                        <li>Immediate search availability</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card border-success">
+                                                <div class="card-body">
+                                                    <h6><i class="fas fa-robot me-2"></i>AI Chat</h6>
+                                                    <p class="small mb-2"><strong>Intelligent document Q&A:</strong></p>
+                                                    <ul class="small mb-0">
+                                                        <li>Semantic search across documents</li>
+                                                        <li>Context-aware responses</li>
+                                                        <li>Multiple AI model support</li>
+                                                        <li>Source attribution</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-4">
+                                        <div class="col-md-6">
+                                            <div class="card border-warning">
+                                                <div class="card-body">
+                                                    <h6><i class="fas fa-brain me-2"></i>Smart Context</h6>
+                                                    <p class="small mb-2"><strong>Intelligent context generation:</strong></p>
+                                                    <ul class="small mb-0">
+                                                        <li>Semantic search & clustering</li>
+                                                        <li>Diversity optimization</li>
+                                                        <li>Token-aware sizing</li>
+                                                        <li>Multiple strategies</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card border-info">
+                                                <div class="card-body">
+                                                    <h6><i class="fas fa-layer-group me-2"></i>Document Clustering</h6>
+                                                    <p class="small mb-2"><strong>Automatic content organization:</strong></p>
+                                                    <ul class="small mb-0">
+                                                        <li>K-means, hierarchical, DBSCAN</li>
+                                                        <li>Theme discovery</li>
+                                                        <li>Outlier detection</li>
+                                                        <li>Performance analytics</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
                                     <div class="mb-3">
-                                        <h7><strong>How it works:</strong></h7>
+                                        <h7><strong>Quick Start - File Upload:</strong></h7>
                                         <ol class="mt-2">
                                             <li><strong>Upload:</strong> Send a POST request with a "file" field to the upload endpoint</li>
                                             <li><strong>Processing:</strong> The backend automatically extracts text, creates embeddings, and stores in the vector database</li>
-                                            <li><strong>Ready:</strong> Documents are immediately available for AI chat and search</li>
+                                            <li><strong>Ready:</strong> Documents are immediately available for AI chat, smart context, and clustering</li>
                                         </ol>
                                     </div>
                                     
@@ -1018,7 +1094,273 @@ Form Data:
                                     
                                     <div class="alert alert-success">
                                         <i class="fas fa-check-circle me-2"></i>
-                                        <strong>Pro Tip:</strong> After uploading, wait 2-5 seconds before asking AI questions to ensure all embeddings are processed.
+                                        <strong>Pro Tip:</strong> After uploading, wait 2-5 seconds before using AI features to ensure all embeddings are processed.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Smart Context Example -->
+                        <div class="tab-pane fade" id="smartContextExample">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-brain me-2"></i>Smart Context API</h6>
+                                    <div class="mb-3">
+                                        <p>Generate intelligent context from your documents using semantic search and clustering. This API creates optimized context for LLM applications by finding relevant content and ensuring diversity.</p>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h7><strong>Endpoints:</strong></h7>
+                                        <ul class="mt-2">
+                                            <li><code>POST /api/collections/:id/smart-context</code> - Generate smart context</li>
+                                            <li><code>POST /api/collections/:id/smart-context/preview</code> - Preview context generation</li>
+                                            <li><code>GET /api/collections/:id/smart-context/capabilities</code> - Get collection capabilities</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h7><strong>cURL Example:</strong></h7>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <small class="text-muted">Generate smart context</small>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="app.collections.copyCodeExample('smartContextCurl')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <pre><code id="smartContextCurl" class="language-bash">curl -X POST "{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/smart-context" \
+  -H "Authorization: Bearer {{JWT_TOKEN}}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "machine learning algorithms",
+    "maxTokens": 4000,
+    "diversityThreshold": 0.7,
+    "includeMetadata": true,
+    "strategy": "balanced"
+  }'</code></pre>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h7><strong>JavaScript Example:</strong></h7>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <small class="text-muted">Using fetch API</small>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="app.collections.copyCodeExample('smartContextJS')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <pre><code id="smartContextJS" class="language-javascript">const response = await fetch('/api/collections/{{COLLECTION_ID}}/smart-context', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer {{JWT_TOKEN}}',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    query: 'machine learning algorithms',
+    maxTokens: 4000,
+    diversityThreshold: 0.7,
+    includeMetadata: true,
+    strategy: 'balanced'
+  })
+});
+
+const result = await response.json();
+console.log('Smart context:', result.context);
+console.log('Analytics:', result.analytics);</code></pre>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h7><strong>Python Example:</strong></h7>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <small class="text-muted">Using requests library</small>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="app.collections.copyCodeExample('smartContextPython')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <pre><code id="smartContextPython" class="language-python">import requests
+
+url = "{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/smart-context"
+headers = {
+    "Authorization": "Bearer {{JWT_TOKEN}}",
+    "Content-Type": "application/json"
+}
+data = {
+    "query": "machine learning algorithms",
+    "maxTokens": 4000,
+    "diversityThreshold": 0.7,
+    "includeMetadata": True,
+    "strategy": "balanced"
+}
+
+response = requests.post(url, headers=headers, json=data)
+result = response.json()
+
+print("Smart context:", result["context"])
+print("Analytics:", result["analytics"])</code></pre>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h7><strong>Request Parameters:</strong></h7>
+                                        <ul class="mt-2">
+                                            <li><code>query</code> - Search query to find relevant content</li>
+                                            <li><code>maxTokens</code> - Maximum tokens in generated context (default: 4000)</li>
+                                            <li><code>diversityThreshold</code> - Diversity threshold 0-1 (default: 0.7)</li>
+                                            <li><code>includeMetadata</code> - Include source metadata (default: true)</li>
+                                            <li><code>strategy</code> - 'balanced', 'diversity', or 'relevance' (default: 'balanced')</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-lightbulb me-2"></i>
+                                        <strong>Strategies:</strong><br>
+                                        • <strong>Balanced:</strong> Optimal mix of relevance and diversity<br>
+                                        • <strong>Diversity:</strong> Prioritizes content variety<br>
+                                        • <strong>Relevance:</strong> Focuses on most relevant content
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Clustering Example -->
+                        <div class="tab-pane fade" id="clusteringExample">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-layer-group me-2"></i>Clustering API</h6>
+                                    <div class="mb-3">
+                                        <p>Organize your documents into semantic clusters for better navigation and understanding. The clustering API groups similar content together using advanced machine learning algorithms.</p>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h7><strong>Endpoints:</strong></h7>
+                                        <ul class="mt-2">
+                                            <li><code>POST /api/collections/:id/clusters</code> - Create document clusters</li>
+                                            <li><code>GET /api/collections/:id/clusters</code> - Get existing clusters</li>
+                                            <li><code>GET /api/collections/:id/clusters/:clusterId/documents</code> - Get cluster documents</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h7><strong>cURL Example:</strong></h7>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <small class="text-muted">Create clusters</small>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="app.collections.copyCodeExample('clusteringCurl')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <pre><code id="clusteringCurl" class="language-bash">curl -X POST "{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/clusters" \
+  -H "Authorization: Bearer {{JWT_TOKEN}}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "numClusters": 5,
+    "algorithm": "kmeans",
+    "includeOutliers": true,
+    "minClusterSize": 2
+  }'</code></pre>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h7><strong>JavaScript Example:</strong></h7>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <small class="text-muted">Fetch clusters</small>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="app.collections.copyCodeExample('clusteringJS')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <pre><code id="clusteringJS" class="language-javascript">// Create clusters
+const createResponse = await fetch('/api/collections/{{COLLECTION_ID}}/clusters', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer {{JWT_TOKEN}}',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    numClusters: 5,
+    algorithm: 'kmeans',
+    includeOutliers: true,
+    minClusterSize: 2
+  })
+});
+
+const clusters = await createResponse.json();
+
+// Get cluster documents
+const clusterResponse = await fetch(`/api/collections/{{COLLECTION_ID}}/clusters/${clusters[0].id}/documents`, {
+  headers: {
+    'Authorization': 'Bearer {{JWT_TOKEN}}'
+  }
+});
+
+const documents = await clusterResponse.json();</code></pre>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h7><strong>Python Example:</strong></h7>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <small class="text-muted">Using requests library</small>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="app.collections.copyCodeExample('clusteringPython')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                        <pre><code id="clusteringPython" class="language-python">import requests
+
+# Create clusters
+url = "{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/clusters"
+headers = {
+    "Authorization": "Bearer {{JWT_TOKEN}}",
+    "Content-Type": "application/json"
+}
+data = {
+    "numClusters": 5,
+    "algorithm": "kmeans",
+    "includeOutliers": True,
+    "minClusterSize": 2
+}
+
+response = requests.post(url, headers=headers, json=data)
+clusters = response.json()
+
+# Get cluster documents
+cluster_id = clusters[0]["id"]
+doc_url = f"{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/clusters/{cluster_id}/documents"
+doc_response = requests.get(doc_url, headers=headers)
+documents = doc_response.json()</code></pre>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h7><strong>Clustering Parameters:</strong></h7>
+                                        <ul class="mt-2">
+                                            <li><code>numClusters</code> - Number of clusters to create (default: auto-detect)</li>
+                                            <li><code>algorithm</code> - 'kmeans', 'hierarchical', or 'dbscan' (default: 'kmeans')</li>
+                                            <li><code>includeOutliers</code> - Include outlier documents (default: true)</li>
+                                            <li><code>minClusterSize</code> - Minimum documents per cluster (default: 2)</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h7><strong>Response Format:</strong></h7>
+                                        <pre class="mt-2"><code>{
+  "clusters": [
+    {
+      "id": 1,
+      "name": "Machine Learning",
+      "description": "Documents about ML algorithms and techniques",
+      "size": 15,
+      "centroid": [0.1, 0.2, ...],
+      "documents": ["doc1", "doc2", ...]
+    }
+  ],
+  "analytics": {
+    "totalClusters": 5,
+    "silhouetteScore": 0.65,
+    "processingTime": 2300
+  }
+}</code></pre>
+                                    </div>
+                                    
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-chart-line me-2"></i>
+                                        <strong>Use Cases:</strong><br>
+                                        • Organize large document collections<br>
+                                        • Discover content themes and patterns<br>
+                                        • Improve search and navigation<br>
+                                        • Generate topic summaries
                                     </div>
                                 </div>
                             </div>
@@ -1029,9 +1371,11 @@ Form Data:
                     <ul>
                         <li><strong>Simple Upload:</strong> Just send the file - no additional fields required</li>
                         <li><strong>Authentication:</strong> Your current JWT token is included in all examples above</li>
-                        <li><strong>File Processing:</strong> Allow 2-10 seconds for document processing before asking questions</li>
+                        <li><strong>File Processing:</strong> Allow 2-10 seconds for document processing before using AI features</li>
                         <li><strong>Rate Limiting:</strong> API calls are subject to your account tier limits</li>
-                        <li><strong>AI Context:</strong> Questions use semantic search to find relevant document chunks</li>
+                        <li><strong>AI Features:</strong> Upload, chat, smart context, and clustering all use semantic search</li>
+                        <li><strong>Smart Context:</strong> Optimizes content selection for LLM applications with diversity control</li>
+                        <li><strong>Clustering:</strong> Organizes documents into semantic groups for better navigation</li>
                         <li><strong>Token Security:</strong> Keep your token secure and do not share these examples with others</li>
                     </ul>
 

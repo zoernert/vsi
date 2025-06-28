@@ -1126,6 +1126,643 @@ if __name__ == "__main__":
         document.getElementById('fetchCode').textContent = fetchCode;
         document.getElementById('axiosCode').textContent = axiosCode;
         document.getElementById('pythonCode').textContent = pythonCode;
+        
+        // Generate Smart Context examples
+        this.generateSmartContextExamples(baseUrl, collectionId, token);
+        
+        // Generate Clustering examples
+        this.generateClusteringExamples(baseUrl, collectionId, token);
+    }
+
+    generateSmartContextExamples(baseUrl, collectionId, token) {
+        // Smart Context cURL example
+        const smartContextCurl = `# Generate smart context for LLM applications
+curl -X POST "${baseUrl}/api/collections/${collectionId}/smart-context" \\
+  -H "Authorization: Bearer ${token}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "machine learning algorithms",
+    "maxTokens": 4000,
+    "diversityThreshold": 0.7,
+    "includeMetadata": true,
+    "strategy": "balanced"
+  }'
+
+# Preview context generation (no token cost)
+curl -X POST "${baseUrl}/api/collections/${collectionId}/smart-context/preview" \\
+  -H "Authorization: Bearer ${token}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "artificial intelligence",
+    "maxTokens": 2000,
+    "strategy": "diversity"
+  }'
+
+# Get collection capabilities
+curl -X GET "${baseUrl}/api/collections/${collectionId}/smart-context/capabilities" \\
+  -H "Authorization: Bearer ${token}"`;
+
+        // Smart Context JavaScript example
+        const smartContextJS = `// Generate smart context with optimal relevance and diversity
+async function generateSmartContext(query, options = {}) {
+  const response = await fetch('${baseUrl}/api/collections/${collectionId}/smart-context', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ${token}',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      query,
+      maxTokens: options.maxTokens || 4000,
+      diversityThreshold: options.diversityThreshold || 0.7,
+      includeMetadata: options.includeMetadata ?? true,
+      strategy: options.strategy || 'balanced'
+    })
+  });
+
+  const result = await response.json();
+  
+  if (result.success) {
+    console.log('Smart Context Generated:');
+    console.log('Context:', result.context);
+    console.log('Token Count:', result.analytics.tokenCount);
+    console.log('Diversity Score:', result.analytics.diversityScore);
+    console.log('Sources:', result.analytics.sources);
+    return result;
+  } else {
+    throw new Error(result.message || 'Failed to generate smart context');
+  }
+}
+
+// Preview context before generation
+async function previewSmartContext(query, maxTokens = 2000) {
+  const response = await fetch('${baseUrl}/api/collections/${collectionId}/smart-context/preview', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ${token}',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      query,
+      maxTokens,
+      strategy: 'balanced'
+    })
+  });
+
+  const result = await response.json();
+  console.log('Preview:', result.preview);
+  return result;
+}
+
+// Usage examples
+async function main() {
+  try {
+    // Get collection capabilities
+    const capResponse = await fetch('${baseUrl}/api/collections/${collectionId}/smart-context/capabilities', {
+      headers: { 'Authorization': 'Bearer ${token}' }
+    });
+    const capabilities = await capResponse.json();
+    console.log('Collection capabilities:', capabilities);
+
+    // Preview context
+    await previewSmartContext('artificial intelligence and machine learning');
+
+    // Generate context for different use cases
+    const contexts = await Promise.all([
+      generateSmartContext('deep learning techniques', { strategy: 'relevance', maxTokens: 3000 }),
+      generateSmartContext('data preprocessing methods', { strategy: 'diversity', maxTokens: 2500 }),
+      generateSmartContext('model evaluation metrics', { strategy: 'balanced', maxTokens: 3500 })
+    ]);
+
+    console.log('Generated contexts:', contexts);
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+
+main();`;
+
+        // Smart Context Python example
+        const smartContextPython = `import requests
+import json
+
+class SmartContextAPI:
+    def __init__(self, base_url='${baseUrl}', token='${token}', collection_id='${collectionId}'):
+        self.base_url = base_url
+        self.collection_id = collection_id
+        self.headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+    
+    def generate_smart_context(self, query, max_tokens=4000, diversity_threshold=0.7, 
+                             include_metadata=True, strategy='balanced'):
+        """Generate optimized context for LLM applications."""
+        url = f'{self.base_url}/api/collections/{self.collection_id}/smart-context'
+        
+        payload = {
+            'query': query,
+            'maxTokens': max_tokens,
+            'diversityThreshold': diversity_threshold,
+            'includeMetadata': include_metadata,
+            'strategy': strategy
+        }
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                print(f"✅ Smart context generated: {result['analytics']['tokenCount']} tokens")
+                print(f"📊 Diversity score: {result['analytics']['diversityScore']:.3f}")
+                print(f"📚 Sources used: {len(result['analytics']['sources'])}")
+                return result
+            else:
+                print(f"❌ Generation failed: {result.get('message')}")
+                return None
+        else:
+            print(f"❌ Request failed: {response.status_code} - {response.text}")
+            return None
+    
+    def preview_context(self, query, max_tokens=2000, strategy='balanced'):
+        """Preview context generation without token cost."""
+        url = f'{self.base_url}/api/collections/{self.collection_id}/smart-context/preview'
+        
+        payload = {
+            'query': query,
+            'maxTokens': max_tokens,
+            'strategy': strategy
+        }
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"📋 Preview for query: '{query}'")
+            print(f"📊 Estimated tokens: {result['preview']['estimatedTokens']}")
+            print(f"📄 Documents found: {len(result['preview']['sources'])}")
+            return result
+        else:
+            print(f"❌ Preview failed: {response.status_code}")
+            return None
+    
+    def get_capabilities(self):
+        """Get collection smart context capabilities."""
+        url = f'{self.base_url}/api/collections/{self.collection_id}/smart-context/capabilities'
+        
+        response = requests.get(url, headers=self.headers)
+        
+        if response.status_code == 200:
+            result = response.json()
+            print("📋 Collection Capabilities:")
+            print(f"  📄 Documents: {result['documentCount']}")
+            print(f"  🧩 Chunks: {result['chunkCount']}")
+            print(f"  🔍 Has embeddings: {result['hasEmbeddings']}")
+            print(f"  📊 Clustering available: {result['clusteringAvailable']}")
+            return result
+        else:
+            print(f"❌ Failed to get capabilities: {response.status_code}")
+            return None
+
+# Usage examples
+if __name__ == "__main__":
+    # Initialize the API client
+    smart_context = SmartContextAPI()
+    
+    # Check collection capabilities
+    print("=== Collection Capabilities ===")
+    capabilities = smart_context.get_capabilities()
+    
+    if capabilities and capabilities['hasEmbeddings']:
+        # Preview different queries
+        print("\\n=== Context Previews ===")
+        queries = [
+            "machine learning algorithms",
+            "data preprocessing techniques", 
+            "model evaluation methods"
+        ]
+        
+        for query in queries:
+            smart_context.preview_context(query, max_tokens=2000)
+            print("-" * 50)
+        
+        # Generate contexts with different strategies
+        print("\\n=== Smart Context Generation ===")
+        
+        # Balanced strategy (recommended)
+        balanced_context = smart_context.generate_smart_context(
+            query="artificial intelligence best practices",
+            max_tokens=4000,
+            strategy="balanced"
+        )
+        
+        # Diversity-focused strategy
+        diverse_context = smart_context.generate_smart_context(
+            query="machine learning techniques",
+            max_tokens=3000,
+            strategy="diversity",
+            diversity_threshold=0.8
+        )
+        
+        # Relevance-focused strategy
+        relevant_context = smart_context.generate_smart_context(
+            query="deep learning neural networks",
+            max_tokens=3500,
+            strategy="relevance"
+        )
+        
+        # Compare results
+        if all([balanced_context, diverse_context, relevant_context]):
+            print("\\n=== Strategy Comparison ===")
+            strategies = [
+                ("Balanced", balanced_context),
+                ("Diversity", diverse_context), 
+                ("Relevance", relevant_context)
+            ]
+            
+            for name, context in strategies:
+                analytics = context['analytics']
+                print(f"{name:10} | Tokens: {analytics['tokenCount']:4d} | "
+                      f"Diversity: {analytics['diversityScore']:.3f} | "
+                      f"Sources: {len(analytics['sources']):2d}")
+        
+        # Save best context for use
+        if balanced_context:
+            with open('smart_context_output.txt', 'w') as f:
+                f.write(balanced_context['context'])
+            print("\\n💾 Smart context saved to smart_context_output.txt")
+    
+    else:
+        print("⚠️ Collection not ready for smart context generation")
+        print("   Please upload documents and wait for embedding processing")`;
+
+        // Update the DOM elements for Smart Context
+        const smartContextCurlEl = document.getElementById('smartContextCurl');
+        const smartContextJSEl = document.getElementById('smartContextJS');
+        const smartContextPythonEl = document.getElementById('smartContextPython');
+        
+        if (smartContextCurlEl) smartContextCurlEl.textContent = smartContextCurl;
+        if (smartContextJSEl) smartContextJSEl.textContent = smartContextJS;
+        if (smartContextPythonEl) smartContextPythonEl.textContent = smartContextPython;
+    }
+
+    generateClusteringExamples(baseUrl, collectionId, token) {
+        // Clustering cURL example
+        const clusteringCurl = `# Create document clusters
+curl -X POST "${baseUrl}/api/collections/${collectionId}/clusters" \\
+  -H "Authorization: Bearer ${token}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "numClusters": 5,
+    "algorithm": "kmeans",
+    "includeOutliers": true,
+    "minClusterSize": 2
+  }'
+
+# Get existing clusters
+curl -X GET "${baseUrl}/api/collections/${collectionId}/clusters" \\
+  -H "Authorization: Bearer ${token}"
+
+# Get documents in a specific cluster
+curl -X GET "${baseUrl}/api/collections/${collectionId}/clusters/1/documents" \\
+  -H "Authorization: Bearer ${token}"`;
+
+        // Clustering JavaScript example
+        const clusteringJS = `// Create and manage document clusters
+async function createClusters(options = {}) {
+  const response = await fetch('${baseUrl}/api/collections/${collectionId}/clusters', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ${token}',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      numClusters: options.numClusters || 5,
+      algorithm: options.algorithm || 'kmeans',
+      includeOutliers: options.includeOutliers ?? true,
+      minClusterSize: options.minClusterSize || 2
+    })
+  });
+
+  const result = await response.json();
+  
+  if (result.success) {
+    console.log('Clusters created:', result.clusters.length);
+    console.log('Analytics:', result.analytics);
+    return result.clusters;
+  } else {
+    throw new Error(result.message || 'Failed to create clusters');
+  }
+}
+
+// Get existing clusters
+async function getClusters() {
+  const response = await fetch('${baseUrl}/api/collections/${collectionId}/clusters', {
+    headers: {
+      'Authorization': 'Bearer ${token}'
+    }
+  });
+
+  const result = await response.json();
+  
+  if (result.success) {
+    console.log('Found clusters:', result.clusters.length);
+    return result.clusters;
+  } else {
+    throw new Error(result.message || 'Failed to get clusters');
+  }
+}
+
+// Get documents in a cluster
+async function getClusterDocuments(clusterId) {
+  const response = await fetch(\`${baseUrl}/api/collections/${collectionId}/clusters/\${clusterId}/documents\`, {
+    headers: {
+      'Authorization': 'Bearer ${token}'
+    }
+  });
+
+  const result = await response.json();
+  
+  if (result.success) {
+    console.log(\`Cluster \${clusterId} has \${result.documents.length} documents\`);
+    return result.documents;
+  } else {
+    throw new Error(result.message || 'Failed to get cluster documents');
+  }
+}
+
+// Comprehensive clustering workflow
+async function analyzeDocumentClusters() {
+  try {
+    console.log('🔍 Starting document clustering analysis...');
+
+    // Create clusters with different algorithms
+    const kmeansResult = await createClusters({
+      numClusters: 5,
+      algorithm: 'kmeans',
+      includeOutliers: true
+    });
+
+    const hierarchicalResult = await createClusters({
+      algorithm: 'hierarchical',
+      minClusterSize: 3
+    });
+
+    // Get all clusters
+    const allClusters = await getClusters();
+    
+    console.log('📊 Clustering Results:');
+    console.log(\`  K-means clusters: \${kmeansResult.length}\`);
+    console.log(\`  Hierarchical clusters: \${hierarchicalResult.length}\`);
+    console.log(\`  Total clusters: \${allClusters.length}\`);
+
+    // Analyze each cluster
+    for (const cluster of allClusters.slice(0, 3)) { // First 3 clusters
+      console.log(\`\\n📁 Cluster \${cluster.id}: "\${cluster.name}"\`);
+      console.log(\`   Description: \${cluster.description}\`);
+      console.log(\`   Size: \${cluster.size} documents\`);
+      
+      const documents = await getClusterDocuments(cluster.id);
+      console.log(\`   Documents: \${documents.map(d => d.filename).join(', ')}\`);
+    }
+
+    return allClusters;
+  } catch (error) {
+    console.error('❌ Clustering analysis failed:', error);
+    throw error;
+  }
+}
+
+// Usage
+analyzeDocumentClusters()
+  .then(clusters => {
+    console.log('✅ Clustering analysis complete');
+    console.log('📋 Summary:', clusters.map(c => ({
+      id: c.id,
+      name: c.name,
+      size: c.size
+    })));
+  })
+  .catch(console.error);`;
+
+        // Clustering Python example
+        const clusteringPython = `import requests
+import json
+import matplotlib.pyplot as plt
+import pandas as pd
+
+class ClusteringAPI:
+    def __init__(self, base_url='${baseUrl}', token='${token}', collection_id='${collectionId}'):
+        self.base_url = base_url
+        self.collection_id = collection_id
+        self.headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+    
+    def create_clusters(self, num_clusters=None, algorithm='kmeans', 
+                       include_outliers=True, min_cluster_size=2):
+        """Create document clusters using specified algorithm."""
+        url = f'{self.base_url}/api/collections/{self.collection_id}/clusters'
+        
+        payload = {
+            'algorithm': algorithm,
+            'includeOutliers': include_outliers,
+            'minClusterSize': min_cluster_size
+        }
+        
+        if num_clusters:
+            payload['numClusters'] = num_clusters
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                clusters = result['clusters']
+                analytics = result['analytics']
+                
+                print(f"✅ Created {len(clusters)} clusters using {algorithm}")
+                print(f"📊 Silhouette score: {analytics.get('silhouetteScore', 'N/A')}")
+                print(f"⏱️ Processing time: {analytics.get('processingTime', 'N/A')}ms")
+                
+                return clusters
+            else:
+                print(f"❌ Clustering failed: {result.get('message')}")
+                return None
+        else:
+            print(f"❌ Request failed: {response.status_code} - {response.text}")
+            return None
+    
+    def get_clusters(self):
+        """Get all existing clusters."""
+        url = f'{self.base_url}/api/collections/{self.collection_id}/clusters'
+        
+        response = requests.get(url, headers=self.headers)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                clusters = result['clusters']
+                print(f"📁 Found {len(clusters)} existing clusters")
+                return clusters
+            else:
+                print(f"❌ Failed to get clusters: {result.get('message')}")
+                return []
+        else:
+            print(f"❌ Request failed: {response.status_code}")
+            return []
+    
+    def get_cluster_documents(self, cluster_id):
+        """Get all documents in a specific cluster."""
+        url = f'{self.base_url}/api/collections/{self.collection_id}/clusters/{cluster_id}/documents'
+        
+        response = requests.get(url, headers=self.headers)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                documents = result['documents']
+                print(f"📄 Cluster {cluster_id} contains {len(documents)} documents")
+                return documents
+            else:
+                print(f"❌ Failed to get cluster documents: {result.get('message')}")
+                return []
+        else:
+            print(f"❌ Request failed: {response.status_code}")
+            return []
+    
+    def analyze_clusters(self, clusters):
+        """Analyze cluster characteristics and create visualizations."""
+        if not clusters:
+            print("⚠️ No clusters to analyze")
+            return None
+        
+        # Create cluster summary
+        cluster_data = []
+        for cluster in clusters:
+            cluster_data.append({
+                'id': cluster['id'],
+                'name': cluster['name'],
+                'description': cluster['description'],
+                'size': cluster['size']
+            })
+        
+        df = pd.DataFrame(cluster_data)
+        
+        print("\\n📊 Cluster Analysis:")
+        print(f"  📁 Total clusters: {len(clusters)}")
+        print(f"  📄 Average cluster size: {df['size'].mean():.1f}")
+        print(f"  📈 Largest cluster: {df['size'].max()} documents")
+        print(f"  📉 Smallest cluster: {df['size'].min()} documents")
+        
+        # Display cluster summary
+        print("\\n📋 Cluster Summary:")
+        for _, row in df.iterrows():
+            print(f"  {row['id']:2d}. {row['name'][:30]:30} | Size: {row['size']:3d}")
+        
+        return df
+    
+    def compare_algorithms(self, num_clusters=5):
+        """Compare different clustering algorithms."""
+        algorithms = ['kmeans', 'hierarchical', 'dbscan']
+        results = {}
+        
+        print("🔬 Comparing clustering algorithms...")
+        
+        for algorithm in algorithms:
+            print(f"\\n🧪 Testing {algorithm}...")
+            clusters = self.create_clusters(
+                num_clusters=num_clusters if algorithm != 'dbscan' else None,
+                algorithm=algorithm
+            )
+            
+            if clusters:
+                results[algorithm] = {
+                    'clusters': clusters,
+                    'count': len(clusters),
+                    'avg_size': sum(c['size'] for c in clusters) / len(clusters)
+                }
+            
+        return results
+
+# Usage examples
+if __name__ == "__main__":
+    # Initialize the clustering API
+    clustering = ClusteringAPI()
+    
+    print("=== Document Clustering Analysis ===\\n")
+    
+    # Check for existing clusters
+    existing_clusters = clustering.get_clusters()
+    
+    if not existing_clusters:
+        print("🔨 Creating new clusters...")
+        
+        # Create clusters with different algorithms
+        kmeans_clusters = clustering.create_clusters(
+            num_clusters=5,
+            algorithm='kmeans',
+            include_outliers=True
+        )
+        
+        hierarchical_clusters = clustering.create_clusters(
+            algorithm='hierarchical',
+            min_cluster_size=3
+        )
+        
+        # Get all clusters after creation
+        all_clusters = clustering.get_clusters()
+    else:
+        print("📁 Using existing clusters")
+        all_clusters = existing_clusters
+    
+    if all_clusters:
+        # Analyze clusters
+        cluster_df = clustering.analyze_clusters(all_clusters)
+        
+        # Get detailed information for first few clusters
+        print("\\n🔍 Detailed Cluster Analysis:")
+        for cluster in all_clusters[:3]:  # First 3 clusters
+            print(f"\\n📁 Cluster {cluster['id']}: {cluster['name']}")
+            print(f"   📝 Description: {cluster['description']}")
+            print(f"   📊 Size: {cluster['size']} documents")
+            
+            # Get cluster documents
+            documents = clustering.get_cluster_documents(cluster['id'])
+            if documents:
+                print("   📄 Documents:")
+                for doc in documents[:5]:  # First 5 documents
+                    print(f"      • {doc.get('filename', 'Unknown')}")
+                if len(documents) > 5:
+                    print(f"      ... and {len(documents) - 5} more")
+        
+        # Compare algorithms
+        print("\\n🔬 Algorithm Comparison:")
+        comparison = clustering.compare_algorithms()
+        
+        if comparison:
+            for algorithm, data in comparison.items():
+                print(f"  {algorithm:12} | Clusters: {data['count']:2d} | "
+                      f"Avg Size: {data['avg_size']:5.1f}")
+        
+        # Save cluster summary
+        if cluster_df is not None:
+            cluster_df.to_csv('cluster_analysis.csv', index=False)
+            print("\\n💾 Cluster analysis saved to cluster_analysis.csv")
+    
+    else:
+        print("⚠️ No clusters available")
+        print("   Please ensure documents are uploaded and processed")`;
+
+        // Update the DOM elements for Clustering
+        const clusteringCurlEl = document.getElementById('clusteringCurl');
+        const clusteringJSEl = document.getElementById('clusteringJS');
+        const clusteringPythonEl = document.getElementById('clusteringPython');
+        
+        if (clusteringCurlEl) clusteringCurlEl.textContent = clusteringCurl;
+        if (clusteringJSEl) clusteringJSEl.textContent = clusteringJS;
+        if (clusteringPythonEl) clusteringPythonEl.textContent = clusteringPython;
     }
 
     copyToClipboard(elementId) {

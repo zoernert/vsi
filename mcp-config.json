@@ -2,12 +2,13 @@
   "mcpServers": {
     "vsi-vector-store": {
       "command": "node",
-      "args": ["src/mcp-server.js"],
+      "args": ["src/mcp-server.js", "--token=YOUR_JWT_TOKEN_HERE"],
       "cwd": "/home/thorsten/Development/vsi",
       "env": {
         "QDRANT_URL": "http://localhost:6333",
         "GOOGLE_AI_API_KEY": "your-google-ai-key-here",
-        "JWT_SECRET": "your-jwt-secret"
+        "JWT_SECRET": "your-jwt-secret",
+        "MCP_AUTH_TOKEN": "YOUR_JWT_TOKEN_HERE"
       }
     }
   }

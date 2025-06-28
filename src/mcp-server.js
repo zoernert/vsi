@@ -4,36 +4,33 @@ require('dotenv').config();
 const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { ListToolsRequestSchema, CallToolRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
+const { McpService } = require('./services/mcpService');
 
-const { qdrantClient } = require('./config/qdrant');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { v4: uuidv4 } = require('uuid');
+// Initialize MCP service
+const mcpService = new McpService();
 
-// Initialize Google AI for embeddings
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-
-// Helper function to generate embeddings
-async function generateEmbedding(text) {
-    try {
-        const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
-        const result = await model.embedContent(text);
-        return result.embedding.values;
-    } catch (error) {
-        console.error('Error generating embedding:', error);
-        return new Array(768).fill(0);
+// Helper function to extract token from environment or arguments
+function getAuthToken() {
+    // Try to get token from environment variable (for CI/CD or automated usage)
+    if (process.env.MCP_AUTH_TOKEN) {
+        return process.env.MCP_AUTH_TOKEN;
     }
-}
-
-// Helper function to get user collections (for MCP, we'll use a default user)
-function getUserCollectionName(collectionName) {
-    return `mcp_${collectionName}`;
+    
+    // Try to get token from command line arguments
+    const tokenArg = process.argv.find(arg => arg.startsWith('--token='));
+    if (tokenArg) {
+        return tokenArg.split('=')[1];
+    }
+    
+    // For development, you can set a default token or require explicit token
+    throw new Error('Authentication token required. Set MCP_AUTH_TOKEN environment variable or use --token=<jwt_token> argument');
 }
 
 // Create MCP server
 const server = new Server(
     {
         name: 'vsi-vector-store',
-        version: '1.0.0',
+        version: '2.0.0',
     },
     {
         capabilities: {
@@ -46,7 +43,7 @@ const server = new Server(
 const tools = [
     {
         name: 'list_collections',
-        description: 'List all available vector collections',
+        description: 'List all available vector collections for authenticated user',
         inputSchema: {
             type: 'object',
             properties: {},
@@ -54,13 +51,18 @@ const tools = [
     },
     {
         name: 'create_collection',
-        description: 'Create a new vector collection',
+        description: 'Create a new vector collection for authenticated user',
         inputSchema: {
             type: 'object',
             properties: {
                 name: {
                     type: 'string',
                     description: 'Name of the collection to create',
+                },
+                description: {
+                    type: 'string',
+                    description: 'Description of the collection',
+                    default: '',
                 },
                 vector_size: {
                     type: 'number',
@@ -79,7 +81,7 @@ const tools = [
     },
     {
         name: 'delete_collection',
-        description: 'Delete a vector collection',
+        description: 'Delete a vector collection for authenticated user',
         inputSchema: {
             type: 'object',
             properties: {
@@ -273,6 +275,92 @@ const tools = [
             required: ['collection'],
         },
     },
+    {
+        name: 'list_clusters',
+        description: 'List all clusters for authenticated user',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+        },
+    },
+    {
+        name: 'create_cluster',
+        description: 'Create a new cluster for organizing collections',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                name: {
+                    type: 'string',
+                    description: 'Name of the cluster to create',
+                },
+                description: {
+                    type: 'string',
+                    description: 'Description of the cluster',
+                    default: '',
+                },
+            },
+            required: ['name'],
+        },
+    },
+    {
+        name: 'delete_cluster',
+        description: 'Delete a cluster',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                cluster_id: {
+                    type: 'string',
+                    description: 'ID of the cluster to delete',
+                },
+            },
+            required: ['cluster_id'],
+        },
+    },
+    {
+        name: 'generate_smart_context',
+        description: 'Generate smart context from collection based on query',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                collection: {
+                    type: 'string',
+                    description: 'Name of the collection',
+                },
+                query: {
+                    type: 'string',
+                    description: 'Query to generate context for',
+                },
+                max_tokens: {
+                    type: 'number',
+                    description: 'Maximum tokens in generated context',
+                    default: 4000,
+                },
+            },
+            required: ['collection', 'query'],
+        },
+    },
+    {
+        name: 'get_collection_analytics',
+        description: 'Get analytics data for a specific collection',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                collection: {
+                    type: 'string',
+                    description: 'Name of the collection',
+                },
+            },
+            required: ['collection'],
+        },
+    },
+    {
+        name: 'get_user_analytics',
+        description: 'Get overall analytics for the authenticated user',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+        },
+    },
 ];
 
 // Handle list_tools requests
@@ -285,39 +373,243 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     try {
+        // Get authentication token
+        const token = getAuthToken();
+
         switch (name) {
             case 'list_collections':
-                return await handleListCollections();
+                const collections = await mcpService.listCollections(token);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(collections, null, 2)
+                        }
+                    ]
+                };
             
             case 'create_collection':
-                return await handleCreateCollection(args);
+                const newCollection = await mcpService.createCollection(
+                    token,
+                    args.name,
+                    args.description,
+                    args.vector_size,
+                    args.distance
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(newCollection, null, 2)
+                        }
+                    ]
+                };
             
             case 'delete_collection':
-                return await handleDeleteCollection(args);
+                const deleteResult = await mcpService.deleteCollection(token, args.name);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(deleteResult, null, 2)
+                        }
+                    ]
+                };
             
             case 'add_document':
-                return await handleAddDocument(args);
-            
-            case 'search_documents':
-                return await handleSearchDocuments(args);
-            
-            case 'get_document':
-                return await handleGetDocument(args);
-            
-            case 'delete_document':
-                return await handleDeleteDocument(args);
-            
-            case 'list_documents':
-                return await handleListDocuments(args);
+                const addedDoc = await mcpService.addDocument(
+                    token,
+                    args.collection,
+                    args.title,
+                    args.content,
+                    args.metadata
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(addedDoc, null, 2)
+                        }
+                    ]
+                };
             
             case 'upload_file':
-                return await handleUploadFile(args);
+                const uploadedFile = await mcpService.uploadFile(
+                    token,
+                    args.collection,
+                    args.filename,
+                    args.content,
+                    args.mime_type
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(uploadedFile, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'search_documents':
+                const searchResults = await mcpService.searchDocuments(
+                    token,
+                    args.collection,
+                    args.query,
+                    args.limit,
+                    args.score_threshold
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(searchResults, null, 2)
+                        }
+                    ]
+                };
             
             case 'ask_question':
-                return await handleAskQuestion(args);
+                const answer = await mcpService.askQuestion(
+                    token,
+                    args.collection,
+                    args.question,
+                    args.context_limit
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(answer, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'get_document':
+                const document = await mcpService.getDocument(
+                    token,
+                    args.collection,
+                    args.document_id
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(document, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'delete_document':
+                const deleteDocResult = await mcpService.deleteDocument(
+                    token,
+                    args.collection,
+                    args.document_id
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(deleteDocResult, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'list_documents':
+                const documents = await mcpService.listDocuments(
+                    token,
+                    args.collection,
+                    args.limit,
+                    args.offset
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(documents, null, 2)
+                        }
+                    ]
+                };
             
             case 'get_collection_info':
-                return await handleGetCollectionInfo(args);
+                const collectionInfo = await mcpService.getCollectionInfo(token, args.collection);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(collectionInfo, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'list_clusters':
+                const clusters = await mcpService.listClusters(token);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(clusters, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'create_cluster':
+                const newCluster = await mcpService.createCluster(token, args.name, args.description);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(newCluster, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'delete_cluster':
+                const deleteClusterResult = await mcpService.deleteCluster(token, args.cluster_id);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(deleteClusterResult, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'generate_smart_context':
+                const smartContext = await mcpService.generateSmartContext(
+                    token,
+                    args.collection,
+                    args.query,
+                    args.max_tokens
+                );
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(smartContext, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'get_collection_analytics':
+                const collectionAnalytics = await mcpService.getCollectionAnalytics(token, args.collection);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(collectionAnalytics, null, 2)
+                        }
+                    ]
+                };
+            
+            case 'get_user_analytics':
+                const userAnalytics = await mcpService.getUserAnalytics(token);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(userAnalytics, null, 2)
+                        }
+                    ]
+                };
             
             default:
                 throw new Error(`Unknown tool: ${name}`);
@@ -327,437 +619,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
                 {
                     type: 'text',
-                    text: `Error: ${error.message}`,
-                },
+                    text: `Error: ${error.message}`
+                }
             ],
+            isError: true
         };
     }
 });
-
-// Tool implementations
-async function handleListCollections() {
-    // Use database instead of just Qdrant
-    const { DatabaseService } = require('./services/databaseService');
-    const db = new DatabaseService();
-    if (!db.pool) await db.initialize();
-    
-    const result = await db.pool.query(`
-        SELECT c.*, COUNT(d.id) as document_count 
-        FROM collections c 
-        LEFT JOIN documents d ON c.id = d.collection_id 
-        WHERE c.qdrant_collection_name LIKE 'mcp_%'
-        GROUP BY c.id 
-        ORDER BY c.created_at DESC
-    `);
-    
-    const mcpCollections = result.rows.map(collection => ({
-        id: collection.id,
-        name: collection.name.replace('mcp_', ''),
-        description: collection.description,
-        documentCount: parseInt(collection.document_count) || 0
-    }));
-
-    return {
-        content: [
-            {
-                type: 'text',
-                text: JSON.stringify(mcpCollections, null, 2),
-            },
-        ],
-    };
-}
-
-async function handleCreateCollection(args) {
-    const { name, vector_size = 768, distance = 'Cosine' } = args;
-    const actualCollectionName = getUserCollectionName(name);
-
-    await qdrantClient.createCollection(actualCollectionName, {
-        vectors: {
-            size: vector_size,
-            distance: distance,
-        },
-    });
-
-    return {
-        content: [
-            {
-                type: 'text',
-                text: `Collection '${name}' created successfully with vector size ${vector_size} and ${distance} distance metric.`,
-            },
-        ],
-    };
-}
-
-async function handleDeleteCollection(args) {
-    const { name } = args;
-    const actualCollectionName = getUserCollectionName(name);
-
-    await qdrantClient.deleteCollection(actualCollectionName);
-
-    return {
-        content: [
-            {
-                type: 'text',
-                text: `Collection '${name}' deleted successfully.`,
-            },
-        ],
-    };
-}
-
-async function handleAddDocument(args) {
-    const { collection, title, content, metadata = {} } = args;
-    const actualCollectionName = getUserCollectionName(collection);
-
-    // Generate embedding
-    const text = `${title}\n\n${content}`;
-    const embedding = await generateEmbedding(text);
-
-    // Create point
-    const documentId = uuidv4();
-    const point = {
-        id: documentId,
-        vector: embedding,
-        payload: {
-            title,
-            content,
-            text,
-            ...metadata,
-            createdAt: new Date().toISOString(),
-            type: 'text',
-            source: 'mcp',
-        },
-    };
-
-    // Ensure collection exists
-    try {
-        await qdrantClient.getCollection(actualCollectionName);
-    } catch (error) {
-        if (error.message.includes('Not found')) {
-            await qdrantClient.createCollection(actualCollectionName, {
-                vectors: {
-                    size: 768,
-                    distance: 'Cosine',
-                },
-            });
-        } else {
-            throw error;
-        }
-    }
-
-    // Add document
-    await qdrantClient.upsert(actualCollectionName, {
-        points: [point],
-    });
-
-    return {
-        content: [
-            {
-                type: 'text',
-                text: `Document '${title}' added to collection '${collection}' with ID: ${documentId}`,
-            },
-        ],
-    };
-}
-
-async function handleSearchDocuments(args) {
-    const { collection, query, limit = 10, score_threshold = 0.0 } = args;
-    const actualCollectionName = getUserCollectionName(collection);
-
-    // Generate query embedding
-    const queryEmbedding = await generateEmbedding(query);
-
-    // Search
-    const searchResult = await qdrantClient.search(actualCollectionName, {
-        vector: queryEmbedding,
-        limit: parseInt(limit),
-        with_payload: true,
-        with_vector: false,
-        score_threshold: score_threshold,
-    });
-
-    const results = searchResult.map(hit => ({
-        id: hit.id,
-        score: hit.score,
-        title: hit.payload.title,
-        content: hit.payload.content || hit.payload.text,
-        metadata: {
-            createdAt: hit.payload.createdAt,
-            type: hit.payload.type,
-            source: hit.payload.source,
-        },
-    }));
-
-    return {
-        content: [
-            {
-                type: 'text',
-                text: JSON.stringify({
-                    query,
-                    results,
-                    count: results.length,
-                }, null, 2),
-            },
-        ],
-    };
-}
-
-async function handleGetDocument(args) {
-    const { collection, document_id } = args;
-    const actualCollectionName = getUserCollectionName(collection);
-
-    const points = await qdrantClient.retrieve(actualCollectionName, {
-        ids: [document_id],
-        with_payload: true,
-        with_vector: false,
-    });
-
-    if (points.length === 0) {
-        throw new Error(`Document with ID '${document_id}' not found in collection '${collection}'`);
-    }
-
-    const document = {
-        id: points[0].id,
-        title: points[0].payload.title,
-        content: points[0].payload.content || points[0].payload.text,
-        metadata: {
-            createdAt: points[0].payload.createdAt,
-            type: points[0].payload.type,
-            source: points[0].payload.source,
-        },
-    };
-
-    return {
-        content: [
-            {
-                type: 'text',
-                text: JSON.stringify(document, null, 2),
-            },
-        ],
-    };
-}
-
-async function handleDeleteDocument(args) {
-    const { collection, document_id } = args;
-    const actualCollectionName = getUserCollectionName(collection);
-
-    await qdrantClient.delete(actualCollectionName, {
-        points: [document_id],
-    });
-
-    return {
-        content: [
-            {
-                type: 'text',
-                text: `Document with ID '${document_id}' deleted from collection '${collection}'.`,
-            },
-        ],
-    };
-}
-
-async function handleListDocuments(args) {
-    const { collection, limit = 50, offset = 0 } = args;
-    const actualCollectionName = getUserCollectionName(collection);
-
-    const scrollResult = await qdrantClient.scroll(actualCollectionName, {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        with_payload: true,
-        with_vector: false,
-    });
-
-    const documents = scrollResult.points.map(point => ({
-        id: point.id,
-        title: point.payload.title,
-        content: (point.payload.content || point.payload.text || '').substring(0, 200) + '...',
-        metadata: {
-            createdAt: point.payload.createdAt,
-            type: point.payload.type,
-            source: point.payload.source,
-        },
-    }));
-
-    return {
-        content: [
-            {
-                type: 'text',
-                text: JSON.stringify({
-                    collection,
-                    documents,
-                    count: documents.length,
-                    offset: parseInt(offset),
-                    limit: parseInt(limit),
-                }, null, 2),
-            },
-        ],
-    };
-}
-
-async function handleUploadFile(args) {
-    const { collection, filename, content, mime_type } = args;
-    const actualCollectionName = getUserCollectionName(collection);
-
-    try {
-        // Decode base64 content
-        const buffer = Buffer.from(content, 'base64');
-        
-        // Generate document ID
-        const documentId = uuidv4();
-        
-        // Extract text content based on file type
-        let textContent = '';
-        if (mime_type && mime_type.startsWith('text/')) {
-            textContent = buffer.toString('utf-8');
-        } else {
-            textContent = `File: ${filename} (${mime_type || 'unknown type'})`;
-        }
-
-        // Generate embedding
-        const embedding = await generateEmbedding(textContent);
-
-        // Ensure collection exists
-        try {
-            await qdrantClient.getCollection(actualCollectionName);
-        } catch (error) {
-            if (error.message.includes('Not found')) {
-                await qdrantClient.createCollection(actualCollectionName, {
-                    vectors: {
-                        size: 768,
-                        distance: 'Cosine',
-                    },
-                });
-            } else {
-                throw error;
-            }
-        }
-
-        // Create point
-        const point = {
-            id: documentId,
-            vector: embedding,
-            payload: {
-                title: filename,
-                content: textContent,
-                text: textContent,
-                filename,
-                mimeType: mime_type,
-                size: buffer.length,
-                createdAt: new Date().toISOString(),
-                type: 'file',
-                source: 'mcp',
-            },
-        };
-
-        // Add document
-        await qdrantClient.upsert(actualCollectionName, {
-            points: [point],
-        });
-
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text: `File '${filename}' uploaded to collection '${collection}' with ID: ${documentId}`,
-                },
-            ],
-        };
-    } catch (error) {
-        throw new Error(`Failed to upload file: ${error.message}`);
-    }
-}
-
-async function handleAskQuestion(args) {
-    const { collection, question, system_prompt, max_results = 5 } = args;
-    const actualCollectionName = getUserCollectionName(collection);
-
-    try {
-        // 1. Generate embedding for the question
-        const queryEmbedding = await generateEmbedding(question);
-
-        // 2. Search for relevant documents
-        const searchResult = await qdrantClient.search(actualCollectionName, {
-            vector: queryEmbedding,
-            limit: max_results,
-            with_payload: true,
-            with_vector: false,
-            score_threshold: 0.1,
-        });
-
-        // 3. Prepare context from search results
-        const context = searchResult
-            .map(hit => hit.payload.content || hit.payload.text || '')
-            .join('\n\n---\n\n');
-
-        if (context.trim().length === 0) {
-            return {
-                content: [{ type: 'text', text: "I couldn't find any relevant information in the collection to answer your question." }]
-            };
-        }
-
-        // 4. Generate answer using Google AI
-        if (!process.env.GOOGLE_AI_API_KEY) {
-            throw new Error('Google AI API key is not configured.');
-        }
-        const llm = genAI.getGenerativeModel({ model: "gemini-pro" });
-        
-        const finalPrompt = `
-System Prompt: ${system_prompt || 'You are a helpful assistant. Answer the question based on the provided context.'}
----
-Context:
-${context}
----
-Question: ${question}
-Answer:
-`;
-        const result = await llm.generateContent(finalPrompt);
-        const response = await result.response;
-        const answer = response.text();
-
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text: JSON.stringify({
-                        answer: answer,
-                        sources: searchResult.map(hit => ({
-                            id: hit.id,
-                            title: hit.payload.title,
-                            score: hit.score
-                        }))
-                    }, null, 2)
-                }
-            ]
-        };
-    } catch (error) {
-        console.error('Error in handleAskQuestion:', error);
-        throw new Error(`Failed to ask question: ${error.message}`);
-    }
-}
-
-async function handleGetCollectionInfo(args) {
-    const { collection } = args;
-    const actualCollectionName = getUserCollectionName(collection);
-
-    try {
-        const info = await qdrantClient.getCollection(actualCollectionName);
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text: JSON.stringify(info, null, 2),
-                },
-            ],
-        };
-    } catch (error) {
-        console.error('Error in handleGetCollectionInfo:', error);
-        throw new Error(`Failed to get info for collection '${collection}': ${error.message}`);
-    }
-}
 
 // Start the server
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('VSI Vector Store MCP server running on stdio');
+    console.error('VSI Vector Store MCP server running with user authentication');
 }
 
 if (require.main === module) {
