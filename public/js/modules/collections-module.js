@@ -575,6 +575,7 @@ class VSICollectionsModule {
         // Hide all tabs
         document.getElementById('chatTab').classList.add('hidden');
         document.getElementById('searchTab').classList.add('hidden');
+        document.getElementById('smartContextTab').classList.add('hidden');
         document.getElementById('documentsTab').classList.add('hidden');
         
         // Remove active class from all nav links
@@ -589,6 +590,11 @@ class VSICollectionsModule {
         } else if (tabName === 'search') {
             document.getElementById('searchTab').classList.remove('hidden');
             document.querySelector('a[onclick="app.collections.showCollectionTab(\'search\')"]').classList.add('active');
+        } else if (tabName === 'smart-context') {
+            document.getElementById('smartContextTab').classList.remove('hidden');
+            document.querySelector('a[onclick="app.collections.showCollectionTab(\'smart-context\')"]').classList.add('active');
+            // Load smart context capabilities when switching to smart context tab
+            this.loadSmartContextCapabilities();
         } else if (tabName === 'documents') {
             document.getElementById('documentsTab').classList.remove('hidden');
             document.querySelector('a[onclick="app.collections.showCollectionTab(\'documents\')"]').classList.add('active');
@@ -970,7 +976,7 @@ class VSIVectorStore:
     
     def ask_question(self, question, max_results=5, system_prompt=None):
         """Ask an AI question about the uploaded documents."""
-        url = f'{self.base_url}/api/collections/${self.collection_id}/ask'
+        url = f'{self.base_url}/api/collections/${this.collection_id}/ask'
         
         payload = {
             'question': question,
@@ -1339,6 +1345,352 @@ if __name__ == "__main__":
             this.app.showNotification('Failed to copy bookmarklet code', 'error');
         });
     }
-}
 
-window.VSICollectionsModule = VSICollectionsModule;
+    // Smart Context Methods
+    async loadSmartContextCapabilities() {
+        if (!this.app.currentCollection) return;
+
+        try {
+            const response = await this.app.api.getSmartContextCapabilities(this.app.currentCollection.id);
+            if (response && response.success) {
+                this.renderSmartContextCapabilities(response.capabilities);
+            }
+        } catch (error) {
+            console.error('Failed to load smart context capabilities:', error);
+            document.getElementById('smartContextCapabilities').innerHTML = `
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p class="mt-2 mb-0">Failed to load capabilities</p>
+                </div>
+            `;
+        }
+    }
+
+    renderSmartContextCapabilities(capabilities) {
+        const container = document.getElementById('smartContextCapabilities');
+        
+        const clusterInfo = capabilities.clusterInfo;
+        const stats = capabilities.statistics;
+        const features = capabilities.features;
+        
+        container.innerHTML = `
+            <div class="mb-3">
+                <h6 class="text-primary">${capabilities.collectionName}</h6>
+                <small class="text-muted">${stats.document_count || 0} documents</small>
+            </div>
+            
+            ${clusterInfo ? `
+                <div class="mb-3 p-2 bg-light rounded">
+                    <small class="fw-bold text-success">
+                        <i class="fas fa-layer-group me-1"></i>
+                        Cluster: ${clusterInfo.clusterName}
+                    </small>
+                    ${clusterInfo.clusterDescription ? `
+                        <br><small class="text-muted">${clusterInfo.clusterDescription}</small>
+                    ` : ''}
+                    ${clusterInfo.relatedClustersCount > 0 ? `
+                        <br><small class="text-info">+${clusterInfo.relatedClustersCount} related clusters</small>
+                    ` : ''}
+                </div>
+            ` : `
+                <div class="mb-3 p-2 bg-warning bg-opacity-10 rounded">
+                    <small class="text-warning">
+                        <i class="fas fa-info-circle me-1"></i>
+                        No cluster assigned
+                    </small>
+                </div>
+            `}
+            
+            <div class="mb-3">
+                <h6>Features</h6>
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center p-1">
+                        <small>Semantic Search</small>
+                        <span class="badge bg-success rounded-pill">✓</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center p-1">
+                        <small>Cluster-Aware Scoring</small>
+                        <span class="badge ${features.clusterAwareScoring ? 'bg-success' : 'bg-secondary'} rounded-pill">
+                            ${features.clusterAwareScoring ? '✓' : '✗'}
+                        </span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center p-1">
+                        <small>Cross-Cluster Support</small>
+                        <span class="badge ${features.crossClusterSupport ? 'bg-success' : 'bg-secondary'} rounded-pill">
+                            ${features.crossClusterSupport ? '✓' : '✗'}
+                        </span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center p-1">
+                        <small>Diversity Optimization</small>
+                        <span class="badge bg-success rounded-pill">✓</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <h6>Recommended Settings</h6>
+                <small class="text-muted">
+                    Context Size: ${capabilities.recommendedSettings.maxContextSize.toLocaleString()}<br>
+                    Max Chunks: ${capabilities.recommendedSettings.maxChunks}<br>
+                    Diversity: ${capabilities.recommendedSettings.diversityWeight}
+                </small>
+            </div>
+        `;
+    }
+
+    async previewSmartContext() {
+        if (!this.app.currentCollection) return;
+
+        const query = document.getElementById('smartContextQuery').value.trim();
+        if (!query) {
+            this.app.showNotification('Please enter a search query first', 'warning');
+            return;
+        }
+
+        const maxContextSize = parseInt(document.getElementById('smartContextMaxSize').value);
+        const maxChunks = parseInt(document.getElementById('smartContextMaxChunks').value);
+
+        try {
+            document.getElementById('smartContextPreviewCard').style.display = 'block';
+            document.getElementById('smartContextPreview').innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <p class="mt-2 mb-0 text-muted">Generating preview...</p>
+                </div>
+            `;
+
+            const response = await this.app.api.previewSmartContext(this.app.currentCollection.id, {
+                query,
+                maxContextSize,
+                maxChunks
+            });
+
+            if (response && response.success) {
+                this.renderSmartContextPreview(response.preview);
+            }
+        } catch (error) {
+            console.error('Preview failed:', error);
+            document.getElementById('smartContextPreview').innerHTML = `
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p class="mt-2 mb-0">Preview failed</p>
+                </div>
+            `;
+        }
+    }
+
+    renderSmartContextPreview(preview) {
+        document.getElementById('smartContextPreview').innerHTML = `
+            <div class="mb-3">
+                <h6 class="text-primary">Preview Results</h6>
+                <small class="text-muted">Collection: ${preview.collectionName}</small>
+            </div>
+            
+            ${preview.clusterInfo ? `
+                <div class="mb-3 p-2 bg-light rounded">
+                    <small class="fw-bold">Cluster: ${preview.clusterInfo.clusterName}</small>
+                    ${preview.clusterInfo.hasRelatedClusters ? '<br><small class="text-info">Has related clusters</small>' : ''}
+                </div>
+            ` : ''}
+            
+            <div class="mb-3">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border rounded p-2">
+                            <h6 class="text-primary mb-0">${preview.estimatedChunks}</h6>
+                            <small class="text-muted">Chunks Found</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="border rounded p-2">
+                            <h6 class="text-success mb-0">${preview.estimatedContextSize.toLocaleString()}</h6>
+                            <small class="text-muted">Characters</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            ${preview.topResults && preview.topResults.length > 0 ? `
+                <div>
+                    <h6>Top Results</h6>
+                    ${preview.topResults.map(result => `
+                        <div class="border-start border-3 border-primary ps-2 mb-2">
+                            <small class="fw-bold">${result.filename}</small>
+                            <small class="text-success ms-2">${result.similarity}%</small>
+                            <br><small class="text-muted">${result.preview}</small>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        `;
+    }
+
+    async generateSmartContext() {
+        if (!this.app.currentCollection) return;
+
+        const query = document.getElementById('smartContextQuery').value.trim();
+        if (!query) {
+            this.app.showNotification('Please enter a search query first', 'warning');
+            return;
+        }
+
+        const options = {
+            query,
+            maxContextSize: parseInt(document.getElementById('smartContextMaxSize').value),
+            maxChunks: parseInt(document.getElementById('smartContextMaxChunks').value),
+            diversityWeight: parseFloat(document.getElementById('smartContextDiversity').value),
+            clusterContextWeight: parseFloat(document.getElementById('smartContextClusterWeight').value),
+            includeClusterMetadata: document.getElementById('smartContextIncludeMetadata').checked
+        };
+
+        try {
+            // Show loading state
+            document.getElementById('smartContextResultsPanel').style.display = 'block';
+            document.getElementById('smartContextResult').innerHTML = 'Generating smart context...';
+            document.getElementById('smartContextStats').innerHTML = '';
+
+            const response = await this.app.api.createSmartContext(this.app.currentCollection.id, options);
+
+            if (response && response.success) {
+                this.renderSmartContextResult(response);
+                document.getElementById('smartContextAnalysisPanel').style.display = 'block';
+                this.renderSmartContextAnalysis(response.metadata);
+            }
+        } catch (error) {
+            console.error('Smart context generation failed:', error);
+            document.getElementById('smartContextResult').innerHTML = `
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Failed to generate smart context</p>
+                    <small>${error.message}</small>
+                </div>
+            `;
+        }
+    }
+
+    renderSmartContextResult(response) {
+        const { context, metadata } = response;
+        const stats = metadata.stats;
+
+        // Update stats
+        document.getElementById('smartContextStats').innerHTML = `
+            <div class="row text-center">
+                <div class="col-3">
+                    <div class="border rounded p-2">
+                        <h6 class="text-primary mb-0">${stats.totalChunks}</h6>
+                        <small class="text-muted">Chunks</small>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="border rounded p-2">
+                        <h6 class="text-success mb-0">${stats.contextSize.toLocaleString()}</h6>
+                        <small class="text-muted">Characters</small>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="border rounded p-2">
+                        <h6 class="text-info mb-0">${stats.clustersRepresented.length}</h6>
+                        <small class="text-muted">Clusters</small>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="border rounded p-2">
+                        <h6 class="text-warning mb-0">${(stats.averageRelevance * 100).toFixed(1)}%</h6>
+                        <small class="text-muted">Avg Relevance</small>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Update context display
+        document.getElementById('smartContextResult').innerHTML = context;
+    }
+
+    renderSmartContextAnalysis(metadata) {
+        const { chunks, stats } = metadata;
+
+        document.getElementById('smartContextChunksAnalysis').innerHTML = `
+            <div class="mb-3">
+                <h6>Chunk Analysis</h6>
+                <p class="text-muted">Diversity Score: ${(stats.diversityScore * 100).toFixed(1)}%</p>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Document</th>
+                            <th>Cluster</th>
+                            <th>Relevance</th>
+                            <th>Cluster Score</th>
+                            <th>Final Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${chunks.map(chunk => `
+                            <tr>
+                                <td>
+                                    <small class="fw-bold">${chunk.filename || 'Unknown'}</small>
+                                    <br><small class="text-muted">${chunk.preview}</small>
+                                </td>
+                                <td>
+                                    ${chunk.clusterName ? `
+                                        <span class="badge bg-secondary">${chunk.clusterName}</span>
+                                    ` : '<small class="text-muted">No cluster</small>'}
+                                </td>
+                                <td>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-primary" style="width: ${chunk.similarity * 100}%"></div>
+                                    </div>
+                                    <small>${(chunk.similarity * 100).toFixed(1)}%</small>
+                                </td>
+                                <td>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-info" style="width: ${chunk.clusterScore * 100}%"></div>
+                                    </div>
+                                    <small>${(chunk.clusterScore * 100).toFixed(1)}%</small>
+                                </td>
+                                <td>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-success" style="width: ${chunk.finalScore * 100}%"></div>
+                                    </div>
+                                    <small>${(chunk.finalScore * 100).toFixed(1)}%</small>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    async copyContextToClipboard() {
+        const contextElement = document.getElementById('smartContextResult');
+        const context = contextElement.textContent;
+
+        try {
+            await navigator.clipboard.writeText(context);
+            this.app.showNotification('Context copied to clipboard!', 'success');
+        } catch (error) {
+            this.app.showNotification('Failed to copy context', 'error');
+        }
+    }
+
+    downloadContext() {
+        const contextElement = document.getElementById('smartContextResult');
+        const context = contextElement.textContent;
+        const query = document.getElementById('smartContextQuery').value.trim();
+        
+        const blob = new Blob([context], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `smart-context-${query.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        this.app.showNotification('Context downloaded!', 'success');
+    }
+}

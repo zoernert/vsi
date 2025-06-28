@@ -903,6 +903,457 @@
         }
       }
     },
+    "/collections/{id}/smart-context": {
+      "post": {
+        "summary": "Create intelligent context for a collection",
+        "description": "Generate smart context using semantic search enhanced with cluster information. Optimizes context window while maintaining relevance and diversity.",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": { 
+                    "type": "string", 
+                    "description": "Search query to find relevant content" 
+                  },
+                  "maxContextSize": { 
+                    "type": "integer", 
+                    "default": 8000, 
+                    "minimum": 100, 
+                    "maximum": 50000,
+                    "description": "Maximum context size in characters" 
+                  },
+                  "maxChunks": { 
+                    "type": "integer", 
+                    "default": 20, 
+                    "minimum": 1, 
+                    "maximum": 100,
+                    "description": "Maximum number of chunks to include" 
+                  },
+                  "includeClusterMetadata": { 
+                    "type": "boolean", 
+                    "default": true,
+                    "description": "Include cluster names and descriptions in context" 
+                  },
+                  "diversityWeight": { 
+                    "type": "number", 
+                    "default": 0.3, 
+                    "minimum": 0, 
+                    "maximum": 1,
+                    "description": "Weight for diversity vs relevance (0-1)" 
+                  },
+                  "clusterContextWeight": { 
+                    "type": "number", 
+                    "default": 0.2, 
+                    "minimum": 0, 
+                    "maximum": 1,
+                    "description": "Weight for cluster-aware scoring (0-1)" 
+                  }
+                },
+                "required": ["query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Smart context generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "context": { 
+                      "type": "string", 
+                      "description": "Generated intelligent context" 
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "properties": {
+                        "query": { "type": "string" },
+                        "collectionId": { "type": "integer" },
+                        "collectionName": { "type": "string" },
+                        "clusterInfo": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "clusterName": { "type": "string" },
+                            "clusterDescription": { "type": "string" }
+                          }
+                        },
+                        "chunks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string" },
+                              "similarity": { "type": "number" },
+                              "clusterScore": { "type": "number" },
+                              "finalScore": { "type": "number" },
+                              "clusterName": { "type": "string" },
+                              "filename": { "type": "string" },
+                              "preview": { "type": "string" }
+                            }
+                          }
+                        },
+                        "stats": {
+                          "type": "object",
+                          "properties": {
+                            "totalChunks": { "type": "integer" },
+                            "contextSize": { "type": "integer" },
+                            "clustersRepresented": { 
+                              "type": "array", 
+                              "items": { "type": "string" } 
+                            },
+                            "diversityScore": { "type": "number" },
+                            "averageRelevance": { "type": "number" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request parameters" },
+          "404": { "description": "Collection not found or access denied" }
+        }
+      }
+    },
+    "/collections/{id}/smart-context/preview": {
+      "post": {
+        "summary": "Preview smart context configuration",
+        "description": "Preview smart context results without full generation to help configure parameters",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": { "type": "string" },
+                  "maxContextSize": { "type": "integer", "default": 8000 },
+                  "maxChunks": { "type": "integer", "default": 20 }
+                },
+                "required": ["query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preview generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "preview": {
+                      "type": "object",
+                      "properties": {
+                        "query": { "type": "string" },
+                        "collectionName": { "type": "string" },
+                        "clusterInfo": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "clusterName": { "type": "string" },
+                            "hasRelatedClusters": { "type": "boolean" }
+                          }
+                        },
+                        "estimatedChunks": { "type": "integer" },
+                        "estimatedContextSize": { "type": "integer" },
+                        "topResults": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "filename": { "type": "string" },
+                              "similarity": { "type": "string" },
+                              "preview": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/smart-context/capabilities": {
+      "get": {
+        "summary": "Get smart context capabilities for a collection",
+        "description": "Retrieve information about smart context features available for a collection, including cluster support and recommended settings",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capabilities retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "capabilities": {
+                      "type": "object",
+                      "properties": {
+                        "collectionName": { "type": "string" },
+                        "hasClusterSupport": { "type": "boolean" },
+                        "clusterInfo": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "clusterName": { "type": "string" },
+                            "clusterDescription": { "type": "string" },
+                            "relatedClustersCount": { "type": "integer" }
+                          }
+                        },
+                        "statistics": {
+                          "type": "object",
+                          "properties": {
+                            "document_count": { "type": "string" },
+                            "total_content_size": { "type": "string" },
+                            "avg_document_size": { "type": "string" }
+                          }
+                        },
+                        "recommendedSettings": {
+                          "type": "object",
+                          "properties": {
+                            "maxContextSize": { "type": "integer" },
+                            "maxChunks": { "type": "integer" },
+                            "diversityWeight": { "type": "number" },
+                            "includeClusterMetadata": { "type": "boolean" }
+                          }
+                        },
+                        "features": {
+                          "type": "object",
+                          "properties": {
+                            "semanticSearch": { "type": "boolean" },
+                            "clusterAwareScoring": { "type": "boolean" },
+                            "crossClusterSupport": { "type": "boolean" },
+                            "diversityOptimization": { "type": "boolean" },
+                            "intelligentSizing": { "type": "boolean" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/documents/upload": {
+      "post": {
+        "summary": "Upload file to collection (Alternative endpoint)",
+        "tags": ["Documents"],
+        "description": "Alternative file upload endpoint - should work the same as /upload/{collectionId}",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { 
+                    "type": "string", 
+                    "format": "binary",
+                    "description": "File to upload (PDF, Word, Text, Markdown, etc.)"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File uploaded and processed successfully"
+          },
+          "400": {
+            "description": "Invalid file or processing error"
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/documents/{documentId}": {
+      "delete": {
+        "summary": "Delete document from collection",
+        "tags": ["Documents"],
+        "parameters": [
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "documentId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/search": {
+      "post": {
+        "summary": "Search documents in collection",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": { "type": "string" },
+                  "limit": { "type": "integer", "default": 10, "maximum": 100 },
+                  "threshold": { "type": "number", "default": 0.5, "minimum": 0, "maximum": 1 }
+                },
+                "required": ["query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/SearchResult" }
+                        },
+                        "query": { "type": "string" },
+                        "total": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{id}/ask": {
+      "post": {
+        "summary": "Ask AI question about collection documents",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": { "type": "string" },
+                  "systemPrompt": { "type": "string", "description": "Custom system prompt for AI" },
+                  "maxResults": { "type": "integer", "default": 5, "maximum": 20 },
+                  "maxQueries": { "type": "integer", "default": 3, "maximum": 10 }
+                },
+                "required": ["question"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "AI response with sources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/QAResponse" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/snippets/{chunkId}": {
+      "get": {
+        "summary": "Get document snippet by chunk ID",
+        "tags": ["Search"],
+        "parameters": [
+          { "name": "collectionId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "chunkId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document snippet content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "content": { "type": "string" },
+                        "filename": { "type": "string" },
+                        "chunkIndex": { "type": "integer" },
+                        "collectionName": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Snippet not found or access denied" }
+        }
+      }
+    },
     "/clusters": {
       "get": {
         "summary": "Get user's clusters",

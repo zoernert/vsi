@@ -410,6 +410,11 @@
                                 </a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link" href="#" onclick="app.collections.showCollectionTab('smart-context')">
+                                    <i class="fas fa-brain me-2"></i>Smart Context
+                                </a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link" href="#" onclick="app.collections.showCollectionTab('documents')">
                                     <i class="fas fa-file me-2"></i>Documents
                                 </a>
@@ -546,6 +551,169 @@
                             </div>
                             <div id="collectionSearchResults">
                                 <!-- Search results will be displayed here -->
+                            </div>
+                        </div>
+
+                        <!-- Smart Context Tab -->
+                        <div id="smartContextTab" class="hidden">
+                            <div class="smart-context-container">
+                                <div class="row mb-4">
+                                    <div class="col-12">
+                                        <h5><i class="fas fa-brain me-2"></i>Smart Context Generator</h5>
+                                        <p class="text-muted">Create intelligent context for AI/LLM applications using semantic search enhanced with cluster information. Perfect for optimizing context windows while maintaining relevance and diversity.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Configuration Panel -->
+                                <div class="row mb-4">
+                                    <div class="col-lg-8">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="fas fa-cogs me-2"></i>Context Configuration</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Search Query</label>
+                                                    <div class="input-group">
+                                                        <input type="text" class="form-control form-control-lg" id="smartContextQuery" 
+                                                               placeholder="Enter your search query to find relevant content...">
+                                                        <button class="btn btn-outline-secondary" onclick="app.collections.previewSmartContext()">
+                                                            <i class="fas fa-eye me-1"></i>Preview
+                                                        </button>
+                                                        <button class="btn btn-primary" onclick="app.collections.generateSmartContext()">
+                                                            <i class="fas fa-magic me-1"></i>Generate
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Max Context Size (characters)</label>
+                                                        <select class="form-select" id="smartContextMaxSize">
+                                                            <option value="2000">2,000 (Small)</option>
+                                                            <option value="4000">4,000 (Medium)</option>
+                                                            <option value="8000" selected>8,000 (Large)</option>
+                                                            <option value="12000">12,000 (XL)</option>
+                                                            <option value="16000">16,000 (XXL)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Max Chunks</label>
+                                                        <select class="form-select" id="smartContextMaxChunks">
+                                                            <option value="5">5 chunks</option>
+                                                            <option value="10">10 chunks</option>
+                                                            <option value="20" selected>20 chunks</option>
+                                                            <option value="30">30 chunks</option>
+                                                            <option value="50">50 chunks</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row mt-3">
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Diversity Weight</label>
+                                                        <select class="form-select" id="smartContextDiversity">
+                                                            <option value="0.1">Low Diversity (0.1)</option>
+                                                            <option value="0.3" selected>Medium Diversity (0.3)</option>
+                                                            <option value="0.5">High Diversity (0.5)</option>
+                                                            <option value="0.7">Very High Diversity (0.7)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label class="form-label">Cluster Weight</label>
+                                                        <select class="form-select" id="smartContextClusterWeight">
+                                                            <option value="0.0">No Cluster Influence</option>
+                                                            <option value="0.1">Low Cluster Influence</option>
+                                                            <option value="0.2" selected>Medium Cluster Influence</option>
+                                                            <option value="0.3">High Cluster Influence</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row mt-3">
+                                                    <div class="col-12">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="smartContextIncludeMetadata" checked>
+                                                            <label class="form-check-label" for="smartContextIncludeMetadata">
+                                                                Include cluster metadata in context
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-lg-4">
+                                        <!-- Capabilities Info -->
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Collection Info</h6>
+                                            </div>
+                                            <div class="card-body" id="smartContextCapabilities">
+                                                <div class="text-center">
+                                                    <div class="spinner-border spinner-border-sm" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <p class="mt-2 mb-0 text-muted">Loading capabilities...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Preview Panel -->
+                                        <div class="card mt-3" id="smartContextPreviewCard" style="display: none;">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="fas fa-eye me-2"></i>Preview</h6>
+                                            </div>
+                                            <div class="card-body" id="smartContextPreview">
+                                                <!-- Preview content will be shown here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Results Panel -->
+                                <div class="row" id="smartContextResultsPanel" style="display: none;">
+                                    <div class="col-12">
+                                        <div class="card">
+                                            <div class="card-header d-flex justify-content-between align-items-center">
+                                                <h6 class="mb-0"><i class="fas fa-file-text me-2"></i>Generated Smart Context</h6>
+                                                <div>
+                                                    <button class="btn btn-outline-secondary btn-sm me-2" onclick="app.collections.copyContextToClipboard()">
+                                                        <i class="fas fa-copy me-1"></i>Copy
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary btn-sm" onclick="app.collections.downloadContext()">
+                                                        <i class="fas fa-download me-1"></i>Download
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="mb-3" id="smartContextStats">
+                                                    <!-- Context statistics will be shown here -->
+                                                </div>
+                                                <div class="border rounded p-3" id="smartContextResult" style="max-height: 600px; overflow-y: auto; background-color: #f8f9fa; font-family: monospace; white-space: pre-wrap;">
+                                                    <!-- Generated context will be displayed here -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Chunks Analysis -->
+                                <div class="row mt-4" id="smartContextAnalysisPanel" style="display: none;">
+                                    <div class="col-12">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Context Analysis</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="smartContextChunksAnalysis">
+                                                    <!-- Chunks analysis will be shown here -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

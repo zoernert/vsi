@@ -298,6 +298,25 @@ class VSIApiService {
         return this.call(`${this.baseUrl}/collections/${collectionId}/snippets/${chunkId}`);
     }
 
+    // Smart Context endpoints
+    async createSmartContext(collectionId, options) {
+        return this.call(`${this.baseUrl}/collections/${collectionId}/smart-context`, {
+            method: 'POST',
+            body: JSON.stringify(options)
+        });
+    }
+
+    async previewSmartContext(collectionId, options) {
+        return this.call(`${this.baseUrl}/collections/${collectionId}/smart-context/preview`, {
+            method: 'POST',
+            body: JSON.stringify(options)
+        });
+    }
+
+    async getSmartContextCapabilities(collectionId) {
+        return this.call(`${this.baseUrl}/collections/${collectionId}/smart-context/capabilities`);
+    }
+
     // Admin endpoints
     async getAdminDashboard() {
         // According to OpenAPI spec, this returns unwrapped response

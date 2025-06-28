@@ -35,6 +35,7 @@ const clusterRoutes = require('./routes/clusterRoutes');
 const { QdrantService } = require('./services/qdrantService');
 const { EmbeddingService } = require('./services/embeddingService');
 const { GeminiService } = require('./services/geminiService');
+const { SmartContextController } = require('./controllers/smartContextController');
 const { v4: uuidv4 } = require('uuid');
 
 // Initialize services
@@ -43,6 +44,7 @@ const migrations = new MigrationService();
 const qdrant = new QdrantService();
 const embeddingService = new EmbeddingService();
 const gemini = new GeminiService();
+const smartContextController = new SmartContextController();
 
 // Initialize database on startup
 async function initializeApp() {
@@ -483,6 +485,19 @@ Always base your answers on the provided context.`;
         console.error('AI chat error:', error);
         res.status(500).json({ success: false, message: 'AI chat failed' });
     }
+});
+
+// Smart Context Routes
+app.post('/api/collections/:id/smart-context', auth, async (req, res) => {
+    await smartContextController.createSmartContext(req, res);
+});
+
+app.post('/api/collections/:id/smart-context/preview', auth, async (req, res) => {
+    await smartContextController.previewSmartContext(req, res);
+});
+
+app.get('/api/collections/:id/smart-context/capabilities', auth, async (req, res) => {
+    await smartContextController.getCapabilities(req, res);
 });
 
 // Global search endpoint
