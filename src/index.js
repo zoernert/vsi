@@ -1180,23 +1180,23 @@ app.post('/api/collections/:id/documents/upload', auth, uploadMiddleware.single(
     }
 });
 
-// Upload routes - Add debugging before registration
-console.log('📁 Registering upload routes...');
-app.use('/api', (req, res, next) => {
-    console.log(`🔍 Upload middleware hit: ${req.method} ${req.url}`);
-    next();
-}, uploadRoutes);
-console.log('✅ Upload routes registered');
+// MCP routes - Mount MCP functionality FIRST to avoid conflicts
+console.log('� Registering MCP routes...');
+app.use('/api/mcp', mcpRoutes);
+console.log('✅ MCP routes registered');
 
 // Search routes - Add new search routes
 console.log('🔍 Registering search routes...');
 app.use('/api', searchRoutes);
 console.log('✅ Search routes registered');
 
-// MCP routes - Mount MCP functionality
-console.log('🔗 Registering MCP routes...');
-app.use('/api/mcp', mcpRoutes);
-console.log('✅ MCP routes registered');
+// Upload routes - Add debugging before registration
+console.log('� Registering upload routes...');
+app.use('/api', (req, res, next) => {
+    console.log(`🔍 Upload middleware hit: ${req.method} ${req.url}`);
+    next();
+}, uploadRoutes);
+console.log('✅ Upload routes registered');
 
 // Admin routes - Mount admin functionality
 console.log('👑 Registering admin routes...');

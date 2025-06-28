@@ -44,11 +44,19 @@ The MCP server now provides **18 tools** (up from 11):
 
 ## Integration URLs
 
-### HTTP MCP Interface
+### HTTP MCP Interface (Standard)
 ```
 POST http://localhost:3000/api/mcp/call-tool
 GET  http://localhost:3000/api/mcp/
 GET  http://localhost:3000/api/mcp/tools
+```
+
+### HTTP MCP Interface (Token-in-Path for Limited Clients)
+For MCP clients that cannot send HTTP headers (common limitation):
+```
+GET  http://localhost:3000/api/mcp/token/YOUR_JWT_TOKEN/
+GET  http://localhost:3000/api/mcp/token/YOUR_JWT_TOKEN/tools
+POST http://localhost:3000/api/mcp/token/YOUR_JWT_TOKEN/call-tool
 ```
 
 ### Stdio MCP Interface
@@ -59,25 +67,32 @@ node src/mcp-server.js --token=YOUR_JWT_TOKEN
 ## Authentication
 
 ### JWT Token Requirements
-All MCP operations require a valid JWT token. You can provide it in two ways:
+All MCP operations require a valid JWT token. You can provide it in multiple ways:
 
-#### 1. Environment Variable
-```bash
-export MCP_AUTH_TOKEN="your-jwt-token-here"
-node src/mcp-server.js
-```
-
-#### 2. Command Line Argument
-```bash
-node src/mcp-server.js --token=your-jwt-token-here
-```
-
-#### 3. HTTP Authorization Header
+#### 1. HTTP Authorization Header (Standard)
 ```bash
 curl -X POST http://localhost:3000/api/mcp/call-tool \
   -H "Authorization: Bearer your-jwt-token-here" \
   -H "Content-Type: application/json" \
   -d '{"name": "list_collections", "arguments": {}}'
+```
+
+#### 2. Token in URL Path (For Limited Clients)
+```bash
+curl -X POST http://localhost:3000/api/mcp/token/your-jwt-token-here/call-tool \
+  -H "Content-Type: application/json" \
+  -d '{"name": "list_collections", "arguments": {}}'
+```
+
+#### 3. Environment Variable (Stdio)
+```bash
+export MCP_AUTH_TOKEN="your-jwt-token-here"
+node src/mcp-server.js
+```
+
+#### 4. Command Line Argument (Stdio)
+```bash
+node src/mcp-server.js --token=your-jwt-token-here
 ```
 
 ### Getting a JWT Token
