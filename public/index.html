@@ -1126,16 +1126,7 @@ Form Data:
                                                 <i class="fas fa-copy"></i>
                                             </button>
                                         </div>
-                                        <pre><code id="smartContextCurl" class="language-bash">curl -X POST "{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/smart-context" \
-  -H "Authorization: Bearer {{JWT_TOKEN}}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "machine learning algorithms",
-    "maxTokens": 4000,
-    "diversityThreshold": 0.7,
-    "includeMetadata": true,
-    "strategy": "balanced"
-  }'</code></pre>
+                                        <pre><code id="smartContextCurl" class="language-bash">Loading...</code></pre>
                                     </div>
                                     
                                     <div class="mb-4">
@@ -1146,24 +1137,7 @@ Form Data:
                                                 <i class="fas fa-copy"></i>
                                             </button>
                                         </div>
-                                        <pre><code id="smartContextJS" class="language-javascript">const response = await fetch('/api/collections/{{COLLECTION_ID}}/smart-context', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer {{JWT_TOKEN}}',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    query: 'machine learning algorithms',
-    maxTokens: 4000,
-    diversityThreshold: 0.7,
-    includeMetadata: true,
-    strategy: 'balanced'
-  })
-});
-
-const result = await response.json();
-console.log('Smart context:', result.context);
-console.log('Analytics:', result.analytics);</code></pre>
+                                        <pre><code id="smartContextJS" class="language-javascript">Loading...</code></pre>
                                     </div>
                                     
                                     <div class="mb-4">
@@ -1174,26 +1148,7 @@ console.log('Analytics:', result.analytics);</code></pre>
                                                 <i class="fas fa-copy"></i>
                                             </button>
                                         </div>
-                                        <pre><code id="smartContextPython" class="language-python">import requests
-
-url = "{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/smart-context"
-headers = {
-    "Authorization": "Bearer {{JWT_TOKEN}}",
-    "Content-Type": "application/json"
-}
-data = {
-    "query": "machine learning algorithms",
-    "maxTokens": 4000,
-    "diversityThreshold": 0.7,
-    "includeMetadata": True,
-    "strategy": "balanced"
-}
-
-response = requests.post(url, headers=headers, json=data)
-result = response.json()
-
-print("Smart context:", result["context"])
-print("Analytics:", result["analytics"])</code></pre>
+                                        <pre><code id="smartContextPython" class="language-python">Loading...</code></pre>
                                     </div>
                                     
                                     <div class="mb-3">
@@ -1244,15 +1199,7 @@ print("Analytics:", result["analytics"])</code></pre>
                                                 <i class="fas fa-copy"></i>
                                             </button>
                                         </div>
-                                        <pre><code id="clusteringCurl" class="language-bash">curl -X POST "{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/clusters" \
-  -H "Authorization: Bearer {{JWT_TOKEN}}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "numClusters": 5,
-    "algorithm": "kmeans",
-    "includeOutliers": true,
-    "minClusterSize": 2
-  }'</code></pre>
+                                        <pre><code id="clusteringCurl" class="language-bash">Loading...</code></pre>
                                     </div>
                                     
                                     <div class="mb-4">
@@ -1263,31 +1210,7 @@ print("Analytics:", result["analytics"])</code></pre>
                                                 <i class="fas fa-copy"></i>
                                             </button>
                                         </div>
-                                        <pre><code id="clusteringJS" class="language-javascript">// Create clusters
-const createResponse = await fetch('/api/collections/{{COLLECTION_ID}}/clusters', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer {{JWT_TOKEN}}',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    numClusters: 5,
-    algorithm: 'kmeans',
-    includeOutliers: true,
-    minClusterSize: 2
-  })
-});
-
-const clusters = await createResponse.json();
-
-// Get cluster documents
-const clusterResponse = await fetch(`/api/collections/{{COLLECTION_ID}}/clusters/${clusters[0].id}/documents`, {
-  headers: {
-    'Authorization': 'Bearer {{JWT_TOKEN}}'
-  }
-});
-
-const documents = await clusterResponse.json();</code></pre>
+                                        <pre><code id="clusteringJS" class="language-javascript">Loading...</code></pre>
                                     </div>
                                     
                                     <div class="mb-4">
@@ -1298,29 +1221,7 @@ const documents = await clusterResponse.json();</code></pre>
                                                 <i class="fas fa-copy"></i>
                                             </button>
                                         </div>
-                                        <pre><code id="clusteringPython" class="language-python">import requests
-
-# Create clusters
-url = "{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/clusters"
-headers = {
-    "Authorization": "Bearer {{JWT_TOKEN}}",
-    "Content-Type": "application/json"
-}
-data = {
-    "numClusters": 5,
-    "algorithm": "kmeans",
-    "includeOutliers": True,
-    "minClusterSize": 2
-}
-
-response = requests.post(url, headers=headers, json=data)
-clusters = response.json()
-
-# Get cluster documents
-cluster_id = clusters[0]["id"]
-doc_url = f"{{API_BASE_URL}}/api/collections/{{COLLECTION_ID}}/clusters/{cluster_id}/documents"
-doc_response = requests.get(doc_url, headers=headers)
-documents = doc_response.json()</code></pre>
+                                        <pre><code id="clusteringPython" class="language-python">Loading...</code></pre>
                                     </div>
                                     
                                     <div class="mb-3">
