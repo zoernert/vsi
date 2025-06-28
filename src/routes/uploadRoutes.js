@@ -103,6 +103,21 @@ router.post('/upload/:collection', (req, res, next) => {
                 extractedText = result;
             } else if (['.txt', '.md'].includes(fileExtension)) {
                 extractedText = fs.readFileSync(req.file.path, 'utf-8');
+            } else if (['.html', '.htm'].includes(fileExtension)) {
+                // Process HTML file using DocumentProcessor
+                sendProgress({
+                    type: 'progress',
+                    stage: 'processing',
+                    message: 'Converting HTML to Markdown...',
+                    progress: 15
+                });
+                
+                try {
+                    extractedText = await processor.extractFromHTML(req.file.path);
+                } catch (htmlError) {
+                    console.error('HTML processing error:', htmlError);
+                    extractedText = `HTML file: ${req.file.originalname}\nFile type: ${fileExtension.substring(1).toUpperCase()}\nNote: Could not convert HTML to markdown. Error: ${htmlError.message}`;
+                }
             } else if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'].includes(fileExtension)) {
                 // Process image with LLM to extract description
                 sendProgress({
@@ -145,7 +160,7 @@ router.post('/upload/:collection', (req, res, next) => {
             } else {
                 sendProgress({
                     type: 'error',
-                    message: `Unsupported file type: ${fileExtension}. Supported types: PDF, DOCX, TXT, MD, PNG, JPG, JPEG, GIF, BMP, WEBP`
+                    message: `Unsupported file type: ${fileExtension}. Supported types: PDF, DOCX, TXT, MD, HTML, HTM, PNG, JPG, JPEG, GIF, BMP, WEBP`
                 });
                 return res.end();
             }
