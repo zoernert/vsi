@@ -39,6 +39,57 @@ async function convertDocumentToMarkdown(filePath, mimeType) {
         // For text files, read directly
         if (mimeType.startsWith('text/')) {
             content = await fs.readFile(filePath, 'utf8');
+        } else if (mimeType === 'text/html' || mimeType === 'application/xhtml+xml' || mimeType.includes('html')) {
+            // Convert HTML to Markdown
+            try {
+                const htmlContent = await fs.readFile(filePath, 'utf8');
+                const TurndownService = require('turndown');
+                const turndownService = new TurndownService({
+                    headingStyle: 'atx',
+                    codeBlockStyle: 'fenced',
+                    bulletListMarker: '- ',
+                    emDelimiter: '*',
+                    strongDelimiter: '**'
+                });
+                
+                // Add turndown plugin for tables
+                try {
+                    const turndownPluginGfm = require('turndown-plugin-gfm');
+                    turndownService.use(turndownPluginGfm.tables);
+                } catch (e) {
+                    console.log('⚠️ Table plugin not available:', e.message);
+                }
+                
+                // Configure turndown to handle common HTML elements better
+                turndownService.addRule('removeComments', {
+                    filter: function (node) {
+                        return node.nodeType === 8; // Comment node
+                    },
+                    replacement: function () {
+                        return '';
+                    }
+                });
+                
+                turndownService.addRule('preserveBreaks', {
+                    filter: ['br'],
+                    replacement: function () {
+                        return '\n';
+                    }
+                });
+                
+                content = turndownService.turndown(htmlContent);
+                
+                // Clean up excessive whitespace
+                content = content
+                    .replace(/\n{3,}/g, '\n\n')  // Replace multiple newlines with double newlines
+                    .replace(/[ \t]+$/gm, '')     // Remove trailing spaces
+                    .trim();
+                
+                console.log(`HTML to Markdown conversion successful: ${content.length} characters`);
+            } catch (htmlError) {
+                console.error('HTML conversion error:', htmlError);
+                content = `HTML file: ${path.basename(filePath)} - Could not convert to markdown. Error: ${htmlError.message}`;
+            }
         } else if (mimeType === 'application/pdf') {
             // Use pdf-parse to extract text from PDF
             try {

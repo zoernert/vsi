@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 
 class DocumentProcessor {
     constructor(embeddingService, qdrantService) {
-        this.supportedTypes = ['.pdf', '.txt', '.md', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
+        this.supportedTypes = ['.pdf', '.txt', '.md', '.html', '.htm', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
         console.log('📄 DocumentProcessor initialized with supported types:', this.supportedTypes);
 
         this.embeddingService = embeddingService || new EmbeddingService();
@@ -26,6 +26,9 @@ class DocumentProcessor {
                 case '.txt':
                 case '.md':
                     return await this.extractFromText(filePath);
+                case '.html':
+                case '.htm':
+                    return await this.extractFromHTML(filePath);
                 case '.png':
                 case '.jpg':
                 case '.jpeg':
@@ -42,6 +45,10 @@ class DocumentProcessor {
                     if (mimeType && mimeType.includes('text')) {
                         console.log('🔄 MIME type indicates text, attempting text extraction...');
                         return await this.extractFromText(filePath);
+                    }
+                    if (mimeType && mimeType.includes('html')) {
+                        console.log('🔄 MIME type indicates HTML, attempting HTML extraction...');
+                        return await this.extractFromHTML(filePath);
                     }
                     if (mimeType && mimeType.includes('image')) {
                         console.log('🔄 MIME type indicates image, attempting image extraction...');
@@ -127,6 +134,74 @@ class DocumentProcessor {
         } catch (error) {
             console.error('❌ Error reading text file:', error.message);
             throw new Error(`Failed to read text file: ${error.message}`);
+        }
+    }
+
+    async extractFromHTML(filePath) {
+        try {
+            console.log(`🌐 Processing HTML file: ${filePath}`);
+            const stats = fs.statSync(filePath);
+            console.log(`📊 HTML file size: ${stats.size} bytes`);
+            
+            // Read HTML content
+            const htmlContent = fs.readFileSync(filePath, 'utf8');
+            console.log(`✅ Successfully read ${htmlContent.length} characters from HTML file`);
+            
+            // Convert HTML to Markdown using turndown
+            const TurndownService = require('turndown');
+            const turndownService = new TurndownService({
+                headingStyle: 'atx',
+                codeBlockStyle: 'fenced',
+                bulletListMarker: '- ',
+                emDelimiter: '*',
+                strongDelimiter: '**'
+            });
+            
+            // Add turndown plugin for tables
+            try {
+                const turndownPluginGfm = require('turndown-plugin-gfm');
+                turndownService.use(turndownPluginGfm.tables);
+                console.log('📊 Table plugin loaded successfully');
+            } catch (e) {
+                console.log('⚠️ Table plugin not available:', e.message);
+            }
+            
+            // Configure turndown to handle common HTML elements better
+            turndownService.addRule('removeComments', {
+                filter: function (node) {
+                    return node.nodeType === 8; // Comment node
+                },
+                replacement: function () {
+                    return '';
+                }
+            });
+            
+            turndownService.addRule('preserveBreaks', {
+                filter: ['br'],
+                replacement: function () {
+                    return '\n';
+                }
+            });
+            
+            const markdownContent = turndownService.turndown(htmlContent);
+            console.log(`🔄 Successfully converted HTML to Markdown: ${markdownContent.length} characters`);
+            
+            // Clean up excessive whitespace
+            const cleanMarkdown = markdownContent
+                .replace(/\n{3,}/g, '\n\n')  // Replace multiple newlines with double newlines
+                .replace(/[ \t]+$/gm, '')     // Remove trailing spaces
+                .trim();
+            
+            console.log(`✅ HTML to Markdown conversion completed: ${cleanMarkdown.length} characters after cleanup`);
+            
+            // Log first 200 characters for debugging
+            console.log(`📝 Markdown preview: "${cleanMarkdown.substring(0, 200)}..."`);
+            
+            return cleanMarkdown;
+        } catch (error) {
+            console.error('❌ Error processing HTML file:', error.message);
+            console.error('❌ HTML processing stack trace:', error.stack);
+            throw new Error(`Failed to extract text from HTML: ${error.message}`);
         }
     }
 
@@ -229,6 +304,7 @@ This is an image file that could not be analyzed automatically. You may need to 
             mimeType.includes('text') ||
             mimeType.includes('plain') ||
             mimeType.includes('markdown') ||
+            mimeType.includes('html') ||
             mimeType.includes('image')
         );
         

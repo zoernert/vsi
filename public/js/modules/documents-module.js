@@ -502,6 +502,8 @@ class VSIDocumentsModule {
             'doc': 'file-word',
             'txt': 'file-alt',
             'md': 'file-alt',
+            'html': 'file-code',
+            'htm': 'file-code',
             'xlsx': 'file-excel',
             'xls': 'file-excel',
             'jpg': 'file-image',
