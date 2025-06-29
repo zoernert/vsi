@@ -384,11 +384,21 @@
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="card h-100">
-                                    <div class="card-header">
+                                <div class="card h-100" id="resultsCard">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
                                         <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Research Results</h6>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-secondary" id="copyResultsBtn" 
+                                                    title="Copy to clipboard" style="display: none;">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" id="expandResultsBtn" 
+                                                    title="Expand to fullscreen" style="display: none;">
+                                                <i class="fas fa-expand"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                                    <div class="card-body" style="max-height: 500px; overflow-y: auto;" id="resultsCardBody">
                                         <div id="sessionResults">
                                             <p class="text-muted">No results generated yet.</p>
                                         </div>
@@ -1728,6 +1738,85 @@ Form Data:
                         </div>
                         <button type="button" class="btn btn-primary" onclick="app.clusters.addCollectionToCluster()">Add to Cluster</button>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Results Modal -->
+    <div class="modal fade" id="fullscreenResultsModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-lightbulb me-2"></i>Research Results - Full View
+                    </h5>
+                    <div class="btn-group me-3" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="copyFullscreenResultsBtn" 
+                                title="Copy markdown to clipboard">
+                            <i class="fas fa-copy me-1"></i>Copy Markdown
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleRenderModeBtn" 
+                                title="Toggle between rendered and raw markdown">
+                            <i class="fas fa-code me-1"></i>Raw Markdown
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="saveToCollectionBtn" 
+                                title="Save research report to a collection">
+                            <i class="fas fa-save me-1"></i>Save to Collection
+                        </button>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4" style="overflow-y: auto;">
+                    <div id="fullscreenResultsContent">
+                        <!-- Content will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save to Collection Modal -->
+    <div class="modal fade" id="saveToCollectionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-save me-2"></i>Save Research Report to Collection
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="saveToCollectionForm">
+                        <div class="mb-3">
+                            <label for="saveCollectionSelect" class="form-label">Select Collection</label>
+                            <select class="form-select" id="saveCollectionSelect" required>
+                                <option value="">Loading collections...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="saveDocumentTitle" class="form-label">Document Title</label>
+                            <input type="text" class="form-control" id="saveDocumentTitle" required
+                                   placeholder="Research Report - AI/ML Healthcare Applications">
+                        </div>
+                        <div class="mb-3">
+                            <label for="saveDocumentType" class="form-label">Document Type</label>
+                            <select class="form-select" id="saveDocumentType">
+                                <option value="md">Markdown (.md)</option>
+                                <option value="txt">Plain Text (.txt)</option>
+                            </select>
+                        </div>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            The research report will be saved as a document in the selected collection and will be searchable.
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmSaveToCollection">
+                        <i class="fas fa-save me-1"></i>Save Report
+                    </button>
                 </div>
             </div>
         </div>

@@ -8,6 +8,7 @@ class VSIAgentsModule {
         this.currentSession = null;
         this.agentTemplates = [];
         this.eventSource = null;
+        this.fullscreenRenderMode = 'rendered'; // Default render mode for fullscreen
     }
 
     /**
@@ -15,6 +16,47 @@ class VSIAgentsModule {
      */
     init() {
         this.loadAgentTemplates();
+        this.initializeResultsHandlers();
+    }
+
+    /**
+     * Initialize event handlers for results display features
+     */
+    initializeResultsHandlers() {
+        // Expand to fullscreen button
+        const expandBtn = document.getElementById('expandResultsBtn');
+        if (expandBtn) {
+            expandBtn.addEventListener('click', () => this.expandResultsToFullscreen());
+        }
+
+        // Copy results button
+        const copyBtn = document.getElementById('copyResultsBtn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => this.copyResultsToClipboard());
+        }
+
+        // Fullscreen modal buttons
+        const copyFullscreenBtn = document.getElementById('copyFullscreenResultsBtn');
+        if (copyFullscreenBtn) {
+            copyFullscreenBtn.addEventListener('click', () => this.copyFullscreenResultsToClipboard());
+        }
+
+        const toggleRenderBtn = document.getElementById('toggleRenderModeBtn');
+        if (toggleRenderBtn) {
+            toggleRenderBtn.addEventListener('click', () => this.toggleRenderMode());
+        }
+
+        // Save to collection button
+        const saveToCollectionBtn = document.getElementById('saveToCollectionBtn');
+        if (saveToCollectionBtn) {
+            saveToCollectionBtn.addEventListener('click', () => this.showSaveToCollectionModal());
+        }
+
+        // Save to collection modal confirm button
+        const confirmSaveBtn = document.getElementById('confirmSaveToCollection');
+        if (confirmSaveBtn) {
+            confirmSaveBtn.addEventListener('click', () => this.saveResearchToCollection());
+        }
     }
 
     /**
@@ -397,21 +439,41 @@ class VSIAgentsModule {
         const container = document.getElementById('sessionResults');
         if (!container) return;
 
+        // Show/hide action buttons based on whether we have results
+        const expandBtn = document.getElementById('expandResultsBtn');
+        const copyBtn = document.getElementById('copyResultsBtn');
+        
         if (!results || results.length === 0) {
             container.innerHTML = '<p class="text-muted">No results generated yet.</p>';
+            if (expandBtn) expandBtn.style.display = 'none';
+            if (copyBtn) copyBtn.style.display = 'none';
+            // Clear stored markdown content
+            container.removeAttribute('data-markdown-content');
             return;
         }
+
+        // Show action buttons
+        if (expandBtn) expandBtn.style.display = 'inline-block';
+        if (copyBtn) copyBtn.style.display = 'inline-block';
+
+        // Store results for fullscreen display and copying
+        this.currentResults = results;
+
+        // Extract and store all markdown content for saving
+        const allMarkdownContent = this.extractAllMarkdownContent(results);
+        container.setAttribute('data-markdown-content', allMarkdownContent);
 
         container.innerHTML = results.map(result => `
             <div class="result-card card mb-3">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">${result.title || result.type || 'Result'}</h6>
-                        <small class="text-muted">${new Date(result.createdAt).toLocaleString()}</small>
+                        <h6 class="mb-0">${result.title || result.artifact_type || 'Result'}</h6>
+                        <small class="text-muted">${new Date(result.created_at || result.createdAt).toLocaleString()}</small>
                     </div>
                 </div>
                 <div class="card-body">
                     ${this.renderResultContent(result)}
+                </div>
                 </div>
             </div>
         `).join('');
@@ -422,14 +484,16 @@ class VSIAgentsModule {
      */
     renderResultContent(result) {
         // Handle research_summary type specifically
-        if (result.type === 'research_summary' && result.content && result.content.report) {
+        if ((result.artifact_type === 'research_summary' || result.type === 'research_summary') && result.content && result.content.report) {
             const content = result.content;
             return `
                 <div class="research-summary">
                     <div class="mb-3">
                         <h6 class="text-primary">Research Report</h6>
                         <div class="report-content" style="max-height: 400px; overflow-y: auto;">
-                            <pre class="text-wrap bg-light p-3 border rounded">${this.escapeHtml(content.report)}</pre>
+                            <div class="research-report-content p-3 border rounded">
+                                ${this.renderMarkdown(content.report)}
+                            </div>
                         </div>
                     </div>
                     
@@ -525,6 +589,352 @@ class VSIAgentsModule {
         
         // Fallback
         return `<p class="text-muted">No content available</p>`;
+    }
+
+    /**
+     * Render markdown content as HTML
+     */
+    renderMarkdown(markdownText) {
+        if (typeof marked === 'undefined') {
+            // Fallback if marked.js is not loaded
+            return `<pre class="markdown-fallback">${this.escapeHtml(markdownText)}</pre>`;
+        }
+        
+        try {
+            // Configure marked with safe options
+            marked.setOptions({
+                breaks: true,
+                gfm: true,
+                sanitize: false, // We trust the content from our agents
+                smartLists: true,
+                smartypants: true
+            });
+            
+            return marked.parse(markdownText);
+        } catch (error) {
+            console.error('Error rendering markdown:', error);
+            return `<pre class="markdown-error">${this.escapeHtml(markdownText)}</pre>`;
+        }
+    }
+
+    /**
+     * Extract markdown content from results for copying
+     */
+    extractMarkdownContent() {
+        if (!this.currentResults || this.currentResults.length === 0) {
+            return '';
+        }
+
+        let markdownContent = '';
+        
+        for (const result of this.currentResults) {
+            if ((result.artifact_type === 'research_summary' || result.type === 'research_summary') && result.content?.report) {
+                markdownContent += `# ${result.title || result.artifact_type || 'Research Report'}\n\n`;
+                markdownContent += `*Created: ${new Date(result.created_at || result.createdAt).toLocaleString()}*\n\n`;
+                markdownContent += result.content.report + '\n\n';
+                
+                if (result.content.quality) {
+                    markdownContent += '## Quality Metrics\n\n';
+                    markdownContent += `- **Coverage:** ${result.content.quality.coverageScore}%\n`;
+                    markdownContent += `- **Coherence:** ${result.content.quality.coherenceScore}%\n`;
+                    markdownContent += `- **Confidence:** ${Math.round(result.content.quality.confidenceScore * 100)}%\n\n`;
+                }
+                
+                if (result.content.statistics) {
+                    markdownContent += '## Research Statistics\n\n';
+                    markdownContent += `- **Agents:** ${result.content.statistics.totalAgents}\n`;
+                    markdownContent += `- **Artifacts:** ${result.content.statistics.totalArtifacts}\n`;
+                    markdownContent += `- **Completed:** ${result.content.statistics.completedAgents}\n`;
+                    markdownContent += `- **Duration:** ${Math.round(result.content.statistics.researchDuration / 1000)}s\n\n`;
+                }
+            } else if (result.content) {
+                markdownContent += `# ${result.title || result.artifact_type || 'Result'}\n\n`;
+                markdownContent += `*Created: ${new Date(result.created_at || result.createdAt).toLocaleString()}*\n\n`;
+                
+                if (typeof result.content === 'string') {
+                    markdownContent += result.content + '\n\n';
+                } else {
+                    markdownContent += '```json\n' + JSON.stringify(result.content, null, 2) + '\n```\n\n';
+                }
+            }
+        }
+        
+        return markdownContent;
+    }
+
+    /**
+     * Expand results to fullscreen modal
+     */
+    expandResultsToFullscreen() {
+        if (!this.currentResults || this.currentResults.length === 0) {
+            return;
+        }
+
+        const modal = document.getElementById('fullscreenResultsModal');
+        const content = document.getElementById('fullscreenResultsContent');
+        
+        if (!modal || !content) {
+            console.error('Fullscreen modal elements not found');
+            return;
+        }
+
+        // Set initial render mode
+        this.fullscreenRenderMode = 'rendered';
+        
+        // Render content in fullscreen
+        this.renderFullscreenContent();
+        
+        // Show modal
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+
+    /**
+     * Render content in fullscreen modal
+     */
+    renderFullscreenContent() {
+        const content = document.getElementById('fullscreenResultsContent');
+        if (!content || !this.currentResults) return;
+
+        if (this.fullscreenRenderMode === 'raw') {
+            // Show raw markdown
+            const markdownContent = this.extractMarkdownContent();
+            content.innerHTML = `<pre class="bg-light p-3 border rounded" style="white-space: pre-wrap; font-family: 'Courier New', monospace;">${this.escapeHtml(markdownContent)}</pre>`;
+        } else {
+            // Show rendered HTML
+            content.innerHTML = this.currentResults.map(result => `
+                <div class="result-card mb-4">
+                    <div class="border-bottom pb-3 mb-3">
+                        <h3 class="text-primary">${result.title || result.artifact_type || 'Result'}</h3>
+                        <small class="text-muted">Created: ${new Date(result.created_at || result.createdAt).toLocaleString()}</small>
+                    </div>
+                    <div class="result-content">
+                        ${this.renderResultContentFullscreen(result)}
+                    </div>
+                </div>
+            `).join('');
+        }
+    }
+
+    /**
+     * Render result content for fullscreen (without size restrictions)
+     */
+    renderResultContentFullscreen(result) {
+        // Handle research_summary type specifically
+        if ((result.artifact_type === 'research_summary' || result.type === 'research_summary') && result.content && result.content.report) {
+            const content = result.content;
+            return `
+                <div class="research-summary">
+                    <div class="mb-4">
+                        <div class="research-report-content">
+                            ${this.renderMarkdown(content.report)}
+                        </div>
+                    </div>
+                    
+                    ${content.quality ? `
+                        <div class="mb-4">
+                            <h4 class="text-info">Quality Metrics</h4>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <h2 class="card-title text-primary">${content.quality.coverageScore}%</h2>
+                                            <p class="card-text">Coverage</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <h2 class="card-title text-primary">${content.quality.coherenceScore}%</h2>
+                                            <p class="card-text">Coherence</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <h2 class="card-title text-primary">${Math.round(content.quality.confidenceScore * 100)}%</h2>
+                                            <p class="card-text">Confidence</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${content.statistics ? `
+                        <div class="mb-4">
+                            <h4 class="text-success">Research Statistics</h4>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <h3 class="card-title text-primary">${content.statistics.totalAgents}</h3>
+                                            <p class="card-text">Agents</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <h3 class="card-title text-primary">${content.statistics.totalArtifacts}</h3>
+                                            <p class="card-text">Artifacts</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <h3 class="card-title text-primary">${content.statistics.completedAgents}</h3>
+                                            <p class="card-text">Completed</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <h3 class="card-title text-primary">${Math.round(content.statistics.researchDuration / 1000)}s</h3>
+                                            <p class="card-text">Duration</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${content.recommendations && content.recommendations.length > 0 ? `
+                        <div class="mb-4">
+                            <h4 class="text-warning">Recommendations</h4>
+                            <div class="row">
+                                ${content.recommendations.map(rec => `
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h5 class="card-title">${this.escapeHtml(rec.title)}</h5>
+                                                <p class="card-text">${this.escapeHtml(rec.description)}</p>
+                                                <div class="d-flex justify-content-between">
+                                                    <small class="text-muted">Priority: ${rec.priority}</small>
+                                                    <small class="text-muted">Category: ${rec.category}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        // Handle other artifact types
+        if (result.content && typeof result.content === 'object') {
+            return `<pre class="bg-light p-3 border rounded"><code>${JSON.stringify(result.content, null, 2)}</code></pre>`;
+        }
+        
+        return `<p class="text-muted">No content available</p>`;
+    }
+
+    /**
+     * Copy results to clipboard (from main card)
+     */
+    async copyResultsToClipboard() {
+        try {
+            const markdownContent = this.extractMarkdownContent();
+            
+            if (!markdownContent.trim()) {
+                this.showCopyNotification('No content to copy', 'warning');
+                return;
+            }
+
+            await navigator.clipboard.writeText(markdownContent);
+            this.showCopyNotification('Results copied to clipboard!', 'success');
+        } catch (error) {
+            console.error('Error copying to clipboard:', error);
+            this.showCopyNotification('Failed to copy to clipboard', 'error');
+        }
+    }
+
+    /**
+     * Copy results to clipboard (from fullscreen modal)
+     */
+    async copyFullscreenResultsToClipboard() {
+        try {
+            const markdownContent = this.extractMarkdownContent();
+            
+            if (!markdownContent.trim()) {
+                this.showCopyNotification('No content to copy', 'warning');
+                return;
+            }
+
+            await navigator.clipboard.writeText(markdownContent);
+            this.showCopyNotification('Results copied to clipboard!', 'success');
+        } catch (error) {
+            console.error('Error copying to clipboard:', error);
+            this.showCopyNotification('Failed to copy to clipboard', 'error');
+        }
+    }
+
+    /**
+     * Toggle between rendered and raw markdown in fullscreen
+     */
+    toggleRenderMode() {
+        const toggleBtn = document.getElementById('toggleRenderModeBtn');
+        
+        if (this.fullscreenRenderMode === 'rendered') {
+            this.fullscreenRenderMode = 'raw';
+            if (toggleBtn) {
+                toggleBtn.innerHTML = '<i class="fas fa-eye me-1"></i>Rendered View';
+                toggleBtn.title = 'Switch to rendered view';
+            }
+        } else {
+            this.fullscreenRenderMode = 'rendered';
+            if (toggleBtn) {
+                toggleBtn.innerHTML = '<i class="fas fa-code me-1"></i>Raw Markdown';
+                toggleBtn.title = 'Switch to raw markdown view';
+            }
+        }
+        
+        this.renderFullscreenContent();
+    }
+
+    /**
+     * Show copy notification
+     */
+    showCopyNotification(message, type = 'success') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'danger'} position-fixed`;
+        notification.style.cssText = `
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 250px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        notification.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'times-circle'} me-2"></i>
+            ${message}
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+        }, 100);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
     }
 
     /**
@@ -825,5 +1235,440 @@ class VSIAgentsModule {
         }
         
         return 'Agent';
+    }
+
+    /**
+     * Expand results to fullscreen mode
+     */
+    expandResultsToFullscreen() {
+        if (!this.currentResults || this.currentResults.length === 0) {
+            return;
+        }
+
+        const modal = document.getElementById('fullscreenResultsModal');
+        const content = document.getElementById('fullscreenResultsContent');
+        
+        if (!modal || !content) {
+            console.error('Fullscreen modal elements not found');
+            return;
+        }
+
+        // Set initial render mode
+        this.fullscreenRenderMode = 'rendered';
+        
+        // Render content in fullscreen
+        this.renderFullscreenContent();
+        
+        // Show modal
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+
+    /**
+     * Copy results to clipboard
+     */
+    copyResultsToClipboard() {
+        const resultsContainer = document.getElementById('sessionResults');
+        if (!resultsContainer) return;
+
+        // Get all result cards
+        const resultCards = resultsContainer.querySelectorAll('.result-card');
+        if (resultCards.length === 0) {
+            this.app.ui.showNotification('No results to copy', 'info');
+            return;
+        }
+
+        // Extract text content from result cards
+        let resultsText = '';
+        resultCards.forEach(card => {
+            const title = card.querySelector('h6')?.innerText || '';
+            const body = card.querySelector('.card-body')?.innerText || '';
+            resultsText += `**${title}**\n${body}\n\n`;
+        });
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(resultsText).then(() => {
+            this.app.ui.showNotification('Results copied to clipboard', 'success');
+        }).catch(err => {
+            console.error('Error copying results to clipboard:', err);
+            this.app.ui.showNotification('Failed to copy results', 'error');
+        });
+    }
+
+    /**
+     * Copy fullscreen results to clipboard
+     */
+    copyFullscreenResultsToClipboard() {
+        const fullscreenContainer = document.getElementById('fullscreenResultsContainer');
+        if (!fullscreenContainer) return;
+
+        // Get the current HTML content of the fullscreen results
+        const content = fullscreenContainer.innerHTML;
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(content).then(() => {
+            this.app.ui.showNotification('Fullscreen results copied to clipboard', 'success');
+        }).catch(err => {
+            console.error('Error copying fullscreen results to clipboard:', err);
+            this.app.ui.showNotification('Failed to copy fullscreen results', 'error');
+        });
+    }
+
+    /**
+     * Toggle render mode for results
+     */
+    toggleRenderMode() {
+        const resultsContainer = document.getElementById('sessionResults');
+        if (!resultsContainer) return;
+
+        // Toggle between JSON and Markdown render modes
+        const isJson = resultsContainer.classList.toggle('json-rendered');
+        const isMarkdown = resultsContainer.classList.toggle('markdown-rendered');
+
+        // Update button text
+        const toggleBtn = document.getElementById('toggleRenderModeBtn');
+        if (toggleBtn) {
+            toggleBtn.innerHTML = isJson ? '<i class="fas fa-markdown"></i> Render as Markdown' : '<i class="fas fa-code"></i> Render as JSON';
+        }
+
+        // Render Markdown if enabled
+        if (isMarkdown) {
+            this.renderMarkdownResults(resultsContainer);
+        } else {
+            // Revert to JSON view
+            this.revertJsonResults(resultsContainer);
+        }
+    }
+
+    /**
+     * Render Markdown content in results container
+     */
+    renderMarkdownResults(container) {
+        const jsonContent = container.dataset.jsonContent;
+        if (!jsonContent) return;
+
+        // Convert JSON content to Markdown
+        const markdownContent = this.jsonToMarkdown(JSON.parse(jsonContent));
+
+        // Set the converted content
+        container.innerHTML = markdownContent;
+
+        // Optionally, highlight code blocks
+        this.highlightCodeBlocks(container);
+    }
+
+    /**
+     * Convert JSON object to Markdown format
+     */
+    jsonToMarkdown(json, indent = 0) {
+        if (typeof json !== 'object' || json === null) {
+            return this.escapeHtml(String(json));
+        }
+
+        let markdown = '';
+        const padding = '  '.repeat(indent);
+
+        if (Array.isArray(json)) {
+            json.forEach(item => {
+                markdown += `${padding}- ${this.jsonToMarkdown(item, indent + 1)}\n`;
+            });
+        } else {
+            Object.keys(json).forEach(key => {
+                const value = json[key];
+                markdown += `${padding}**${this.escapeHtml(key)}**: ${this.jsonToMarkdown(value, indent + 1)}\n`;
+            });
+        }
+
+        return markdown;
+    }
+
+    /**
+     * Highlight code blocks in the container
+     */
+    highlightCodeBlocks(container) {
+        // Find all preformatted text blocks
+        const codeBlocks = container.querySelectorAll('pre');
+        codeBlocks.forEach(block => {
+            // Apply syntax highlighting (e.g., using highlight.js)
+            hljs.highlightElement(block);
+        });
+    }
+
+    /**
+     * Revert results container to JSON view
+     */
+    revertJsonResults(container) {
+        const jsonContent = container.dataset.jsonContent;
+        if (!jsonContent) return;
+
+        // Parse and stringify to format JSON content
+        const jsonData = JSON.parse(jsonContent);
+        const formattedJson = JSON.stringify(jsonData, null, 2);
+
+        // Set the formatted JSON content
+        container.innerHTML = `<pre><code>${this.escapeHtml(formattedJson)}</code></pre>`;
+    }
+
+    /**
+     * Show save to collection modal
+     */
+    async showSaveToCollectionModal() {
+        try {
+            // Load user collections
+            await this.loadUserCollections();
+            
+            // Pre-fill the document title
+            const session = this.currentSession;
+            if (session) {
+                const titleField = document.getElementById('saveDocumentTitle');
+                if (titleField) {
+                    const sessionTopic = session.research_topic || 'Research Report';
+                    const timestamp = new Date().toLocaleDateString();
+                    titleField.value = `${sessionTopic} - ${timestamp}`;
+                }
+            }
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('saveToCollectionModal'));
+            modal.show();
+        } catch (error) {
+            console.error('Error showing save to collection modal:', error);
+            this.app.showNotification('Failed to load collections', 'error');
+        }
+    }
+
+    /**
+     * Load user collections for the save modal
+     */
+    async loadUserCollections() {
+        try {
+            const collections = await this.app.api.getCollections();
+            const selectElement = document.getElementById('saveCollectionSelect');
+            
+            if (!selectElement) return;
+
+            // Clear existing options
+            selectElement.innerHTML = '';
+
+            // Handle response format
+            let collectionsArray = [];
+            if (Array.isArray(collections)) {
+                collectionsArray = collections;
+            } else if (collections && Array.isArray(collections.data)) {
+                collectionsArray = collections.data;
+            }
+
+            if (collectionsArray.length === 0) {
+                selectElement.innerHTML = '<option value="">No collections available</option>';
+                return;
+            }
+
+            // Add default option
+            selectElement.innerHTML = '<option value="">Select a collection...</option>';
+
+            // Add collections as options
+            collectionsArray.forEach(collection => {
+                const option = document.createElement('option');
+                option.value = collection.id;
+                option.textContent = `${collection.name} (${collection.document_count || 0} documents)`;
+                selectElement.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading collections:', error);
+            const selectElement = document.getElementById('saveCollectionSelect');
+            if (selectElement) {
+                selectElement.innerHTML = '<option value="">Error loading collections</option>';
+            }
+        }
+    }
+
+    /**
+     * Save research report to selected collection
+     */
+    async saveResearchToCollection() {
+        try {
+            const collectionId = document.getElementById('saveCollectionSelect').value;
+            const title = document.getElementById('saveDocumentTitle').value.trim();
+            const docType = document.getElementById('saveDocumentType').value;
+
+            if (!collectionId) {
+                this.app.showNotification('Please select a collection', 'warning');
+                return;
+            }
+
+            if (!title) {
+                this.app.showNotification('Please enter a document title', 'warning');
+                return;
+            }
+
+            // Extract the markdown content from current results
+            const markdownContent = this.extractMarkdownContent();
+            
+            if (!markdownContent.trim()) {
+                this.app.showNotification('No research content available to save', 'warning');
+                return;
+            }
+
+            // Show loading state
+            const confirmBtn = document.getElementById('confirmSaveToCollection');
+            const originalText = confirmBtn.innerHTML;
+            confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+            confirmBtn.disabled = true;
+
+            // Save to collection using the create-text endpoint
+            const response = await this.app.api.call(`/api/collections/${collectionId}/documents/create-text`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: title,
+                    content: markdownContent,
+                    type: docType
+                })
+            });
+
+            if (response && response.success) {
+                // Success - close modal and show notification
+                const modal = bootstrap.Modal.getInstance(document.getElementById('saveToCollectionModal'));
+                modal.hide();
+                
+                this.app.showNotification(`Research report saved to collection successfully! ${response.chunksStored || 0} chunks stored.`, 'success');
+                
+                // Optionally show details
+                if (response.document) {
+                    console.log('Saved document:', response.document);
+                }
+            } else {
+                throw new Error(response?.message || 'Failed to save document');
+            }
+
+        } catch (error) {
+            console.error('Error saving to collection:', error);
+            this.app.showNotification(`Failed to save research report: ${error.message}`, 'error');
+        } finally {
+            // Reset button state
+            const confirmBtn = document.getElementById('confirmSaveToCollection');
+            if (confirmBtn) {
+                confirmBtn.innerHTML = '<i class="fas fa-save me-1"></i>Save Report';
+                confirmBtn.disabled = false;
+            }
+        }
+    }
+
+    /**
+     * Extract markdown content from current session results
+     */
+    extractMarkdownContent() {
+        if (!this.currentSession) return '';
+
+        // Get all research summary artifacts
+        const container = document.getElementById('sessionResults');
+        if (!container) return '';
+
+        // Try to get stored markdown content from last display
+        const storedContent = container.dataset.markdownContent;
+        if (storedContent) {
+            return storedContent;
+        }
+
+        // Fallback: extract from current session data if available
+        // This would need to be implemented based on how the session data is stored
+        return this.buildMarkdownFromSession();
+    }
+
+    /**
+     * Extract all markdown content from results array
+     */
+    extractAllMarkdownContent(results) {
+        if (!results || results.length === 0) return '';
+
+        let markdownContent = '';
+
+        // Add session header
+        if (this.currentSession) {
+            markdownContent += `# ${this.currentSession.research_topic || 'Research Report'}\n\n`;
+            markdownContent += `**Generated:** ${new Date().toLocaleString()}\n`;
+            markdownContent += `**Session ID:** ${this.currentSession.id}\n\n`;
+
+            if (this.currentSession.preferences) {
+                markdownContent += `**Configuration:**\n`;
+                Object.entries(this.currentSession.preferences).forEach(([key, value]) => {
+                    markdownContent += `- ${key}: ${value}\n`;
+                });
+                markdownContent += '\n';
+            }
+
+            markdownContent += '---\n\n';
+        }
+
+        // Process each result
+        results.forEach((result, index) => {
+            const resultTitle = result.title || result.artifact_type || `Result ${index + 1}`;
+            markdownContent += `## ${resultTitle}\n\n`;
+            
+            if (result.created_at || result.createdAt) {
+                markdownContent += `**Created:** ${new Date(result.created_at || result.createdAt).toLocaleString()}\n\n`;
+            }
+
+            // Extract content based on type
+            if ((result.artifact_type === 'research_summary' || result.type === 'research_summary') && result.content && result.content.report) {
+                markdownContent += result.content.report + '\n\n';
+
+                // Add quality metrics if available
+                if (result.content.quality) {
+                    markdownContent += `### Quality Metrics\n\n`;
+                    markdownContent += `- **Coverage Score:** ${result.content.quality.coverageScore}%\n`;
+                    markdownContent += `- **Coherence Score:** ${result.content.quality.coherenceScore}%\n`;
+                    markdownContent += `- **Confidence Score:** ${Math.round(result.content.quality.confidenceScore * 100)}%\n\n`;
+                }
+
+                // Add statistics if available
+                if (result.content.statistics) {
+                    markdownContent += `### Research Statistics\n\n`;
+                    markdownContent += `- **Total Agents:** ${result.content.statistics.totalAgents}\n`;
+                    markdownContent += `- **Total Artifacts:** ${result.content.statistics.totalArtifacts}\n`;
+                    markdownContent += `- **Research Duration:** ${Math.round(result.content.statistics.researchDuration / 1000)} seconds\n\n`;
+                }
+            } else if (result.content) {
+                // Handle other content types
+                if (typeof result.content === 'string') {
+                    markdownContent += result.content + '\n\n';
+                } else if (typeof result.content === 'object') {
+                    markdownContent += '```json\n' + JSON.stringify(result.content, null, 2) + '\n```\n\n';
+                }
+            }
+
+            if (index < results.length - 1) {
+                markdownContent += '---\n\n';
+            }
+        });
+
+        return markdownContent;
+    }
+
+    /**
+     * Build markdown content from current session data
+     */
+    buildMarkdownFromSession() {
+        if (!this.currentSession) return '';
+
+        let markdown = `# ${this.currentSession.research_topic || 'Research Report'}\n\n`;
+        markdown += `**Generated:** ${new Date().toLocaleString()}\n`;
+        markdown += `**Session ID:** ${this.currentSession.id}\n\n`;
+
+        // Add any other session metadata
+        if (this.currentSession.preferences) {
+            markdown += `**Configuration:**\n`;
+            Object.entries(this.currentSession.preferences).forEach(([key, value]) => {
+                markdown += `- ${key}: ${value}\n`;
+            });
+            markdown += '\n';
+        }
+
+        markdown += '**Note:** Full research content will be displayed when the session completes.\n\n';
+        markdown += 'This is a placeholder that will be replaced with the actual research report content once generated by the agents.';
+
+        return markdown;
     }
 }

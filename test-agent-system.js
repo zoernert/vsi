@@ -19,6 +19,8 @@ const { DatabaseService } = require('./src/services/databaseService');
 const { OrchestratorAgent } = require('./src/agents/OrchestratorAgent');
 const { SourceDiscoveryAgent } = require('./src/agents/SourceDiscoveryAgent');
 const { ContentAnalysisAgent } = require('./src/agents/ContentAnalysisAgent');
+const { SynthesisAgent } = require('./src/agents/SynthesisAgent');
+const { FactCheckingAgent } = require('./src/agents/FactCheckingAgent');
 
 /**
  * Generate a JWT token for testing purposes
@@ -125,7 +127,52 @@ async function testAgentSystem() {
             frameworks: ['thematic', 'sentiment'],
             maxContextSize: 4000
         });
-        console.log(`✅ Content Analysis agent registered: ${analysisAgentId}\n`);
+        console.log(`✅ Content Analysis agent registered: ${analysisAgentId}`);
+
+        // Register Synthesis Agent
+        const synthesisAgentId = `${session.id}-synthesis`;
+        await agentService.registerAgent(synthesisAgentId, SynthesisAgent, {
+            agentType: 'synthesis',
+            preferences: {
+                researchTopic: session.research_topic,
+                maxSynthesisLength: 5000,
+                narrativeStyle: 'academic',
+                structureTemplate: 'research'
+            },
+            timeout: 30000,
+            maxRetries: 3,
+            query: session.research_topic,
+            inputs: {
+                query: session.research_topic,
+                collections: null
+            },
+            maxSynthesisLength: 5000,
+            narrativeStyle: 'academic',
+            coherenceThreshold: 0.8
+        });
+        console.log(`✅ Synthesis agent registered: ${synthesisAgentId}`);
+
+        // Register Fact Checking Agent
+        const factCheckAgentId = `${session.id}-fact-checking`;
+        await agentService.registerAgent(factCheckAgentId, FactCheckingAgent, {
+            agentType: 'fact_checking',
+            preferences: {
+                researchTopic: session.research_topic,
+                confidenceThreshold: 0.7,
+                maxClaimsToCheck: 50
+            },
+            timeout: 30000,
+            maxRetries: 3,
+            query: session.research_topic,
+            inputs: {
+                query: session.research_topic,
+                collections: null
+            },
+            confidenceThreshold: 0.7,
+            maxClaimsToCheck: 50,
+            disputeThreshold: 0.3
+        });
+        console.log(`✅ Fact Checking agent registered: ${factCheckAgentId}\n`);
 
         // 3. Start the orchestrator (it will coordinate other agents)
         console.log('🎬 Starting orchestrator agent...');
@@ -224,6 +271,43 @@ async function testAgentSystem() {
                         if (result.content.statistics) {
                             console.log(`   Statistics: ${result.content.statistics.totalAgents} agents, ${result.content.statistics.totalArtifacts} artifacts, ${Math.round(result.content.statistics.researchDuration / 1000)}s duration`);
                         }
+                        
+                        // Offer to save the report to a collection
+                        if (result.content.report && result.content.report.length > 100) {
+                            console.log(`\n💾 Research report generated (${result.content.report.length} characters)`);
+                            console.log('   You can manually save this report to a collection using the frontend,');
+                            console.log('   or use the API endpoint: POST /api/collections/{id}/documents/create-text');
+                            console.log('   Report preview saved to test-research-report.md for reference');
+                            
+                            // Save report to file for reference
+                            const fs = require('fs');
+                            const reportContent = `# ${session.research_topic}\n\n` +
+                                                `**Generated:** ${new Date().toLocaleString()}\n` +
+                                                `**Session ID:** ${session.id}\n\n` +
+                                                `---\n\n` +
+                                                result.content.report + '\n\n' +
+                                                `## Quality Metrics\n\n` +
+                                                (result.content.quality ? 
+                                                    `- Coverage: ${result.content.quality.coverageScore}%\n` +
+                                                    `- Coherence: ${result.content.quality.coherenceScore}%\n` +
+                                                    `- Confidence: ${Math.round(result.content.quality.confidenceScore * 100)}%\n`
+                                                    : 'No quality metrics available\n'
+                                                ) + '\n' +
+                                                `## Statistics\n\n` +
+                                                (result.content.statistics ?
+                                                    `- Total Agents: ${result.content.statistics.totalAgents}\n` +
+                                                    `- Total Artifacts: ${result.content.statistics.totalArtifacts}\n` +
+                                                    `- Duration: ${Math.round(result.content.statistics.researchDuration / 1000)} seconds\n`
+                                                    : 'No statistics available\n'
+                                                );
+                            
+                            try {
+                                fs.writeFileSync('test-research-report.md', reportContent);
+                                console.log('   ✅ Report saved to test-research-report.md');
+                            } catch (writeError) {
+                                console.log('   ⚠️  Could not save report to file:', writeError.message);
+                            }
+                        }
                     }
                 }
                 
@@ -281,15 +365,17 @@ async function testAgentSystem() {
 
         console.log('\n🎉 Agent system test completed successfully!');
         console.log('\n📝 What happened:');
-        console.log('   • Created a research session with AI/ML healthcare topic');
-        console.log('   • Registered 3 specialized agents (Orchestrator, Source Discovery, Content Analysis)');
+        console.log('   • Created a research session with German training material topic');
+        console.log('   • Registered 5 specialized agents (Orchestrator, Source Discovery, Content Analysis, Synthesis, Fact Checking)');
         console.log('   • Started the orchestrator which began coordinating the research');
         console.log('   • Demonstrated inter-agent communication');
         console.log('   • Showed progress tracking and artifact generation');
         console.log('\n🔄 The agents are now running autonomously and will:');
         console.log('   • Discover relevant sources across collections');
         console.log('   • Analyze content using smart context capabilities');
-        console.log('   • Generate structured research artifacts');
+        console.log('   • Synthesize findings into coherent narratives');
+        console.log('   • Fact-check statements for accuracy');
+        console.log('   • Generate comprehensive research artifacts');
         console.log('   • Communicate findings between agents');
 
     } catch (error) {
@@ -318,3 +404,78 @@ if (require.main === module) {
 }
 
 module.exports = { testAgentSystem };
+
+/**
+ * Helper function to save a research report to a collection
+ * Usage: node -e "require('./test-agent-system.js').saveReportToCollection(reportFilePath, collectionId, title)"
+ */
+async function saveReportToCollection(reportFilePath, collectionId, title) {
+    const fs = require('fs');
+    const https = require('https');
+    
+    try {
+        // Read the report file
+        if (!fs.existsSync(reportFilePath)) {
+            console.error('❌ Report file not found:', reportFilePath);
+            return;
+        }
+        
+        const reportContent = fs.readFileSync(reportFilePath, 'utf8');
+        
+        // Generate JWT token for API call
+        const userId = 2; // stromdao user
+        const username = 'stromdao';
+        const userToken = generateTestToken(userId, username);
+        
+        // Make API call to save the report
+        const payload = JSON.stringify({
+            title: title || `Research Report - ${new Date().toISOString()}`,
+            content: reportContent,
+            type: 'md'
+        });
+        
+        const options = {
+            hostname: 'localhost',
+            port: 3000,
+            path: `/api/collections/${collectionId}/documents/create-text`,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${userToken}`,
+                'Content-Length': Buffer.byteLength(payload)
+            }
+        };
+        
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => {
+                try {
+                    const response = JSON.parse(data);
+                    if (response.success) {
+                        console.log('✅ Report saved to collection successfully!');
+                        console.log(`   Document ID: ${response.document?.id}`);
+                        console.log(`   Chunks stored: ${response.chunksStored}`);
+                        console.log(`   Collection: ${response.collection}`);
+                    } else {
+                        console.error('❌ Failed to save report:', response.message);
+                    }
+                } catch (parseError) {
+                    console.error('❌ Error parsing response:', parseError.message);
+                }
+            });
+        });
+        
+        req.on('error', (error) => {
+            console.error('❌ Error saving report:', error.message);
+        });
+        
+        req.write(payload);
+        req.end();
+        
+    } catch (error) {
+        console.error('❌ Error in saveReportToCollection:', error.message);
+    }
+}
+
+module.exports = { testAgentSystem, saveReportToCollection };

@@ -693,14 +693,15 @@ class AgentService extends EventEmitter {
         const { OrchestratorAgent } = require('../agents/OrchestratorAgent');
         const { SourceDiscoveryAgent } = require('../agents/SourceDiscoveryAgent');
         const { ContentAnalysisAgent } = require('../agents/ContentAnalysisAgent');
-        // Additional agents will be added here as they are implemented
+        const { SynthesisAgent } = require('../agents/SynthesisAgent');
+        const { FactCheckingAgent } = require('../agents/FactCheckingAgent');
         
         const agentClasses = {
             'orchestrator': OrchestratorAgent,
             'source_discovery': SourceDiscoveryAgent,
             'content_analysis': ContentAnalysisAgent,
-            // 'synthesis': SynthesisAgent,         // To be implemented
-            // 'fact_checking': FactCheckingAgent,  // To be implemented
+            'synthesis': SynthesisAgent,
+            'fact_checking': FactCheckingAgent,
         };
         
         const AgentClass = agentClasses[agentType];
@@ -751,6 +752,28 @@ class AgentService extends EventEmitter {
                 };
                 console.log(`📊 Content analysis config:`, analysisConfig);
                 return analysisConfig;
+            case 'synthesis':
+                const synthesisConfig = {
+                    ...baseConfig,
+                    maxSynthesisLength: parsedPreferences.maxSynthesisLength || 5000,
+                    narrativeStyle: parsedPreferences.narrativeStyle || 'academic',
+                    includeReferences: parsedPreferences.includeReferences !== false,
+                    coherenceThreshold: parsedPreferences.coherenceThreshold || 0.8,
+                    structureTemplate: parsedPreferences.structureTemplate || 'research'
+                };
+                console.log(`📝 Synthesis config:`, synthesisConfig);
+                return synthesisConfig;
+            case 'fact_checking':
+                const factCheckConfig = {
+                    ...baseConfig,
+                    confidenceThreshold: parsedPreferences.confidenceThreshold || 0.7,
+                    maxClaimsToCheck: parsedPreferences.maxClaimsToCheck || 50,
+                    checkExternalSources: parsedPreferences.checkExternalSources || false,
+                    disputeThreshold: parsedPreferences.disputeThreshold || 0.3,
+                    verificationMethods: parsedPreferences.verificationMethods || ['source_cross_reference', 'statistical_validation']
+                };
+                console.log(`✅ Fact checking config:`, factCheckConfig);
+                return factCheckConfig;
             default:
                 console.log(`🔧 Default config for ${agentType}:`, baseConfig);
                 return baseConfig;
