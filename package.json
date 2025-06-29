@@ -7,6 +7,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "node test.js",
+    "test:agents": "node test-agent-system.js",
     "test:watch": "NODE_ENV=test DATABASE_URL=test://mock mocha tests/**/*.test.js --require tests/setup.js --timeout 15000 --watch",
     "test:coverage": "NODE_ENV=test DATABASE_URL=test://mock nyc mocha tests/**/*.test.js --require tests/setup.js --timeout 15000 --exit",
     "test:unit": "NODE_ENV=test DATABASE_URL=test://mock mocha tests/unit/**/*.test.js --require tests/setup.js --timeout 10000 --exit",

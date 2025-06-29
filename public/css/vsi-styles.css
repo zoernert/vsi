@@ -789,3 +789,58 @@ code {
   pointer-events: none !important;
   cursor: not-allowed;
 }
+
+/* Research report styling */
+.research-report {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-family: 'Georgia', serif;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  margin: 0;
+}
+
+.research-summary .report-content {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.research-summary h6 {
+  color: var(--primary-color);
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.quality-metrics .text-center {
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.log-entry {
+  padding: 0.5rem;
+  margin-bottom: 0.25rem;
+  border-left: 3px solid transparent;
+  background-color: #f8f9fa;
+  border-radius: 0.25rem;
+}
+
+.log-entry.info {
+  border-left-color: #0d6efd;
+}
+
+.log-entry.success {
+  border-left-color: #198754;
+}
+
+.log-entry.warning {
+  border-left-color: #ffc107;
+}
+
+.log-entry.error {
+  border-left-color: #dc3545;
+}

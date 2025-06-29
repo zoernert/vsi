@@ -1,10 +1,12 @@
 const { BaseAgent } = require('./BaseAgent');
 const { GeminiService } = require('../services/geminiService');
+const { ReportAssemblyService } = require('../services/reportAssemblyService');
 
 class OrchestratorAgent extends BaseAgent {
     constructor(agentId, sessionId, config, apiClient, databaseService = null) {
         super(agentId, sessionId, config, apiClient, databaseService);
         this.geminiService = new GeminiService();
+        this.reportAssembly = new ReportAssemblyService();
         this.researchPlan = null;
         this.specializedAgents = new Map();
         this.agentDependencies = new Map();
@@ -14,19 +16,28 @@ class OrchestratorAgent extends BaseAgent {
     async performWork() {
         console.log(`🎯 Starting orchestration for research topic: ${this.config.preferences.researchTopic || 'Unknown'}`);
         
-        this.updateProgress(10, 'Analyzing research scope');
+        this.updateProgress(5, 'Detecting language and setting up configuration');
+        await this.setupLanguageConfiguration();
+        
+        this.updateProgress(15, 'Analyzing research scope');
         await this.analyzeResearchScope();
         
-        this.updateProgress(30, 'Creating research plan');
+        this.updateProgress(35, 'Creating research plan');
         await this.createResearchPlan();
         
         this.updateProgress(50, 'Assigning specialized agents');
         await this.assignSpecializedAgents();
         
         this.updateProgress(70, 'Monitoring agent progress');
-        await this.monitorAgentProgress();
+        await this.monitorSpecializedAgents();
         
         this.updateProgress(90, 'Finalizing research');
+        await this.finalizeResearch();
+        
+        this.updateProgress(100, 'Research orchestration completed');
+    }
+
+    async analyzeResearchScope() {
         await this.finalizeResearch();
         
         this.updateProgress(100, 'Research orchestration completed');
@@ -378,6 +389,41 @@ class OrchestratorAgent extends BaseAgent {
         return agentId;
     }
 
+    /**
+     * Monitor specialized agents and wait for their completion
+     */
+    async monitorSpecializedAgents() {
+        // Wait for all specialized agents to complete
+        if (!this.specializedAgentIds || this.specializedAgentIds.length === 0) {
+            this.log('info', 'No specialized agents to monitor.');
+            return;
+        }
+        this.log('info', `Monitoring ${this.specializedAgentIds.length} specialized agents...`);
+        const checkInterval = 5000; // 5 seconds
+        const timeout = 10 * 60 * 1000; // 10 minutes
+        const startTime = Date.now();
+        let completed = new Set();
+        while (completed.size < this.specializedAgentIds.length) {
+            for (const agentId of this.specializedAgentIds) {
+                if (!completed.has(agentId)) {
+                    const agentInfo = this.agentService.agents.get(agentId);
+                    if (agentInfo && (agentInfo.status === 'completed' || agentInfo.status === 'error')) {
+                        completed.add(agentId);
+                        this.log('info', `Specialized agent ${agentId} completed with status: ${agentInfo.status}`);
+                    }
+                }
+            }
+            this.updateOverallProgress(completed.size, this.specializedAgentIds.length);
+            if (completed.size === this.specializedAgentIds.length) break;
+            if (Date.now() - startTime > timeout) {
+                this.log('error', 'Timeout waiting for specialized agents to complete.');
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
+        }
+        this.log('success', 'All specialized agents completed.');
+    }
+
     async monitorAgentProgress() {
         try {
             console.log(`📊 Monitoring specialized agent progress`);
@@ -634,52 +680,124 @@ class OrchestratorAgent extends BaseAgent {
         try {
             console.log(`🤖 Calling LLM to generate comprehensive research report...`);
             
-            const prompt = `# Research Report Generation
-
-## Research Topic: ${this.config.preferences.researchTopic}
-
-## Available Research Data:
-
-### Sources (${findings.sources.length} found):
-${findings.sources.map(source => `- ${source.filename || source.title}: ${source.contentPreview || source.description || ''}`).join('\n')}
-
-### Key Themes (${findings.themes.length} identified):
-${findings.themes.map(theme => `- ${theme.name || theme.theme}: ${theme.description || theme.summary || ''}`).join('\n')}
-
-### Research Insights (${findings.insights.length} generated):
-${findings.insights.map(insight => `- ${insight.title || insight.type}: ${insight.content || insight.summary || ''}`).join('\n')}
-
-### Fact Checks (${findings.factChecks.length} performed):
-${findings.factChecks.map(check => `- ${check.claim}: ${check.status} (${check.confidence || 'unknown confidence'})`).join('\n')}
-
-## Instructions:
-Generate a comprehensive research report that:
-1. Provides an executive summary of the research topic
-2. Synthesizes the key findings from all sources
-3. Identifies the main themes and patterns
-4. Presents actionable insights and conclusions
-5. Includes limitations and areas for further research
-6. Is well-structured and professional
-
-Please generate a detailed, well-organized research report based on the above data.`;
-
-            const response = await this.geminiService.generateResponse(
-                'You are a research report generator. Create comprehensive, well-structured research reports.',
-                prompt
-            );
-
-            console.log(`✅ LLM research report generated (${response.length} characters)`);
-            return response;
+            const researchTopic = this.config.preferences.researchTopic;
+            
+            // Get language configuration from shared memory
+            let languageConfig = null;
+            try {
+                const languageMemory = await this.retrieveMemory('session_language');
+                languageConfig = languageMemory?.value;
+            } catch (error) {
+                console.warn(`⚠️ Could not retrieve language config, using fallback detection`);
+            }
+            
+            // Fallback language detection if no config found
+            let detectedLanguage = 'english';
+            if (languageConfig) {
+                detectedLanguage = languageConfig.language;
+            } else {
+                const langDetection = await this.geminiService.detectLanguage(researchTopic);
+                detectedLanguage = langDetection.language;
+            }
+            
+            console.log(`🌍 Generating report in language: ${detectedLanguage}`);
+            
+            const languageInstructions = this.getLanguageInstructions(detectedLanguage);
+            const prompt = this.buildReportPrompt(researchTopic, findings, detectedLanguage, languageInstructions);
+            
+            // Generate report with retry logic for truncation
+            let report = null;
+            let attempts = 0;
+            const maxAttempts = 3;
+            
+            while (attempts < maxAttempts && !report) {
+                attempts++;
+                console.log(`📝 Attempt ${attempts}/${maxAttempts} to generate complete report...`);
+                
+                try {
+                    const response = await this.geminiService.generateResponse(prompt, [], {
+                        // Remove all token limits to prevent truncation
+                        temperature: 0.3, // Lower temperature for more consistent output
+                        topP: 0.9,
+                        topK: 40
+                    });
+                    
+                    // Check for truncation
+                    const truncationCheck = this.geminiService.detectTruncation(response, prompt);
+                    
+                    if (truncationCheck.isTruncated) {
+                        console.warn(`⚠️ Report appears truncated (confidence: ${truncationCheck.confidence})`);
+                        console.warn(`   Indicators: ${truncationCheck.indicators.join(', ')}`);
+                        
+                        if (attempts < maxAttempts) {
+                            console.log(`🔄 Retrying to get complete report...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+                            continue;
+                        } else {
+                            console.warn(`⚠️ Final attempt still truncated, using best available result`);
+                        }
+                    }
+                    
+                    report = response;
+                    console.log(`✅ LLM research report generated (${report.length} characters)`);
+                    break;
+                    
+                } catch (error) {
+                    console.error(`❌ Attempt ${attempts} failed:`, error);
+                    if (attempts >= maxAttempts) {
+                        throw error;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds before retry
+                }
+            }
+            
+            // Final fallback if all attempts failed
+            if (!report) {
+                console.warn(`⚠️ All LLM attempts failed, generating fallback report`);
+                report = this.generateFallbackReport(researchTopic, findings, detectedLanguage);
+            }
+            
+            return report;
+            
         } catch (error) {
             console.error(`❌ Error generating research report:`, error);
-            
-            // Fallback to structured summary if LLM fails
-            return this.generateFallbackReport(findings);
+            // Return comprehensive fallback report
+            return this.generateFallbackReport(
+                this.config.preferences.researchTopic, 
+                findings, 
+                'english'
+            );
         }
     }
 
-    generateFallbackReport(findings) {
-        return `# Research Report: ${this.config.preferences.researchTopic}
+    generateFallbackReport(findings, detectedLanguage = 'english') {
+        const researchTopic = this.config.preferences.researchTopic;
+        const isGerman = /[äöüß]|^\s*(erstelle|bearbeitung|bedeutung|umgang|schulung|übersicht|analyse|untersuchung)/i.test(researchTopic);
+        
+        if (isGerman) {
+            return `# Forschungsbericht: ${researchTopic}
+
+## Zusammenfassung
+Diese Forschung wurde mit automatischen Agenten durchgeführt und umfasste ${findings.sources.length} Quellen, identifizierte ${findings.themes.length} Hauptthemen und generierte ${findings.insights.length} Erkenntnisse.
+
+## Hauptquellen
+${findings.sources.map(source => `- ${source.filename || source.title}`).join('\n')}
+
+## Hauptthemen
+${findings.themes.map(theme => `- ${theme.name || theme.theme}`).join('\n')}
+
+## Wichtige Erkenntnisse
+${findings.insights.map(insight => `- ${insight.title || insight.type}: ${insight.content || insight.summary || ''}`).join('\n')}
+
+## Faktenprüfung
+${findings.factChecks.map(check => `- ${check.claim}: ${check.status}`).join('\n')}
+
+## Fazit
+Diese Forschung bietet eine Grundlage für das Verständnis von ${researchTopic}. Eine weitere Analyse könnte für tiefere Einsichten erforderlich sein.
+
+*Hinweis: Dies ist eine automatisierte Forschungszusammenfassung. LLM-Generierung war nicht verfügbar.*`;
+        } else {
+            return `# Research Report: ${researchTopic}
 
 ## Executive Summary
 This research was conducted using automated agents across ${findings.sources.length} sources, identifying ${findings.themes.length} key themes and generating ${findings.insights.length} insights.
@@ -697,9 +815,10 @@ ${findings.insights.map(insight => `- ${insight.title || insight.type}: ${insigh
 ${findings.factChecks.map(check => `- ${check.claim}: ${check.status}`).join('\n')}
 
 ## Conclusion
-This research provides a foundation for understanding ${this.config.preferences.researchTopic}. Further analysis may be needed for deeper insights.
+This research provides a foundation for understanding ${researchTopic}. Further analysis may be needed for deeper insights.
 
 *Note: This is an automated research summary. LLM generation was unavailable.*`;
+        }
     }
 
     /**
@@ -905,6 +1024,238 @@ This research provides a foundation for understanding ${this.config.preferences.
         }
         
         return true;
+    }
+
+    /**
+     * Set up language configuration for the research session
+     */
+    async setupLanguageConfiguration() {
+        try {
+            console.log('🌐 Setting up language configuration');
+            
+            // Simple language detection for research topic
+            const researchTopic = this.config.preferences?.researchTopic || this.config.query || '';
+            const isGerman = this.detectGerman(researchTopic);
+            
+            const languageConfig = {
+                primaryLanguage: {
+                    code: isGerman ? 'de' : 'en',
+                    name: isGerman ? 'German' : 'English'
+                },
+                instructions: isGerman 
+                    ? 'WICHTIG: Alle Ausgaben, Berichte und Kommunikation müssen auf Deutsch sein. Verwenden Sie formelle deutsche Sprache (Sie-Form). Behalten Sie deutsche Fachterminologie bei, wo angemessen. Verwenden Sie deutsche Datums- und Zahlenformate. Folgen Sie deutschen akademischen/professionellen Schreibkonventionen.'
+                    : 'IMPORTANT: All outputs, reports, and communications must be in English. Use professional English writing style. Maintain consistent terminology throughout. Use clear, academic language structure.',
+                detectedFromTopic: researchTopic.substring(0, 100)
+            };
+
+            // Store language configuration for other agents
+            await this.storeMemory('language_config', languageConfig);
+            
+            console.log(`✅ Language configuration set: ${languageConfig.primaryLanguage.name}`);
+            
+        } catch (error) {
+            console.error('❌ Error setting up language configuration:', error);
+            // Continue with default (English) configuration
+            await this.storeMemory('language_config', {
+                primaryLanguage: { code: 'en', name: 'English' },
+                instructions: 'All outputs must be in English. Use professional writing style.'
+            });
+        }
+    }
+
+    /**
+     * Simple German language detection
+     */
+    detectGerman(text) {
+        const germanIndicators = /\b(der|die|das|und|oder|mit|von|zu|in|auf|für|ist|sind|wird|werden|kann|könnte|soll|sollte|muss|müssen|haben|hat|hatten|sein|war|waren|über|unter|zwischen|während|Schleupen|Bilanzierung|Einarbeitung|Schulung|erstelle|umfangreiche)\b/gi;
+        const matches = text.match(germanIndicators) || [];
+        return matches.length > 2; // More than 2 German indicators suggests German content
+    }
+
+    /**
+     * Get language-specific instructions for LLM
+     */
+    getLanguageInstructions(language) {
+        if (language === 'german') {
+            return `WICHTIG: Antworte ausschließlich auf Deutsch und verwende deutsche Fachbegriffe. 
+Der gesamte Bericht muss in deutscher Sprache verfasst werden.
+Verwende professionelle, klare und präzise deutsche Sprache.
+Strukturiere den Bericht mit klaren deutschen Überschriften.
+Bei Fachbegrffen: Deutsche Begriffe bevorzugen, englische Fachbegriffe in Klammern sind erlaubt.`;
+        } else {
+            return `IMPORTANT: Respond entirely in English using professional terminology.
+Use clear, professional English throughout the report.
+Structure the report with clear English headings.
+Explain technical terms when first introduced.`;
+        }
+    }
+
+    /**
+     * Build comprehensive report prompt
+     */
+    buildReportPrompt(researchTopic, findings, language, languageInstructions) {
+        const isGerman = language === 'german';
+        
+        return `# ${isGerman ? 'Forschungsbericht Generierung' : 'Research Report Generation'}
+
+${languageInstructions}
+
+## ${isGerman ? 'Forschungsthema' : 'Research Topic'}: ${researchTopic}
+
+## ${isGerman ? 'Verfügbare Forschungsdaten' : 'Available Research Data'}:
+
+### ${isGerman ? 'Quellen' : 'Sources'} (${findings.sources.length} ${isGerman ? 'gefunden' : 'found'}):
+${findings.sources.map(source => `- ${source.filename || source.title}: ${source.contentPreview || source.description || ''}`).join('\n')}
+
+### ${isGerman ? 'Hauptthemen' : 'Key Themes'} (${findings.themes.length} ${isGerman ? 'identifiziert' : 'identified'}):
+${findings.themes.map(theme => `- ${theme.name || theme.theme}: ${theme.description || theme.summary || ''}`).join('\n')}
+
+### ${isGerman ? 'Forschungserkenntnisse' : 'Research Insights'} (${findings.insights.length} ${isGerman ? 'generiert' : 'generated'}):
+${findings.insights.map(insight => `- ${insight.title || insight.type}: ${insight.content || insight.summary || ''}`).join('\n')}
+
+### ${isGerman ? 'Faktenprüfungen' : 'Fact Checks'} (${findings.factChecks.length} ${isGerman ? 'durchgeführt' : 'performed'}):
+${findings.factChecks.map(check => `- ${check.claim}: ${check.status} (${check.confidence || (isGerman ? 'unbekannte Vertrauenswürdigkeit' : 'unknown confidence')})`).join('\n')}
+
+## ${isGerman ? 'Anweisungen' : 'Instructions'}:
+${isGerman ? `Erstelle einen umfassenden Forschungsbericht, der:
+1. Eine Zusammenfassung des Forschungsthemas bietet
+2. Die wichtigsten Erkenntnisse aus allen Quellen zusammenführt
+3. Die Hauptthemen und Muster identifiziert
+4. Umsetzbare Einsichten und Schlussfolgerungen präsentiert
+5. Limitationen und Bereiche für weitere Forschung einschließt
+6. Gut strukturiert und professionell ist
+7. VOLLSTÄNDIG und NICHT abgeschnitten ist
+8. Mindestens 2000-3000 Wörter umfasst
+
+KRITISCHE ANFORDERUNGEN:
+- Der Bericht MUSS vollständig sein und darf nicht mitten im Satz aufhören
+- Alle Abschnitte müssen vollständig ausgeführt werden
+- Verwende klare Überschriften und Unterüberschriften  
+- Beende den Bericht mit einem vollständigen Fazit und Handlungsempfehlungen
+- STELLE SICHER, dass der Bericht mit einem vollständigen Satz endet
+
+Erstelle bitte einen detaillierten, gut organisierten und VOLLSTÄNDIGEN Forschungsbericht.` : 
+`Generate a comprehensive research report that:
+1. Provides an executive summary of the research topic
+2. Synthesizes the key findings from all sources
+3. Identifies the main themes and patterns
+4. Presents actionable insights and conclusions
+5. Includes limitations and areas for further research
+6. Is well-structured and professional
+7. Is COMPLETE and NOT truncated
+8. Contains at least 2000-3000 words
+
+CRITICAL REQUIREMENTS:
+- The report MUST be complete and not cut off mid-sentence
+- All sections must be fully developed
+- Use clear headings and subheadings
+- End with complete conclusions and recommendations
+- ENSURE the report ends with a complete sentence
+
+Please generate a detailed, well-organized and COMPLETE research report.`}`;
+    }
+
+    /**
+     * Generate enhanced fallback report
+     */
+    generateFallbackReport(researchTopic, findings, language) {
+        const isGerman = language === 'german';
+        
+        if (isGerman) {
+            return `# Forschungsbericht: ${researchTopic}
+
+## Zusammenfassung
+
+Dieser Bericht wurde aufgrund technischer Beschränkungen als Fallback-Version erstellt. Die verfügbaren Daten wurden strukturiert aufbereitet, um eine umfassende Übersicht zu bieten.
+
+## Verfügbare Quellen (${findings.sources.length})
+
+${findings.sources.map((source, index) => 
+    `${index + 1}. **${source.filename || source.title || 'Unbekannte Quelle'}**
+   - Inhalt: ${source.contentPreview || source.description || 'Keine Beschreibung verfügbar'}
+   - Relevanz: ${source.similarity ? Math.round(source.similarity * 100) + '%' : 'Unbekannt'}`
+).join('\n\n')}
+
+## Identifizierte Themen (${findings.themes.length})
+
+${findings.themes.map((theme, index) =>
+    `### ${index + 1}. ${theme.name || theme.theme || 'Thema'}
+${theme.description || theme.summary || 'Keine Beschreibung verfügbar'}`
+).join('\n\n')}
+
+## Forschungserkenntnisse (${findings.insights.length})
+
+${findings.insights.map((insight, index) =>
+    `### ${index + 1}. ${insight.title || insight.type || 'Erkenntnis'}
+${insight.content || insight.summary || 'Keine Details verfügbar'}`
+).join('\n\n')}
+
+## Faktenprüfungen (${findings.factChecks.length})
+
+${findings.factChecks.map((check, index) =>
+    `${index + 1}. **Behauptung:** ${check.claim}
+   - **Status:** ${check.status}
+   - **Vertrauenswürdigkeit:** ${check.confidence || 'Unbekannt'}`
+).join('\n\n')}
+
+## Fazit und Empfehlungen
+
+Basierend auf den verfügbaren Daten zeigt sich, dass ${researchTopic} ein komplexes Thema mit mehreren relevanten Aspekten ist. Die Analyse der ${findings.sources.length} Quellen und ${findings.themes.length} Hauptthemen bietet eine solide Grundlage für weitere Untersuchungen.
+
+### Handlungsempfehlungen:
+1. Weitere Analyse der identifizierten Hauptthemen
+2. Vertiefung der Quellenstudien für detailliertere Erkenntnisse
+3. Regelmäßige Aktualisierung der Forschungsdaten
+
+**Hinweis:** Dieser Bericht wurde automatisch generiert und sollte durch manuuelle Überprüfung ergänzt werden.`;
+        } else {
+            return `# Research Report: ${researchTopic}
+
+## Executive Summary
+
+This report was generated as a fallback version due to technical limitations. The available data has been structured to provide a comprehensive overview.
+
+## Available Sources (${findings.sources.length})
+
+${findings.sources.map((source, index) => 
+    `${index + 1}. **${source.filename || source.title || 'Unknown Source'}**
+   - Content: ${source.contentPreview || source.description || 'No description available'}
+   - Relevance: ${source.similarity ? Math.round(source.similarity * 100) + '%' : 'Unknown'}`
+).join('\n\n')}
+
+## Identified Themes (${findings.themes.length})
+
+${findings.themes.map((theme, index) =>
+    `### ${index + 1}. ${theme.name || theme.theme || 'Theme'}
+${theme.description || theme.summary || 'No description available'}`
+).join('\n\n')}
+
+## Research Insights (${findings.insights.length})
+
+${findings.insights.map((insight, index) =>
+    `### ${index + 1}. ${insight.title || insight.type || 'Insight'}
+${insight.content || insight.summary || 'No details available'}`
+).join('\n\n')}
+
+## Fact Checks (${findings.factChecks.length})
+
+${findings.factChecks.map((check, index) =>
+    `${index + 1}. **Claim:** ${check.claim}
+   - **Status:** ${check.status}
+   - **Confidence:** ${check.confidence || 'Unknown'}`
+).join('\n\n')}
+
+## Conclusions and Recommendations
+
+Based on the available data, ${researchTopic} presents a complex topic with multiple relevant aspects. The analysis of ${findings.sources.length} sources and ${findings.themes.length} main themes provides a solid foundation for further investigation.
+
+### Action Items:
+1. Further analysis of identified main themes
+2. Deeper source studies for more detailed insights
+3. Regular updates of research data
+
+**Note:** This report was automatically generated and should be supplemented with manual review.`;
+        }
     }
 }
 

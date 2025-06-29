@@ -32,7 +32,7 @@ class BaseAgent {
 
     // Core agent methods (must be implemented by subclasses)
     async initialize() {
-        console.log(`🔧 Initializing agent ${this.agentId}`);
+        await this.log('info', 'Initializing agent', { status: 'initializing' });
         this.status = 'initializing';
         this.startTime = new Date();
         
@@ -41,11 +41,11 @@ class BaseAgent {
         await this.validateConfiguration();
         
         this.status = 'initialized';
-        console.log(`✅ Agent ${this.agentId} initialized successfully`);
+        await this.log('success', 'Agent initialized successfully', { status: 'initialized' });
     }
 
     async execute() {
-        console.log(`🚀 Starting execution of agent ${this.agentId}`);
+        await this.log('info', 'Starting execution', { status: 'running' });
         this.status = 'running';
         
         try {
@@ -59,10 +59,18 @@ class BaseAgent {
             
             this.status = 'completed';
             this.progress = 100;
-            console.log(`✅ Agent ${this.agentId} completed successfully`);
+            await this.log('success', 'Agent completed successfully', { 
+                status: 'completed',
+                progress: 100,
+                duration: this.startTime ? Date.now() - this.startTime.getTime() : null
+            });
         } catch (error) {
             this.status = 'error';
-            console.error(`❌ Agent ${this.agentId} execution failed:`, error);
+            await this.log('error', `Agent execution failed: ${error.message}`, { 
+                status: 'error',
+                error: error.message,
+                stack: error.stack
+            });
             throw error;
         }
     }
@@ -474,7 +482,70 @@ class BaseAgent {
             });
         }
         
-        console.log(`📊 Agent ${this.agentId} progress: ${this.progress}% - ${currentTask || 'Working...'}`);
+        // Log progress update
+        this.log('info', `Progress: ${this.progress}% - ${currentTask || 'Working...'}`, {
+            progress: this.progress,
+            currentTask: currentTask
+        });
+    }
+
+    // Logging methods
+    async log(level, message, metadata = {}) {
+        const timestamp = new Date();
+        const logEntry = {
+            timestamp,
+            level,
+            message,
+            agentId: this.agentId,
+            sessionId: this.sessionId,
+            metadata
+        };
+
+        // Console output for development
+        const emoji = this.getLogEmoji(level);
+        console.log(`${emoji} [${level.toUpperCase()}] Agent ${this.agentId}: ${message}`);
+
+        // Persist to database if available
+        await this.persistLog(logEntry);
+    }
+
+    getLogEmoji(level) {
+        const emojis = {
+            'info': 'ℹ️',
+            'success': '✅',
+            'warning': '⚠️',
+            'error': '❌',
+            'debug': '🔍'
+        };
+        return emojis[level] || 'ℹ️';
+    }
+
+    async persistLog(logEntry) {
+        try {
+            if (!this.db) {
+                // No database service available, skip persistence
+                return;
+            }
+
+            const query = `
+                INSERT INTO agent_logs (
+                    session_id, agent_id, log_level, message, details
+                ) VALUES ($1, $2, $3, $4, $5)
+            `;
+
+            const values = [
+                this.sessionId,
+                this.agentId,
+                logEntry.level,
+                logEntry.message,
+                JSON.stringify(logEntry.metadata || {})
+            ];
+
+            await this.db.query(query, values);
+        } catch (error) {
+            // Don't throw errors for logging failures, just log to console
+            console.error(`Failed to persist log for agent ${this.agentId}:`, error.message);
+        }
     }
 
     // Helper methods for data persistence (to be implemented based on database schema)

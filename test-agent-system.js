@@ -6,7 +6,7 @@
  * This script demonstrates the basic functionality of the VSI Agent System:
  * 1. Creates a research session
  * 2. Registers and starts specialized agents
- * 3. Shows agent communication and task execution
+ * 3. Shows agent communication and task executio        // 9. Show final session summary
  * 4. Displays generated artifacts
  */
 
@@ -15,6 +15,7 @@ require('dotenv').config();
 
 const jwt = require('jsonwebtoken');
 const { AgentService } = require('./src/services/agentService');
+const { DatabaseService } = require('./src/services/databaseService');
 const { OrchestratorAgent } = require('./src/agents/OrchestratorAgent');
 const { SourceDiscoveryAgent } = require('./src/agents/SourceDiscoveryAgent');
 const { ContentAnalysisAgent } = require('./src/agents/ContentAnalysisAgent');
@@ -37,7 +38,9 @@ function generateTestToken(userId, username) {
 async function testAgentSystem() {
     console.log('🚀 Starting VSI Agent System Test\n');
     
-    const agentService = new AgentService();
+    // Initialize database service
+    const databaseService = new DatabaseService();
+    const agentService = new AgentService(databaseService);
     
     try {
         // Generate JWT token for user authentication
@@ -50,7 +53,7 @@ async function testAgentSystem() {
         console.log('📝 Creating research session...');
         const session = await agentService.createSession(
             userId,
-            'AI and Machine Learning in Healthcare',
+            'Erstelle eine umfangreiche Schulungsunterlage zur Einarbeitung in Schleupen 3.0',
             {
                 maxSources: 20,
                 analysisFrameworks: ['thematic', 'sentiment', 'trend'],
@@ -127,7 +130,10 @@ async function testAgentSystem() {
         // 3. Start the orchestrator (it will coordinate other agents)
         console.log('🎬 Starting orchestrator agent...');
         await agentService.startAgent(orchestratorId, session.id, userToken);
-        console.log(`✅ Orchestrator started and running\n`);
+        
+        // Update session status to running (like the HTTP route does)
+        await agentService.updateSession(session.id, { status: 'running' });
+        console.log(`✅ Orchestrator started and session status updated to 'running'\n`);
 
         // 4. Monitor progress for a brief period
         console.log('📊 Monitoring agent progress...');
@@ -182,7 +188,89 @@ async function testAgentSystem() {
         });
         console.log('✅ Message sent from orchestrator to source discovery agent');
 
-        // 8. Show session summary
+        // 8. Wait for agents to complete and show results
+        console.log('\n⏳ Waiting for agents to complete...');
+        let completionCheckCount = 0;
+        const maxChecks = 120; // 10 minutes max wait
+        
+        while (completionCheckCount < maxChecks) {
+            await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+            completionCheckCount++;
+            
+            const sessionStatus = await agentService.getSession(session.id);
+            console.log(`🔄 Check ${completionCheckCount}: Session status is '${sessionStatus.status}'`);
+            
+            if (sessionStatus.status === 'completed') {
+                console.log('✅ Session completed! Fetching final results...');
+                
+                // Get final results
+                const results = await agentService.getSessionArtifacts(session.id);
+                console.log(`\n📊 Final Results (${results.length} artifacts):`);
+                
+                for (const result of results) {
+                    console.log(`\n🎨 Artifact: ${result.artifact_type}`);
+                    console.log(`   Agent: ${result.agent_id}`);
+                    console.log(`   Created: ${result.created_at}`);
+                    
+                    if (result.artifact_type === 'research_summary' && result.content?.report) {
+                        const report = result.content.report;
+                        const preview = report.substring(0, 500) + (report.length > 500 ? '...' : '');
+                        console.log(`   Report Preview: ${preview}`);
+                        
+                        if (result.content.quality) {
+                            console.log(`   Quality Metrics: Coverage ${result.content.quality.coverageScore}%, Coherence ${result.content.quality.coherenceScore}%, Confidence ${Math.round(result.content.quality.confidenceScore * 100)}%`);
+                        }
+                        
+                        if (result.content.statistics) {
+                            console.log(`   Statistics: ${result.content.statistics.totalAgents} agents, ${result.content.statistics.totalArtifacts} artifacts, ${Math.round(result.content.statistics.researchDuration / 1000)}s duration`);
+                        }
+                    }
+                }
+                
+                // Get logs summary
+                const logs = await agentService.getSessionLogs(session.id);
+                console.log(`\n📝 Execution Logs (${logs.length} entries):`);
+                
+                const logSummary = logs.reduce((acc, log) => {
+                    acc[log.log_level] = (acc[log.log_level] || 0) + 1;
+                    return acc;
+                }, {});
+                
+                for (const [level, count] of Object.entries(logSummary)) {
+                    console.log(`   ${level}: ${count} entries`);
+                }
+                
+                break;
+            } else if (sessionStatus.status === 'error' || sessionStatus.status === 'failed') {
+                console.log('❌ Session failed! Fetching error details...');
+                
+                const logs = await agentService.getSessionLogs(session.id);
+                const errorLogs = logs.filter(log => log.log_level === 'error');
+                
+                if (errorLogs.length > 0) {
+                    console.log('\n❌ Error Details:');
+                    for (const errorLog of errorLogs.slice(-3)) { // Show last 3 errors
+                        console.log(`   ${errorLog.message}`);
+                        if (errorLog.details) {
+                            console.log(`   Details: ${JSON.stringify(errorLog.details, null, 2)}`);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        
+        if (completionCheckCount >= maxChecks) {
+            console.log('⏰ Timeout waiting for completion. Showing current status...');
+            
+            const finalSession = await agentService.getSession(session.id);
+            console.log(`Final status: ${finalSession.status}`);
+            
+            const partialResults = await agentService.getSessionArtifacts(session.id);
+            console.log(`Partial results: ${partialResults.length} artifacts created so far`);
+        }
+
+        // 9. Show session summary
         console.log('\n📋 Session Summary:');
         const updatedSession = await agentService.getSession(session.id);
         console.log(`Session ID: ${updatedSession.id}`);

@@ -3,17 +3,91 @@ const { EventEmitter } = require('events');
 const { v4: uuidv4 } = require('uuid');
 
 class AgentService extends EventEmitter {
-    constructor() {
+    constructor(databaseService) {
         super();
-        this.db = new DatabaseService();
+        this.db = databaseService;
         this.agents = new Map();
         this.sessions = new Map();
         this.messageQueue = [];
-        this.taskQueue = [];
-        this.isProcessing = false;
+        this.sseClients = new Map();
         
-        // Start message processing
-        this.startMessageProcessing();
+        // Set up event listeners
+        this.setupEventListeners();
+    }
+
+    /**
+     * Set up event listeners for session management
+     */
+    setupEventListeners() {
+        this.on('agent_completed', async ({ agentId, sessionId }) => {
+            try {
+                console.log(`🔍 Checking if session ${sessionId} is complete after agent ${agentId} completion`);
+                await this.checkSessionCompletion(sessionId);
+            } catch (error) {
+                console.error(`❌ Error checking session completion for ${sessionId}:`, error);
+            }
+        });
+    }
+
+    /**
+     * Check if all agents in a session have completed and update session status
+     */
+    async checkSessionCompletion(sessionId) {
+        try {
+            const sessionInfo = this.sessions.get(sessionId);
+            if (!sessionInfo) {
+                console.log(`⚠️ Session ${sessionId} not found in active sessions`);
+                return;
+            }
+
+            // Check if all agents are completed
+            let allCompleted = true;
+            let hasErrors = false;
+            let completedCount = 0;
+            let totalCount = 0;
+
+            for (const [agentId, agentData] of sessionInfo.agents) {
+                totalCount++;
+                const agentInfo = this.agents.get(agentId);
+                if (agentInfo) {
+                    if (agentInfo.status === 'completed') {
+                        completedCount++;
+                    } else if (agentInfo.status === 'error') {
+                        hasErrors = true;
+                        completedCount++; // Count errors as "completed" for session closure
+                    } else {
+                        allCompleted = false;
+                    }
+                }
+            }
+
+            console.log(`📊 Session ${sessionId} progress: ${completedCount}/${totalCount} agents completed`);
+
+            if (allCompleted && totalCount > 0) {
+                const newStatus = hasErrors ? 'error' : 'completed';
+                console.log(`✅ All agents completed for session ${sessionId}, updating status to '${newStatus}'`);
+                
+                // Update session status in database
+                await this.updateSession(sessionId, { 
+                    status: newStatus,
+                    completed_at: new Date()
+                });
+
+                // Broadcast session completion
+                this.emit('session_status_updated', {
+                    sessionId,
+                    status: newStatus,
+                    message: hasErrors ? 'Session completed with errors' : 'Session completed successfully',
+                    completedAgents: completedCount,
+                    totalAgents: totalCount,
+                    timestamp: new Date().toISOString()
+                });
+
+                console.log(`🎉 Session ${sessionId} marked as ${newStatus}`);
+            }
+        } catch (error) {
+            console.error(`❌ Error checking session completion for ${sessionId}:`, error);
+        }
     }
 
     /**
@@ -97,6 +171,19 @@ class AgentService extends EventEmitter {
             
             agentInfo.status = 'running';
             console.log(`📝 Agent status updated to 'running'`);
+            
+            // Add agent to session tracking
+            const sessionInfo = this.sessions.get(sessionId);
+            if (sessionInfo) {
+                sessionInfo.agents.set(agentId, {
+                    type: AgentClass.name,
+                    status: 'running',
+                    startedAt: new Date()
+                });
+                console.log(`📊 Agent ${agentId} added to session ${sessionId} tracking`);
+            } else {
+                console.warn(`⚠️ Session ${sessionId} not found in active sessions for agent tracking`);
+            }
             
             // Start execution in background
             console.log(`🚀 Starting background execution...`);
@@ -223,6 +310,20 @@ class AgentService extends EventEmitter {
 
             const session = result.rows[0];
             session.preferences = this.parsePreferences(session.preferences);
+            
+            // Ensure session is in memory for tracking if not already there
+            if (!this.sessions.has(sessionId)) {
+                console.log(`💭 Loading session ${sessionId} into memory for tracking`);
+                this.sessions.set(sessionId, {
+                    ...session,
+                    agents: new Map(),
+                    artifacts: new Map(),
+                    progress: {
+                        overall: 0,
+                        agents: []
+                    }
+                });
+            }
             
             return session;
         } catch (error) {
@@ -683,6 +784,38 @@ class AgentService extends EventEmitter {
             return { success: true, feedbackId };
         } catch (error) {
             console.error(`❌ Error providing feedback:`, error);
+            throw error;
+        }
+    }
+
+    async getSessionLogs(sessionId, options = {}) {
+        try {
+            const { limit = 100, offset = 0, level } = options;
+            
+            let query = `
+                SELECT * FROM agent_logs 
+                WHERE session_id = $1
+            `;
+            const params = [sessionId];
+            
+            // Add level filter if specified
+            if (level) {
+                query += ` AND log_level = $${params.length + 1}`;
+                params.push(level);
+            }
+            
+            query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+            params.push(limit, offset);
+            
+            const result = await this.db.query(query, params);
+            
+            return result.rows.map(log => ({
+                ...log,
+                // PostgreSQL JSONB automatically deserializes to objects, so don't parse again
+                metadata: typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata || {}
+            }));
+        } catch (error) {
+            console.error(`❌ Error getting session logs:`, error);
             throw error;
         }
     }

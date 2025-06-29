@@ -351,17 +351,26 @@ class VSIAgentsModule {
             return;
         }
 
-        container.innerHTML = logs.map(log => `
-            <div class="log-entry ${log.level}" data-timestamp="${log.timestamp}">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <strong>${log.agent_type || 'System'}:</strong> ${this.escapeHtml(log.message)}
+        container.innerHTML = logs.map(log => {
+            // Map backend response to frontend expected format
+            const agentType = this.extractAgentType(log.agent_id) || 'System';
+            const level = log.log_level || 'info';
+            const message = log.message;
+            const timestamp = log.created_at;
+            const details = log.details;
+            
+            return `
+                <div class="log-entry ${level}" data-timestamp="${timestamp}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <strong>${agentType}:</strong> ${this.escapeHtml(message)}
+                        </div>
+                        <small class="text-muted">${new Date(timestamp).toLocaleTimeString()}</small>
                     </div>
-                    <small class="text-muted">${new Date(log.timestamp).toLocaleTimeString()}</small>
+                    ${details && Object.keys(details).length > 0 ? `<pre class="mt-2 small"><code>${JSON.stringify(details, null, 2)}</code></pre>` : ''}
                 </div>
-                ${log.data ? `<pre class="mt-2 small"><code>${JSON.stringify(log.data, null, 2)}</code></pre>` : ''}
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         // Auto-scroll to bottom
         container.scrollTop = container.scrollHeight;
@@ -397,26 +406,125 @@ class VSIAgentsModule {
             <div class="result-card card mb-3">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">${result.agent_type || 'Result'}</h6>
-                        <small class="text-muted">${new Date(result.timestamp).toLocaleString()}</small>
+                        <h6 class="mb-0">${result.title || result.type || 'Result'}</h6>
+                        <small class="text-muted">${new Date(result.createdAt).toLocaleString()}</small>
                     </div>
                 </div>
                 <div class="card-body">
-                    ${result.type === 'text' ? `
-                        <p>${this.escapeHtml(result.content)}</p>
-                    ` : result.type === 'data' ? `
-                        <pre><code>${JSON.stringify(result.data, null, 2)}</code></pre>
-                    ` : result.type === 'link' ? `
-                        <a href="${result.url}" target="_blank" class="text-decoration-none">
-                            <i class="fas fa-external-link-alt me-2"></i>${this.escapeHtml(result.title || result.url)}
-                        </a>
-                        ${result.summary ? `<p class="mt-2 text-muted">${this.escapeHtml(result.summary)}</p>` : ''}
-                    ` : `
-                        <p>${this.escapeHtml(result.content || 'Unknown result type')}</p>
-                    `}
+                    ${this.renderResultContent(result)}
                 </div>
             </div>
         `).join('');
+    }
+
+    /**
+     * Render result content based on type and structure
+     */
+    renderResultContent(result) {
+        // Handle research_summary type specifically
+        if (result.type === 'research_summary' && result.content && result.content.report) {
+            const content = result.content;
+            return `
+                <div class="research-summary">
+                    <div class="mb-3">
+                        <h6 class="text-primary">Research Report</h6>
+                        <div class="report-content" style="max-height: 400px; overflow-y: auto;">
+                            <pre class="text-wrap bg-light p-3 border rounded">${this.escapeHtml(content.report)}</pre>
+                        </div>
+                    </div>
+                    
+                    ${content.quality ? `
+                        <div class="mb-3">
+                            <h6 class="text-info">Quality Metrics</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="h5 mb-0">${content.quality.coverageScore}%</div>
+                                        <small class="text-muted">Coverage</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="h5 mb-0">${content.quality.coherenceScore}%</div>
+                                        <small class="text-muted">Coherence</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="h5 mb-0">${Math.round(content.quality.confidenceScore * 100)}%</div>
+                                        <small class="text-muted">Confidence</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${content.statistics ? `
+                        <div class="mb-3">
+                            <h6 class="text-success">Research Statistics</h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="h5 mb-0">${content.statistics.totalAgents}</div>
+                                        <small class="text-muted">Agents</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="h5 mb-0">${content.statistics.totalArtifacts}</div>
+                                        <small class="text-muted">Artifacts</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="h5 mb-0">${content.statistics.completedAgents}</div>
+                                        <small class="text-muted">Completed</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="h5 mb-0">${Math.round(content.statistics.researchDuration / 1000)}s</div>
+                                        <small class="text-muted">Duration</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${content.recommendations && content.recommendations.length > 0 ? `
+                        <div class="mb-3">
+                            <h6 class="text-warning">Recommendations</h6>
+                            <div class="list-group list-group-flush">
+                                ${content.recommendations.map(rec => `
+                                    <div class="list-group-item border-0 px-0">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1">${this.escapeHtml(rec.title)}</h6>
+                                                <p class="mb-1 text-muted">${this.escapeHtml(rec.description)}</p>
+                                                <small class="text-muted">Priority: ${rec.priority} | Category: ${rec.category}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        // Handle other artifact types
+        if (result.content && typeof result.content === 'object') {
+            return `<pre><code>${JSON.stringify(result.content, null, 2)}</code></pre>`;
+        }
+        
+        // Handle simple text content
+        if (result.content && typeof result.content === 'string') {
+            return `<p>${this.escapeHtml(result.content)}</p>`;
+        }
+        
+        // Fallback
+        return `<p class="text-muted">No content available</p>`;
     }
 
     /**
@@ -628,15 +736,22 @@ class VSIAgentsModule {
         const container = document.getElementById('sessionLogs');
         if (!container) return;
 
+        // Map the log data properly based on source (SSE vs API)
+        const agentType = this.extractAgentType(log.agent_id || log.agentId) || log.agent_type || 'System';
+        const level = log.log_level || log.level || 'info';
+        const message = log.message;
+        const timestamp = log.created_at || log.timestamp;
+        const details = log.details || log.data;
+
         const logHtml = `
-            <div class="log-entry ${log.level}" data-timestamp="${log.timestamp}">
+            <div class="log-entry ${level}" data-timestamp="${timestamp}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
-                        <strong>${log.agent_type || 'System'}:</strong> ${this.escapeHtml(log.message)}
+                        <strong>${agentType}:</strong> ${this.escapeHtml(message)}
                     </div>
-                    <small class="text-muted">${new Date(log.timestamp).toLocaleTimeString()}</small>
+                    <small class="text-muted">${new Date(timestamp).toLocaleTimeString()}</small>
                 </div>
-                ${log.data ? `<pre class="mt-2 small"><code>${JSON.stringify(log.data, null, 2)}</code></pre>` : ''}
+                ${details && Object.keys(details).length > 0 ? `<pre class="mt-2 small"><code>${JSON.stringify(details, null, 2)}</code></pre>` : ''}
             </div>
         `;
 
@@ -660,23 +775,12 @@ class VSIAgentsModule {
             <div class="result-card card mb-3">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">${result.agent_type || 'Result'}</h6>
-                        <small class="text-muted">${new Date(result.timestamp).toLocaleString()}</small>
+                        <h6 class="mb-0">${result.title || result.type || 'Result'}</h6>
+                        <small class="text-muted">${new Date(result.createdAt || result.timestamp).toLocaleString()}</small>
                     </div>
                 </div>
                 <div class="card-body">
-                    ${result.type === 'text' ? `
-                        <p>${this.escapeHtml(result.content)}</p>
-                    ` : result.type === 'data' ? `
-                        <pre><code>${JSON.stringify(result.data, null, 2)}</code></pre>
-                    ` : result.type === 'link' ? `
-                        <a href="${result.url}" target="_blank" class="text-decoration-none">
-                            <i class="fas fa-external-link-alt me-2"></i>${this.escapeHtml(result.title || result.url)}
-                        </a>
-                        ${result.summary ? `<p class="mt-2 text-muted">${this.escapeHtml(result.summary)}</p>` : ''}
-                    ` : `
-                        <p>${this.escapeHtml(result.content || 'Unknown result type')}</p>
-                    `}
+                    ${this.renderResultContent(result)}
                 </div>
             </div>
         `;
@@ -698,5 +802,28 @@ class VSIAgentsModule {
      */
     destroy() {
         this.stopSessionUpdates();
+    }
+
+    /**
+     * Extract agent type from agent ID for display purposes
+     */
+    extractAgentType(agentId) {
+        if (!agentId) return null;
+        
+        // Extract the type from agent ID patterns like:
+        // "sessionId-orchestrator" or "sessionId_source_discovery_timestamp"
+        if (agentId.includes('orchestrator')) return 'Orchestrator';
+        if (agentId.includes('source_discovery')) return 'Source Discovery';
+        if (agentId.includes('content_analysis')) return 'Content Analysis';
+        if (agentId.includes('synthesis')) return 'Synthesis';
+        if (agentId.includes('fact_checking')) return 'Fact Checking';
+        
+        // Fallback: try to extract any agent type pattern
+        const match = agentId.match(/-([\w_]+)(?:-\d+)?$/);
+        if (match) {
+            return match[1].replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        return 'Agent';
     }
 }

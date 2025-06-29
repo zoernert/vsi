@@ -1,10 +1,14 @@
 const express = require('express');
 const { AgentService } = require('../services/agentService');
+const { DatabaseService } = require('../services/databaseService');
 const { auth } = require('../middleware');
 const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
-const agentService = new AgentService();
+
+// Initialize database service and agent service with proper dependency injection
+const db = new DatabaseService();
+const agentService = new AgentService(db);
 
 // Store active SSE connections by session ID
 const activeConnections = new Map();
@@ -734,13 +738,17 @@ router.get('/sessions/:sessionId/logs', async (req, res) => {
     try {
         const userId = req.user.id;
         const { sessionId } = req.params;
-        const { limit = 100, offset = 0 } = req.query;
+        const { limit = 100, offset = 0, level } = req.query;
         
         // Verify user has access to session
         await agentService.getSession(sessionId, userId);
         
-        // Get session logs - for now return empty array as logs aren't implemented yet
-        const logs = [];
+        // Get session logs from database
+        const logs = await agentService.getSessionLogs(sessionId, {
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            level
+        });
         
         res.json({
             success: true,
