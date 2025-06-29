@@ -6,6 +6,13 @@ class SourceDiscoveryAgent extends BaseAgent {
         this.discoveredSources = [];
         this.qualityThreshold = config.qualityThreshold || 0.6;
         this.maxSources = config.maxSources || 50;
+        
+        // External content service injection (optional)
+        if (config.useExternalSources) {
+            const WebSearchService = require('../services/webSearchService');
+            this.webSearchService = new WebSearchService(config.externalContent?.search || {});
+            console.log('🌐 External source discovery enabled');
+        }
     }
 
     async performWork() {
@@ -13,6 +20,12 @@ class SourceDiscoveryAgent extends BaseAgent {
         
         this.updateProgress(10, 'Discovering relevant sources');
         await this.discoverRelevantSources();
+        
+        // External source discovery (if enabled)
+        if (this.webSearchService) {
+            this.updateProgress(30, 'Discovering external sources');
+            await this.discoverExternalSources();
+        }
         
         this.updateProgress(40, 'Evaluating source quality');
         await this.evaluateSourceQuality();
@@ -29,7 +42,8 @@ class SourceDiscoveryAgent extends BaseAgent {
         await this.storeSharedMemory('source_discovery_completed', {
             status: 'completed',
             timestamp: new Date(),
-            sourceCount: this.discoveredSources.length
+            sourceCount: this.discoveredSources.length,
+            externalSourcesFound: this.discoveredSources.filter(s => s.type === 'external').length
         });
     }
 
@@ -708,6 +722,67 @@ class SourceDiscoveryAgent extends BaseAgent {
     async getSharedMemory(key) {
         // Retrieve memory stored by other agents
         return await this.retrieveMemory(`shared_${key}`);
+    }
+
+    async discoverExternalSources() {
+        if (!this.webSearchService) {
+            return;
+        }
+
+        try {
+            console.log('🌐 Discovering external sources');
+            
+            const query = this.config.query || this.config.inputs?.query;
+            if (!query) {
+                console.warn('⚠️ No query available for external source discovery');
+                return;
+            }
+
+            const maxExternalSources = this.config.externalContent?.maxExternalSources || 5;
+            
+            // Perform web search
+            const searchResults = await this.webSearchService.search(query, {
+                maxResults: maxExternalSources,
+                rankResults: true
+            });
+
+            if (searchResults && searchResults.length > 0) {
+                console.log(`🔍 Found ${searchResults.length} external sources`);
+                
+                // Convert web search results to source format
+                for (const result of searchResults) {
+                    const externalSource = {
+                        id: `external_${result.url.replace(/[^a-zA-Z0-9]/g, '_')}`,
+                        filename: result.title || 'External Source',
+                        content: result.snippet || result.description || '',
+                        metadata: {
+                            url: result.url,
+                            title: result.title,
+                            snippet: result.snippet,
+                            domain: new URL(result.url).hostname,
+                            source: result.source || 'web_search',
+                            type: 'external',
+                            discoveredAt: new Date(),
+                            relevanceScore: result.score || 0.5
+                        },
+                        type: 'external',
+                        source: 'web_search',
+                        collectionId: 'external',
+                        collectionName: 'External Web Sources'
+                    };
+
+                    this.discoveredSources.push(externalSource);
+                }
+                
+                console.log(`✅ Added ${searchResults.length} external sources to discovery results`);
+            } else {
+                console.log('📭 No external sources found');
+            }
+            
+        } catch (error) {
+            console.warn(`⚠️ External source discovery failed:`, error.message);
+            // Don't throw - continue with internal sources only
+        }
     }
 }
 

@@ -405,6 +405,128 @@ class AgentSystemUI {
                     justify-content: center;
                 }
             }
+            
+            /* External Content Configuration Styles */
+            .external-sources-section {
+                border-top: 1px solid #e1e5e9;
+                padding-top: 20px;
+                margin-top: 20px;
+            }
+            
+            .external-sources-section h4 {
+                margin: 0 0 10px 0;
+                color: #2c3e50;
+                font-size: 16px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .help-text {
+                color: #7f8c8d;
+                font-size: 14px;
+                margin: 0 0 15px 0;
+                line-height: 1.4;
+            }
+            
+            .config-group {
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 6px;
+                border: 1px solid #e1e5e9;
+            }
+            
+            .checkbox-label {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 10px;
+                cursor: pointer;
+                font-size: 14px;
+            }
+            
+            .checkbox-label input[type="checkbox"] {
+                margin: 0;
+            }
+            
+            .nested-config {
+                margin-left: 20px;
+                padding: 15px;
+                background: white;
+                border-radius: 4px;
+                border: 1px solid #dee2e6;
+                margin-top: 10px;
+            }
+            
+            .config-row {
+                display: flex;
+                gap: 20px;
+                margin-bottom: 15px;
+                flex-wrap: wrap;
+            }
+            
+            .input-group {
+                flex: 1;
+                min-width: 200px;
+            }
+            
+            .input-group label {
+                display: block;
+                margin-bottom: 5px;
+                font-weight: 500;
+                font-size: 14px;
+                color: #495057;
+            }
+            
+            .form-control {
+                width: 100%;
+                padding: 8px 12px;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                font-size: 14px;
+                transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+            }
+            
+            .form-control:focus {
+                border-color: #80bdff;
+                outline: 0;
+                box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+            }
+            
+            textarea.form-control {
+                resize: vertical;
+                min-height: 80px;
+            }
+            
+            .warning-box {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                padding: 12px;
+                background: #fff3cd;
+                border: 1px solid #ffeaa7;
+                border-radius: 4px;
+                margin-top: 15px;
+                font-size: 13px;
+                line-height: 1.4;
+            }
+            
+            .warning-icon {
+                color: #856404;
+                font-size: 16px;
+                flex-shrink: 0;
+            }
+            
+            .warning-box span:not(.warning-icon) {
+                color: #856404;
+            }
+            
+            small.help-text {
+                display: block;
+                margin-top: 5px;
+                font-size: 12px;
+                color: #6c757d;
+            }
         `;
         
         const styleSheet = document.createElement('style');
@@ -488,6 +610,60 @@ class AgentSystemUI {
                                 <option value="literature_review">Literature Review</option>
                             </select>
                         </div>
+                        
+                        <!-- External Content Sources Configuration -->
+                        <div class="form-group external-sources-section">
+                            <h4>🌐 External Content Sources</h4>
+                            <p class="help-text">Enable external web sources to enhance research with current information</p>
+                            
+                            <div class="config-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="enableExternalSources"> 
+                                    <span>Enable external sources for research</span>
+                                </label>
+                                
+                                <div id="externalSourcesConfig" class="nested-config" style="display:none;">
+                                    <div class="config-row">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="enableWebSearch"> 
+                                            <span>Web Search (DuckDuckGo)</span>
+                                        </label>
+                                        
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="enableWebBrowsing"> 
+                                            <span>Web Page Content Analysis</span>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="config-row">
+                                        <div class="input-group">
+                                            <label for="maxExternalSources">Max External Sources:</label>
+                                            <input type="number" id="maxExternalSources" value="5" min="1" max="20" class="form-control">
+                                        </div>
+                                        
+                                        <div class="input-group">
+                                            <label for="searchProvider">Search Provider:</label>
+                                            <select id="searchProvider" class="form-control">
+                                                <option value="duckduckgo">DuckDuckGo</option>
+                                                <option value="google">Google</option>
+                                                <option value="bing">Bing</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="input-group">
+                                        <label for="externalUrls">Additional URLs (optional):</label>
+                                        <textarea id="externalUrls" placeholder="https://example.com&#10;https://another-site.com" rows="3" class="form-control"></textarea>
+                                        <small class="help-text">One URL per line. These will be analyzed in addition to web search results.</small>
+                                    </div>
+                                    
+                                    <div class="warning-box">
+                                        <span class="warning-icon">⚠️</span>
+                                        <span>External sources may increase research time and require internet access. Content will be processed according to our privacy policy.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">
                                 Cancel
@@ -513,10 +689,31 @@ class AgentSystemUI {
                 .map(cb => cb.value);
             const outputFormat = document.getElementById('output-format').value;
             
+            // Collect external content configuration
+            const enableExternalSources = document.getElementById('enableExternalSources').checked;
+            const externalContentConfig = {};
+            
+            if (enableExternalSources) {
+                externalContentConfig.enableExternalSources = true;
+                externalContentConfig.enableWebSearch = document.getElementById('enableWebSearch').checked;
+                externalContentConfig.enableWebBrowsing = document.getElementById('enableWebBrowsing').checked;
+                externalContentConfig.maxExternalSources = parseInt(document.getElementById('maxExternalSources').value);
+                externalContentConfig.searchProvider = document.getElementById('searchProvider').value;
+                
+                // Parse additional URLs
+                const externalUrls = document.getElementById('externalUrls').value.trim();
+                if (externalUrls) {
+                    externalContentConfig.externalUrls = externalUrls.split('\n')
+                        .map(url => url.trim())
+                        .filter(url => url.length > 0);
+                }
+            }
+            
             await this.createSession(topic, {
                 maxSources,
                 analysisFrameworks: frameworks,
-                outputFormat
+                outputFormat,
+                ...externalContentConfig
             });
             
             dialog.remove();
@@ -526,11 +723,68 @@ class AgentSystemUI {
         dialog.querySelector('.modal-close').addEventListener('click', () => {
             dialog.remove();
         });
-
+        
+        // External content configuration handlers
+        const enableExternalSourcesCheckbox = document.getElementById('enableExternalSources');
+        const externalSourcesConfig = document.getElementById('externalSourcesConfig');
+        
+        enableExternalSourcesCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                externalSourcesConfig.style.display = 'block';
+                // Enable web search by default when external sources are enabled
+                document.getElementById('enableWebSearch').checked = true;
+            } else {
+                externalSourcesConfig.style.display = 'none';
+                // Reset all nested options
+                document.getElementById('enableWebSearch').checked = false;
+                document.getElementById('enableWebBrowsing').checked = false;
+                document.getElementById('maxExternalSources').value = 5;
+                document.getElementById('searchProvider').value = 'duckduckgo';
+                document.getElementById('externalUrls').value = '';
+            }
+        });
+        
+        // Add tooltips for external content options
+        this.addExternalContentTooltips(dialog);
+        
         // Add modal styles
         this.addModalStyles();
     }
-
+    
+    addExternalContentTooltips(dialog) {
+        // Add tooltips for better user experience
+        const tooltips = [
+            {
+                selector: '#enableWebSearch',
+                text: 'Search the web for current information related to your research topic'
+            },
+            {
+                selector: '#enableWebBrowsing', 
+                text: 'Analyze specific web pages and extract relevant content using AI'
+            },
+            {
+                selector: '#maxExternalSources',
+                text: 'Maximum number of external sources to include in analysis (1-20)'
+            },
+            {
+                selector: '#searchProvider',
+                text: 'Choose your preferred search engine provider'
+            },
+            {
+                selector: '#externalUrls',
+                text: 'Specific URLs to analyze in addition to search results'
+            }
+        ];
+        
+        tooltips.forEach(({ selector, text }) => {
+            const element = dialog.querySelector(selector);
+            if (element) {
+                element.title = text;
+                element.setAttribute('data-tooltip', text);
+            }
+        });
+    }
+    
     addModalStyles() {
         if (document.getElementById('modal-styles')) return;
         

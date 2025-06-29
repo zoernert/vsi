@@ -217,8 +217,25 @@ class VSIAgentsModule {
                 ).join('');
         }
 
+        // Setup external sources configuration toggle
+        this.setupExternalSourcesToggle();
+
         const modal = new bootstrap.Modal(document.getElementById('createSessionModal'));
         modal.show();
+    }
+
+    /**
+     * Setup external sources configuration toggle
+     */
+    setupExternalSourcesToggle() {
+        const enableExternalSourcesCheckbox = document.getElementById('enableExternalSources');
+        const externalSourcesConfig = document.getElementById('externalSourcesConfig');
+        
+        if (enableExternalSourcesCheckbox && externalSourcesConfig) {
+            enableExternalSourcesCheckbox.addEventListener('change', function() {
+                externalSourcesConfig.style.display = this.checked ? 'block' : 'none';
+            });
+        }
     }
 
     /**
@@ -242,6 +259,29 @@ class VSIAgentsModule {
         const timeout = formData.get('timeout');
         if (maxResults) sessionData.preferences.maxResults = parseInt(maxResults);
         if (timeout) sessionData.preferences.timeout = parseInt(timeout);
+
+        // Collect external content configuration
+        const enableExternalSources = document.getElementById('enableExternalSources');
+        if (enableExternalSources && enableExternalSources.checked) {
+            const externalContentConfig = {
+                enableExternalSources: true,
+                enableWebSearch: document.getElementById('enableWebSearch').checked,
+                enableWebBrowsing: document.getElementById('enableWebBrowsing').checked,
+                maxExternalSources: parseInt(document.getElementById('maxExternalSources').value || 5),
+                searchProvider: document.getElementById('searchProvider').value
+            };
+            
+            // Parse additional URLs
+            const externalUrls = document.getElementById('externalUrls').value.trim();
+            if (externalUrls) {
+                externalContentConfig.externalUrls = externalUrls.split('\n')
+                    .map(url => url.trim())
+                    .filter(url => url.length > 0);
+            }
+
+            // Add external content config to preferences
+            sessionData.preferences.externalContent = externalContentConfig;
+        }
 
         try {
             const response = await this.app.api.call('/api/agents/sessions', {

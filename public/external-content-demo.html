@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSI External Content Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+        }
+        
+        .section h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-control:focus {
+            border-color: #80bdff;
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+            transform: translateY(-1px);
+        }
+        
+        .btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-success { background: #27ae60; }
+        .btn-success:hover { background: #229954; }
+        
+        .btn-warning { background: #f39c12; }
+        .btn-warning:hover { background: #e67e22; }
+        
+        .results {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #e1e5e9;
+            margin-top: 15px;
+        }
+        
+        .results pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .status {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            margin: 0;
+        }
+        
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .loading {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 VSI External Content Demo</h1>
+            <p>Test and demonstrate external content integration features</p>
+        </div>
+        
+        <div class="content">
+            <!-- Connection Status -->
+            <div class="section">
+                <h2>🔌 Connection Status</h2>
+                <div id="connection-status" class="status warning">
+                    Checking external content service availability...
+                </div>
+                <button id="test-connection-btn" class="btn">Test Connection</button>
+            </div>
+            
+            <!-- Service Configuration -->
+            <div class="section">
+                <h2>⚙️ Service Configuration</h2>
+                <div id="config-display" class="results">
+                    <p>Click "Load Configuration" to see current settings</p>
+                </div>
+                <button id="load-config-btn" class="btn">Load Configuration</button>
+            </div>
+            
+            <!-- Web Search Test -->
+            <div class="section">
+                <h2>🔍 Web Search Test</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="search-query">Search Query:</label>
+                        <input type="text" id="search-query" class="form-control" 
+                               placeholder="e.g., artificial intelligence trends 2024" 
+                               value="VSI vector database">
+                    </div>
+                    <div class="form-group">
+                        <label for="search-provider">Provider:</label>
+                        <select id="search-provider" class="form-control">
+                            <option value="duckduckgo">DuckDuckGo</option>
+                            <option value="google">Google</option>
+                            <option value="bing">Bing</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="search-max-results">Max Results:</label>
+                        <input type="number" id="search-max-results" class="form-control" 
+                               value="5" min="1" max="20">
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="search-include-content">
+                            <label for="search-include-content">Include Full Content</label>
+                        </div>
+                    </div>
+                </div>
+                <button id="search-btn" class="btn">🔍 Search</button>
+                <div id="search-results" class="results" style="display: none;"></div>
+            </div>
+            
+            <!-- URL Browser Test -->
+            <div class="section">
+                <h2>🌐 URL Browser Test</h2>
+                <div class="form-group">
+                    <label for="browse-url">URL to Browse:</label>
+                    <input type="url" id="browse-url" class="form-control" 
+                           placeholder="https://example.com/article"
+                           value="https://www.wikipedia.org">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="extraction-type">Extraction Type:</label>
+                        <select id="extraction-type" class="form-control">
+                            <option value="summary">Summary</option>
+                            <option value="full">Full Content</option>
+                            <option value="structured">Structured Data</option>
+                            <option value="facts">Key Facts</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="include-metadata" checked>
+                            <label for="include-metadata">Include Metadata</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="wait-for-js">
+                            <label for="wait-for-js">Wait for JavaScript</label>
+                        </div>
+                    </div>
+                </div>
+                <button id="browse-btn" class="btn">🌐 Browse</button>
+                <div id="browse-results" class="results" style="display: none;"></div>
+            </div>
+            
+            <!-- Multi-Source Analysis -->
+            <div class="section">
+                <h2>📊 Multi-Source Analysis</h2>
+                <div class="form-group">
+                    <label for="analysis-sources">Sources (URLs or search queries, one per line):</label>
+                    <textarea id="analysis-sources" class="form-control" 
+                              placeholder="https://example.com/article1&#10;machine learning trends&#10;https://another-site.com/research">VSI vector database
+machine learning vector search
+https://www.wikipedia.org</textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="analysis-type">Analysis Type:</label>
+                        <select id="analysis-type" class="form-control">
+                            <option value="summary">Summary</option>
+                            <option value="comparison">Comparison</option>
+                            <option value="trends">Trends</option>
+                            <option value="facts">Facts</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="analysis-max-sources">Max Sources:</label>
+                        <input type="number" id="analysis-max-sources" class="form-control" 
+                               value="3" min="1" max="10">
+                    </div>
+                </div>
+                <button id="analyze-btn" class="btn btn-success">📊 Analyze</button>
+                <div id="analysis-results" class="results" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load the external content service -->
+    <script src="/js/services/externalContentService.js"></script>
+    <script>
+        // Initialize the external content service
+        const externalService = new ExternalContentService();
+        
+        // Helper function to show loading state
+        function setLoading(button, loading) {
+            if (loading) {
+                button.disabled = true;
+                button.innerHTML = button.innerHTML.replace(/^[^\s]+\s/, '⏳ ');
+            } else {
+                button.disabled = false;
+                button.innerHTML = button.innerHTML.replace('⏳ ', button.getAttribute('data-original-icon') + ' ');
+            }
+        }
+        
+        // Helper function to store original button icons
+        function storeButtonIcon(button) {
+            const match = button.innerHTML.match(/^([^\s]+)\s/);
+            if (match) {
+                button.setAttribute('data-original-icon', match[1]);
+            }
+        }
+        
+        // Store original icons for all buttons
+        document.querySelectorAll('.btn').forEach(storeButtonIcon);
+        
+        // Helper function to display results
+        function displayResults(elementId, data, error = null) {
+            const element = document.getElementById(elementId);
+            if (error) {
+                element.innerHTML = `<pre style="color: #721c24;">Error: ${error}</pre>`;
+            } else {
+                element.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+            element.style.display = 'block';
+        }
+        
+        // Helper function to show status
+        function showStatus(message, type = 'warning') {
+            const status = document.getElementById('connection-status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+        
+        // Test connection
+        document.getElementById('test-connection-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('test-connection-btn');
+            setLoading(btn, true);
+            
+            try {
+                const result = await externalService.testConnection();
+                showStatus(result.message, result.available ? 'success' : 'error');
+            } catch (error) {
+                showStatus(externalService.getErrorMessage(error), 'error');
+            }
+            
+            setLoading(btn, false);
+        });
+        
+        // Load configuration
+        document.getElementById('load-config-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('load-config-btn');
+            setLoading(btn, true);
+            
+            try {
+                const config = await externalService.getConfig();
+                displayResults('config-display', config);
+            } catch (error) {
+                displayResults('config-display', null, externalService.getErrorMessage(error));
+            }
+            
+            setLoading(btn, false);
+        });
+        
+        // Web search
+        document.getElementById('search-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('search-btn');
+            setLoading(btn, true);
+            
+            try {
+                const query = document.getElementById('search-query').value;
+                const provider = document.getElementById('search-provider').value;
+                const maxResults = parseInt(document.getElementById('search-max-results').value);
+                const includeContent = document.getElementById('search-include-content').checked;
+                
+                if (!query.trim()) {
+                    throw new Error('Search query is required');
+                }
+                
+                const results = await externalService.search(query, {
+                    provider,
+                    maxResults,
+                    includeContent
+                });
+                
+                displayResults('search-results', results);
+            } catch (error) {
+                displayResults('search-results', null, externalService.getErrorMessage(error));
+            }
+            
+            setLoading(btn, false);
+        });
+        
+        // URL browsing
+        document.getElementById('browse-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('browse-btn');
+            setLoading(btn, true);
+            
+            try {
+                const url = document.getElementById('browse-url').value;
+                const extractionType = document.getElementById('extraction-type').value;
+                const includeMetadata = document.getElementById('include-metadata').checked;
+                const waitForJs = document.getElementById('wait-for-js').checked;
+                
+                if (!url.trim()) {
+                    throw new Error('URL is required');
+                }
+                
+                if (!externalService.isValidUrl(url)) {
+                    throw new Error('Please enter a valid URL');
+                }
+                
+                const results = await externalService.browse(url, {
+                    extractionType,
+                    includeMetadata,
+                    waitForJs
+                });
+                
+                displayResults('browse-results', results);
+            } catch (error) {
+                displayResults('browse-results', null, externalService.getErrorMessage(error));
+            }
+            
+            setLoading(btn, false);
+        });
+        
+        // Multi-source analysis
+        document.getElementById('analyze-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('analyze-btn');
+            setLoading(btn, true);
+            
+            try {
+                const sourcesText = document.getElementById('analysis-sources').value;
+                const analysisType = document.getElementById('analysis-type').value;
+                const maxSources = parseInt(document.getElementById('analysis-max-sources').value);
+                
+                if (!sourcesText.trim()) {
+                    throw new Error('At least one source is required');
+                }
+                
+                // Parse sources from textarea
+                const sources = sourcesText.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .map(source => externalService.formatSource(source));
+                
+                if (sources.length === 0) {
+                    throw new Error('No valid sources found');
+                }
+                
+                const results = await externalService.analyze(sources, {
+                    analysisType,
+                    maxSources
+                });
+                
+                displayResults('analysis-results', results);
+            } catch (error) {
+                displayResults('analysis-results', null, externalService.getErrorMessage(error));
+            }
+            
+            setLoading(btn, false);
+        });
+        
+        // Auto-test connection on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('test-connection-btn').click();
+        });
+    </script>
+</body>
+</html>

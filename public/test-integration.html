@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSI External Content Integration Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>VSI External Content Integration Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="testResults"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Manual Test</h2>
+        <p>1. Navigate to the main VSI application at <a href="/" target="_blank">http://localhost:3000</a></p>
+        <p>2. Click on "Agents" in the navigation</p>
+        <p>3. Click "Start Research Session" button</p>
+        <p>4. Look for the "🌐 External Content Sources" section</p>
+        <p>5. Toggle the checkbox to enable external sources</p>
+        <p>6. Verify the configuration options appear</p>
+        <p>7. Fill out the form and test session creation</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>Expected Configuration</h2>
+        <pre id="expectedConfig"></pre>
+    </div>
+
+    <script>
+        function logResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('testResults');
+            const p = document.createElement('p');
+            p.className = type;
+            p.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            resultsDiv.appendChild(p);
+        }
+
+        function showExpectedConfig() {
+            const config = {
+                "sessionData": {
+                    "researchTopic": "Your research query",
+                    "preferences": {
+                        "name": "Session name",
+                        "description": "Session description",
+                        "template_id": null,
+                        "externalContent": {
+                            "enableExternalSources": true,
+                            "enableWebSearch": true,
+                            "enableWebBrowsing": true,
+                            "maxExternalSources": 5,
+                            "searchProvider": "duckduckgo",
+                            "externalUrls": ["https://example.com"]
+                        }
+                    }
+                }
+            };
+            document.getElementById('expectedConfig').textContent = JSON.stringify(config, null, 2);
+        }
+
+        // Test external content API endpoints
+        async function testExternalContentAPI() {
+            logResult('Testing external content API endpoints...', 'info');
+            
+            try {
+                // Test config endpoint
+                const configResponse = await fetch('/api/external/config');
+                if (configResponse.ok) {
+                    const config = await configResponse.json();
+                    logResult('✓ External content config endpoint working', 'success');
+                    logResult(`Config: ${JSON.stringify(config)}`, 'info');
+                } else {
+                    logResult('✗ External content config endpoint failed', 'error');
+                }
+            } catch (error) {
+                logResult(`✗ Error testing config endpoint: ${error.message}`, 'error');
+            }
+
+            try {
+                // Test search endpoint (with dummy data)
+                const searchResponse = await fetch('/api/external/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: 'test query', provider: 'duckduckgo' })
+                });
+                
+                if (searchResponse.ok) {
+                    logResult('✓ External content search endpoint accessible', 'success');
+                } else {
+                    logResult(`✗ External content search endpoint failed: ${searchResponse.status}`, 'error');
+                }
+            } catch (error) {
+                logResult(`✗ Error testing search endpoint: ${error.message}`, 'error');
+            }
+        }
+
+        // Run tests when page loads
+        window.addEventListener('load', () => {
+            logResult('Starting external content integration tests...', 'info');
+            showExpectedConfig();
+            testExternalContentAPI();
+        });
+    </script>
+</body>
+</html>

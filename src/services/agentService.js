@@ -740,7 +740,18 @@ class AgentService extends EventEmitter {
                 const sourceConfig = {
                     ...baseConfig,
                     maxSources: parsedPreferences.maxSources || 50,
-                    qualityThreshold: parsedPreferences.qualityThreshold || 0.4 // Lowered for testing
+                    qualityThreshold: parsedPreferences.qualityThreshold || 0.4, // Lowered for testing
+                    // External content configuration
+                    useExternalSources: parsedPreferences.enableExternalSources || false,
+                    externalContent: {
+                        maxExternalSources: parsedPreferences.maxExternalSources || 5,
+                        search: {
+                            enabled: parsedPreferences.enableWebSearch || false,
+                            provider: parsedPreferences.webSearchProvider || 'duckduckgo',
+                            maxResults: parsedPreferences.maxExternalSources || 5,
+                            timeout: 30000
+                        }
+                    }
                 };
                 console.log(`🔍 Source discovery config:`, sourceConfig);
                 return sourceConfig;
@@ -748,7 +759,26 @@ class AgentService extends EventEmitter {
                 const analysisConfig = {
                     ...baseConfig,
                     frameworks: parsedPreferences.analysisFrameworks || ['thematic', 'sentiment'],
-                    maxContextSize: parsedPreferences.maxContextSize || 4000
+                    maxContextSize: parsedPreferences.maxContextSize || 4000,
+                    // External content configuration
+                    useExternalSources: parsedPreferences.enableExternalSources || false,
+                    externalContent: {
+                        enableWebSearch: parsedPreferences.enableWebSearch || false,
+                        enableWebBrowsing: parsedPreferences.enableWebBrowsing || false,
+                        maxExternalSources: parsedPreferences.maxExternalSources || 5,
+                        browser: {
+                            apiBase: parsedPreferences.browserApiBase || 'https://browserless.corrently.cloud',
+                            timeout: 60000,
+                            maxCommands: 50,
+                            maxConcurrentSessions: 3
+                        },
+                        search: {
+                            enabled: parsedPreferences.enableWebSearch || false,
+                            provider: parsedPreferences.webSearchProvider || 'duckduckgo',
+                            maxResults: parsedPreferences.maxExternalSources || 5,
+                            timeout: 30000
+                        }
+                    }
                 };
                 console.log(`📊 Content analysis config:`, analysisConfig);
                 return analysisConfig;

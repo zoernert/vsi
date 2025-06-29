@@ -1248,3 +1248,44 @@ code {
   max-height: none;
   border: 2px solid #e9ecef;
 }
+
+/* External Sources Configuration Styling */
+#externalSourcesConfig {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 0.5rem;
+}
+
+#externalSourcesConfig .form-check {
+  margin-bottom: 0.5rem;
+}
+
+#externalSourcesConfig .alert-sm {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+#externalSourcesConfig .alert-warning {
+  background-color: #fff3cd;
+  border-color: #ffeaa7;
+  color: #856404;
+}
+
+/* Modal card headers for configuration sections */
+.modal .card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  padding: 0.75rem 1rem;
+}
+
+.modal .card-header h6 {
+  margin: 0;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.modal .card-body {
+  padding: 1rem;
+}

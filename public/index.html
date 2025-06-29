@@ -1604,6 +1604,69 @@ Form Data:
                             </div>
                         </div>
                         
+                        <!-- External Content Sources Configuration -->
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">🌐 External Content Sources</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="enableExternalSources">
+                                    <label class="form-check-label" for="enableExternalSources">
+                                        Enable external web sources for enhanced research
+                                    </label>
+                                </div>
+                                
+                                <div id="externalSourcesConfig" style="display: none;">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="enableWebSearch" checked>
+                                                <label class="form-check-label" for="enableWebSearch">
+                                                    Web Search
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="enableWebBrowsing" checked>
+                                                <label class="form-check-label" for="enableWebBrowsing">
+                                                    Web Browsing
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="maxExternalSources">Max External Sources</label>
+                                            <input type="number" class="form-control" id="maxExternalSources" value="5" min="1" max="20">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="searchProvider">Search Provider</label>
+                                            <select class="form-control" id="searchProvider">
+                                                <option value="duckduckgo">DuckDuckGo</option>
+                                                <option value="google">Google</option>
+                                                <option value="bing">Bing</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label" for="externalUrls">Additional URLs (optional)</label>
+                                        <textarea class="form-control" id="externalUrls" rows="2" 
+                                                  placeholder="https://example.com&#10;https://another-site.com"></textarea>
+                                        <div class="form-text">One URL per line</div>
+                                    </div>
+                                    
+                                    <div class="alert alert-warning alert-sm">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        <small>External sources may increase research time and require internet access.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
                             <strong>How it works:</strong> Our AI agents will autonomously search, analyze, and synthesize 

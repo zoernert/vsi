@@ -1,4 +1,5 @@
 const { BaseAgent } = require('./BaseAgent');
+const { ExternalContentService } = require('../services/externalContentService');
 
 class ContentAnalysisAgent extends BaseAgent {
     constructor(agentId, sessionId, config, apiClient) {
@@ -8,6 +9,12 @@ class ContentAnalysisAgent extends BaseAgent {
         this.analyzedContent = [];
         this.themes = new Map();
         this.insights = [];
+        
+        // Initialize external content service if enabled
+        if (config.useExternalSources) {
+            console.log(`🌐 Initializing external content service for ContentAnalysisAgent`);
+            this.externalContentService = new ExternalContentService(config.externalContent || {});
+        }
     }
 
     async performWork() {
@@ -20,11 +27,52 @@ class ContentAnalysisAgent extends BaseAgent {
         this.updateProgress(15, 'Performing deep content analysis');
         await this.performDeepContentAnalysis();
         
+        // External content analysis (if enabled)
+        let externalAnalysis = null;
+        if (this.externalContentService) {
+            try {
+                this.updateProgress(35, 'Analyzing external sources');
+                
+                // Check if external URLs were provided in the task
+                const taskData = await this.getSharedMemory('current_task') || {};
+                const externalUrls = taskData.externalUrls || [];
+                
+                // Discover additional external sources if none provided
+                let urlsToAnalyze = [...externalUrls];
+                if (urlsToAnalyze.length === 0 && taskData.query) {
+                    const discoveredUrls = await this.discoverExternalSources(taskData.query, 3);
+                    urlsToAnalyze = discoveredUrls;
+                }
+                
+                if (urlsToAnalyze.length > 0) {
+                    externalAnalysis = await this.analyzeExternalContent(urlsToAnalyze, taskData.analysisType);
+                    
+                    if (externalAnalysis && externalAnalysis.length > 0) {
+                        console.log(`🌐 Successfully analyzed ${externalAnalysis.length} external sources`);
+                    }
+                }
+            } catch (error) {
+                console.warn(`⚠️ External content analysis failed, continuing with internal analysis only:`, error.message);
+            }
+        }
+        
         this.updateProgress(50, 'Identifying key themes');
         await this.identifyKeyThemes();
         
         this.updateProgress(75, 'Extracting insights');
         await this.extractInsights();
+        
+        // Combine internal and external analysis if external data is available
+        if (externalAnalysis && externalAnalysis.length > 0) {
+            this.updateProgress(85, 'Combining internal and external analysis');
+            const combinedResults = this.combineAnalysis({
+                themes: Array.from(this.themes.values()),
+                insights: this.insights,
+                sources: this.analyzedContent.length - externalAnalysis.length
+            }, externalAnalysis);
+            
+            console.log(`🔗 Combined analysis completed with ${combinedResults.sources.total} total sources (${combinedResults.sources.internal} internal, ${combinedResults.sources.external} external)`);
+        }
         
         this.updateProgress(90, 'Creating analysis report');
         await this.createAnalysisReport();
@@ -37,7 +85,8 @@ class ContentAnalysisAgent extends BaseAgent {
             timestamp: new Date(),
             analysisCount: this.analyzedContent.length,
             themeCount: this.themes.size,
-            insightCount: this.insights.length
+            insightCount: this.insights.length,
+            externalSourcesAnalyzed: externalAnalysis ? externalAnalysis.length : 0
         });
     }
 
@@ -974,145 +1023,16 @@ class ContentAnalysisAgent extends BaseAgent {
         
         for (const insight of insights) {
             const confidence = insight.confidence || 0.5;
-            if (confidence > 0.8) distribution.high++;
-            else if (confidence >= 0.5) distribution.medium++;
-            else distribution.low++;
+            if (confidence > 0.8) {
+                distribution.high++;
+            } else if (confidence >= 0.5) {
+                distribution.medium++;
+            } else {
+                distribution.low++;
+            }
         }
         
         return distribution;
-    }
-
-    async createAnalysisReport() {
-        try {
-            console.log(`📊 Creating comprehensive analysis report`);
-            
-            const analysisData = await this.retrieveMemory('content_analysis');
-            const themeData = await this.retrieveMemory('theme_analysis');
-            const insightsData = await this.retrieveMemory('insights_analysis');
-            
-            const report = {
-                summary: {
-                    analysisFrameworks: this.analysisFrameworks,
-                    sourcesAnalyzed: analysisData?.data.results.length || 0,
-                    themesIdentified: themeData?.data.keyThemes.length || 0,
-                    insightsExtracted: insightsData?.data.totalInsights || 0,
-                    overallConfidence: analysisData?.data.statistics.avgConfidence || 0,
-                    analysisDate: new Date()
-                },
-                keyFindings: {
-                    dominantThemes: themeData?.data.keyThemes.slice(0, 5) || [],
-                    topInsights: insightsData?.data.keyFindings.slice(0, 8) || [],
-                    sentimentOverview: this.createSentimentOverview(analysisData?.data.results || []),
-                    qualityAssessment: this.createQualityAssessment(analysisData?.data.results || [])
-                },
-                detailedAnalysis: {
-                    themeAnalysis: themeData?.data || {},
-                    insightAnalysis: insightsData?.data || {},
-                    contentStatistics: analysisData?.data.statistics || {}
-                },
-                recommendations: this.generateAnalysisRecommendations(
-                    analysisData?.data || {},
-                    themeData?.data || {},
-                    insightsData?.data || {}
-                )
-            };
-            
-            await this.createArtifact('content_analysis_report', report);
-            
-            console.log(`✅ Comprehensive analysis report created`);
-            return report;
-        } catch (error) {
-            console.error(`❌ Error creating analysis report:`, error);
-            throw error;
-        }
-    }
-
-    createSentimentOverview(results) {
-        const sentiments = results.map(r => r.sentiment?.overall).filter(s => s);
-        const sentimentCounts = sentiments.reduce((acc, s) => {
-            acc[s] = (acc[s] || 0) + 1;
-            return acc;
-        }, {});
-        
-        return {
-            distribution: sentimentCounts,
-            dominant: Object.entries(sentimentCounts).reduce((max, [sent, count]) => 
-                count > max[1] ? [sent, count] : max, ['neutral', 0]
-            )[0],
-            totalAnalyzed: sentiments.length
-        };
-    }
-
-    createQualityAssessment(results) {
-        const qualityScores = results.map(r => r.analysis.quality?.completeness).filter(q => q !== undefined);
-        
-        if (qualityScores.length === 0) {
-            return { assessment: 'unknown', averageScore: 0 };
-        }
-        
-        const avgScore = qualityScores.reduce((sum, q) => sum + q, 0) / qualityScores.length;
-        
-        return {
-            assessment: avgScore > 0.7 ? 'high' : avgScore > 0.5 ? 'moderate' : 'low',
-            averageScore: avgScore,
-            distribution: {
-                high: qualityScores.filter(q => q > 0.7).length,
-                moderate: qualityScores.filter(q => q >= 0.5 && q <= 0.7).length,
-                low: qualityScores.filter(q => q < 0.5).length
-            }
-        };
-    }
-
-    generateAnalysisRecommendations(analysisData, themeData, insightsData) {
-        const recommendations = [];
-        
-        // Theme-based recommendations
-        if (themeData.keyThemes && themeData.keyThemes.length > 0) {
-            if (themeData.statistics.themeConcentration > 0.7) {
-                recommendations.push({
-                    type: 'diversity',
-                    priority: 'medium',
-                    message: 'Consider exploring additional themes for more comprehensive coverage'
-                });
-            }
-            
-            if (themeData.keyThemes.length < 3) {
-                recommendations.push({
-                    type: 'depth',
-                    priority: 'low',
-                    message: 'Limited theme diversity detected - consider expanding research scope'
-                });
-            }
-        }
-        
-        // Confidence-based recommendations
-        if (analysisData.statistics && analysisData.statistics.avgConfidence < 0.6) {
-            recommendations.push({
-                type: 'confidence',
-                priority: 'high',
-                message: 'Low average confidence in analysis - consider additional sources or different analysis approaches'
-            });
-        }
-        
-        // Insight-based recommendations
-        if (insightsData.confidenceDistribution && insightsData.confidenceDistribution.high < 3) {
-            recommendations.push({
-                type: 'insights',
-                priority: 'medium',
-                message: 'Few high-confidence insights generated - may benefit from more focused analysis'
-            });
-        }
-        
-        return recommendations;
-    }
-
-    async storeSharedMemory(key, value) {
-        console.log(`💾 Storing shared memory: ${key}`);
-        return await this.storeMemory(`shared_${key}`, value, { scope: 'shared' });
-    }
-
-    async getSharedMemory(key) {
-        return await this.retrieveMemory(`shared_${key}`);
     }
 }
 
