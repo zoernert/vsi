@@ -85,7 +85,7 @@ class AdminTester {
       const response = await this.testEndpoint(
         'POST', 
         '/api/v1/auth/login',
-        { username: 'stromdao', password: 'Maus12Rad' },
+        { username: 'admin', password: 'admin' },
         'Admin login'
       );
 

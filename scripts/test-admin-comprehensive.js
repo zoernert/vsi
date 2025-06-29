@@ -12,8 +12,8 @@ class AdminTester {
     this.baseUrl = 'http://localhost:3000';
     this.token = null;
     this.adminUser = {
-      username: 'stromdao',
-      password: 'Maus12Rad'
+      username: 'admin',
+      password: 'admin'
     };
   }
 
