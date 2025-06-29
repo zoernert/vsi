@@ -38,17 +38,16 @@ class OrchestratorAgent extends BaseAgent {
     }
 
     async analyzeResearchScope() {
-        await this.finalizeResearch();
-        
-        this.updateProgress(100, 'Research orchestration completed');
-    }
-
-    async analyzeResearchScope() {
         try {
             console.log(`🔍 Analyzing research scope for: ${this.config.preferences.researchTopic}`);
             
-            // Get all available collections
-            const collectionsResponse = await this.httpClient.get('/api/collections');
+            // Get all available collections with retry logic
+            const collectionsResponse = await this.retryRequest(
+                () => this.httpClient.get('/api/collections'),
+                3,
+                2000
+            );
+            
             // The collections API returns a raw array, not a wrapped response
             const collections = Array.isArray(collectionsResponse.data) ? collectionsResponse.data : [];
             console.log(`📚 Found ${collections.length} available collections`);
@@ -94,8 +93,57 @@ class OrchestratorAgent extends BaseAgent {
             return researchScope;
         } catch (error) {
             console.error(`❌ Error analyzing research scope:`, error);
+            
+            // Enhanced error logging for debugging
+            if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+                console.error(`❌ Network connection error: Cannot connect to API server`);
+                console.error(`❌ Check if the server is running and accessible`);
+                console.error(`❌ Base URL: ${this.httpClient.defaults.baseURL}`);
+            }
+            
+            if (error.response) {
+                console.error(`❌ HTTP Error: ${error.response.status} ${error.response.statusText}`);
+                console.error(`❌ Response data:`, error.response.data);
+            }
+            
             throw error;
         }
+    }
+
+    /**
+     * Retry a request function with exponential backoff
+     * @param {Function} requestFn - Function that returns a promise
+     * @param {number} maxRetries - Maximum number of retry attempts
+     * @param {number} initialDelay - Initial delay in milliseconds
+     * @returns {Promise} - Result of the request
+     */
+    async retryRequest(requestFn, maxRetries = 3, initialDelay = 1000) {
+        let lastError;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return await requestFn();
+            } catch (error) {
+                lastError = error;
+                console.warn(`⚠️ Request attempt ${attempt} failed: ${error.message}`);
+                
+                // Don't retry on certain error types
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    console.error(`❌ Authentication error, not retrying`);
+                    throw error;
+                }
+                
+                if (attempt < maxRetries) {
+                    const delay = initialDelay * Math.pow(2, attempt - 1);
+                    console.log(`🔄 Retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                    console.error(`❌ All ${maxRetries} retry attempts failed`);
+                }
+            }
+        }
+        
+        throw lastError;
     }
 
     async findRelevantCollections(researchTopic, collections) {
@@ -104,13 +152,17 @@ class OrchestratorAgent extends BaseAgent {
         
         for (const collection of collections) {
             try {
-                // Perform a search to assess relevance
-                const searchResponse = await this.httpClient.post(
-                    `/api/collections/${collection.id}/search`,
-                    { 
-                        query: researchTopic,
-                        limit: 5
-                    }
+                // Perform a search to assess relevance with retry logic
+                const searchResponse = await this.retryRequest(
+                    () => this.httpClient.post(
+                        `/api/collections/${collection.id}/search`,
+                        { 
+                            query: researchTopic,
+                            limit: 5
+                        }
+                    ),
+                    2, // Fewer retries for collection searches
+                    1000
                 );
                 
                 if (searchResponse.data.success && searchResponse.data.data) {

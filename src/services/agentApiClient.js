@@ -7,12 +7,15 @@ const axios = require('axios');
 class AgentApiClient {
     constructor(sessionId, baseUrl = null, userToken = null) {
         this.sessionId = sessionId;
-        this.baseUrl = baseUrl || process.env.API_BASE_URL || 'http://localhost:3000';
+        
+        // Enhanced base URL resolution with production support
+        this.baseUrl = this.resolveBaseUrl(baseUrl);
         this.userToken = userToken;
         
         const headers = {
             'Content-Type': 'application/json',
-            'User-Agent': `VSI-Agent-System/${sessionId}`
+            'User-Agent': `VSI-Agent-System/${sessionId}`,
+            'Accept': 'application/json'
         };
         
         // Include Authorization header if token is provided
@@ -22,9 +25,18 @@ class AgentApiClient {
         
         this.axios = axios.create({
             baseURL: this.baseUrl,
-            timeout: 30000,
-            headers
+            timeout: 60000, // Increased timeout for production
+            headers,
+            // Add retry configuration for network issues
+            validateStatus: function (status) {
+                return status < 500; // Resolve only if status code is less than 500
+            },
+            // Add additional network configuration
+            maxRedirects: 5,
+            family: 4, // Use IPv4
         });
+
+        console.log(`🔗 AgentApiClient initialized with baseURL: ${this.baseUrl}`);
 
         // Add request interceptor for logging
         this.axios.interceptors.request.use(
@@ -50,12 +62,65 @@ class AgentApiClient {
             },
             (error) => {
                 console.error(`❌ Agent API Response Error: ${error.response?.status} ${error.response?.statusText}`);
+                console.error(`❌ Request URL: ${error.config?.url}`);
+                console.error(`❌ Base URL: ${error.config?.baseURL}`);
+                
                 if (error.response?.data) {
                     console.error(`❌ Response data:`, error.response.data);
                 }
+                
+                // Enhanced error information for debugging
+                if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+                    console.error(`❌ Network connection failed to ${this.baseUrl}`);
+                    console.error(`❌ Error code: ${error.code}`);
+                    console.error(`❌ Error message: ${error.message}`);
+                }
+                
                 return Promise.reject(error);
             }
         );
+    }
+
+    /**
+     * Resolve the appropriate base URL for API requests
+     * @param {string|null} baseUrl - Explicitly provided base URL
+     * @returns {string} - Resolved base URL
+     */
+    resolveBaseUrl(baseUrl) {
+        if (baseUrl) {
+            return baseUrl;
+        }
+
+        // Try environment variables in order of preference
+        const envCandidates = [
+            process.env.API_BASE_URL,
+            process.env.BASE_URL,
+            process.env.SERVER_URL
+        ];
+
+        for (const url of envCandidates) {
+            if (url) {
+                console.log(`🔗 Using base URL from environment: ${url}`);
+                return url;
+            }
+        }
+
+        // Production vs development defaults
+        if (process.env.NODE_ENV === 'production') {
+            // In production, try to determine the correct URL
+            const port = process.env.PORT || 3000;
+            
+            // If running in a container, use localhost
+            // If running on a server, might need external URL
+            const productionUrl = `http://localhost:${port}`;
+            console.log(`🏭 Production environment detected, using: ${productionUrl}`);
+            return productionUrl;
+        }
+
+        // Development default
+        const defaultUrl = 'http://localhost:3000';
+        console.log(`🔧 Development environment, using default: ${defaultUrl}`);
+        return defaultUrl;
     }
 
     // Collection Management
