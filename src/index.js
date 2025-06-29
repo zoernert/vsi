@@ -33,6 +33,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const clusterRoutes = require('./routes/clusterRoutes');
 const mcpRoutes = require('./routes/mcpRoutes');
+const agentRoutes = require('./routes/agentRoutes');
 const { QdrantService } = require('./services/qdrantService');
 const { EmbeddingService } = require('./services/embeddingService');
 const { GeminiService } = require('./services/geminiService');
@@ -1207,6 +1208,11 @@ console.log('✅ Admin routes registered');
 console.log('📊 Registering analytics routes...');
 app.use('/api/admin/analytics', analyticsRoutes);
 console.log('✅ Analytics routes registered');
+
+// Agent routes - Mount agent system functionality
+console.log('🤖 Registering agent routes...');
+app.use('/api/agents', agentRoutes);
+console.log('✅ Agent routes registered');
 
 // Advanced clustering routes - Mount advanced features FIRST to avoid conflicts
 console.log('🤖 Registering advanced clustering routes...');

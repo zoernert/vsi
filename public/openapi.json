@@ -21,7 +21,8 @@
     { "name": "Admin", "description": "Administrative operations" },
     { "name": "Files", "description": "File storage and retrieval" },
     { "name": "Analytics", "description": "Usage analytics and metrics" },
-    { "name": "MCP", "description": "Model Context Protocol integration" }
+    { "name": "MCP", "description": "Model Context Protocol integration" },
+    { "name": "Agents", "description": "Autonomous research agent system" }
   ],
   "components": {
     "schemas": {
@@ -200,6 +201,205 @@
           "total_content_size": { "type": "integer" },
           "last_updated": { "type": "string", "format": "date-time", "nullable": true }
         }
+      }
+    },
+    "AgentSession": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique session identifier" },
+        "user_id": { "type": "integer", "description": "ID of the user who owns this session" },
+        "research_topic": { "type": "string", "description": "The research topic for this session" },
+        "preferences": { 
+          "type": "object",
+          "description": "Session preferences and configuration",
+          "properties": {
+            "maxSources": { "type": "integer", "minimum": 10, "maximum": 500, "default": 50 },
+            "analysisFrameworks": { 
+              "type": "array",
+              "items": { "type": "string", "enum": ["thematic", "sentiment", "trend", "comparative"] }
+            },
+            "outputFormat": { "type": "string", "enum": ["comprehensive_report", "executive_summary", "data_analysis", "literature_review"] },
+            "qualityThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.7 },
+            "priority": { "type": "string", "enum": ["speed", "balanced", "thorough"], "default": "balanced" }
+          }
+        },
+        "status": { 
+          "type": "string", 
+          "enum": ["created", "running", "paused", "completed", "stopped", "error"],
+          "description": "Current status of the research session"
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time", "nullable": true }
+      },
+      "required": ["id", "user_id", "research_topic", "status"]
+    },
+    "Agent": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "agent_type": { 
+          "type": "string", 
+          "enum": ["orchestrator", "source_discovery", "content_analysis", "synthesis", "fact_checking"],
+          "description": "Type of the agent"
+        },
+        "agent_id": { "type": "string", "description": "Unique identifier for this agent instance" },
+        "config": { 
+          "type": "object", 
+          "description": "Agent-specific configuration parameters" 
+        },
+        "status": { 
+          "type": "string", 
+          "enum": ["initialized", "starting", "running", "paused", "completed", "stopped", "error"],
+          "description": "Current status of the agent"
+        },
+        "started_at": { "type": "string", "format": "date-time", "nullable": true },
+        "completed_at": { "type": "string", "format": "date-time", "nullable": true },
+        "error_message": { "type": "string", "nullable": true },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "session_id", "agent_type", "agent_id", "status"]
+    },
+    "AgentArtifact": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "agent_id": { "type": "string" },
+        "artifact_type": { 
+          "type": "string",
+          "enum": ["research_report", "executive_summary", "source_list", "analysis_results", "visualization", "bibliography"],
+          "description": "Type of artifact generated"
+        },
+        "artifact_name": { "type": "string", "description": "Human-readable name for the artifact" },
+        "content": { 
+          "type": "object", 
+          "description": "The actual content of the artifact (structure varies by type)"
+        },
+        "metadata": { 
+          "type": "object",
+          "properties": {
+            "summary": { "type": "string" },
+            "keywords": { "type": "array", "items": { "type": "string" } },
+            "sources_count": { "type": "integer" },
+            "generated_at": { "type": "string", "format": "date-time" },
+            "quality_score": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "version": { "type": "integer", "minimum": 1, "default": 1 },
+        "status": { 
+          "type": "string", 
+          "enum": ["draft", "in_progress", "completed", "reviewed", "published"],
+          "default": "draft"
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "session_id", "agent_id", "artifact_type", "artifact_name", "content"]
+    },
+    "AgentProgress": {
+      "type": "object",
+      "properties": {
+        "session_id": { "type": "string", "format": "uuid" },
+        "overall": { "type": "integer", "minimum": 0, "maximum": 100, "description": "Overall progress percentage" },
+        "status": { "type": "string", "description": "Current session status" },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "agent_id": { "type": "string" },
+              "type": { "type": "string" },
+              "status": { "type": "string" },
+              "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "started_at": { "type": "string", "format": "date-time", "nullable": true },
+              "completed_at": { "type": "string", "format": "date-time", "nullable": true }
+            }
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "type": { "type": "string" },
+              "name": { "type": "string" },
+              "status": { "type": "string" },
+              "created_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      },
+      "required": ["session_id", "overall", "status", "agents", "artifacts"]
+    },
+    "AgentFeedback": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "session_id": { "type": "string", "format": "uuid" },
+        "user_id": { "type": "integer" },
+        "agent_id": { "type": "string", "nullable": true },
+        "artifact_id": { "type": "string", "format": "uuid", "nullable": true },
+        "feedback_type": { 
+          "type": "string",
+          "enum": ["general", "quality", "relevance", "completeness", "accuracy", "suggestion"],
+          "description": "Type of feedback being provided"
+        },
+        "feedback_data": { 
+          "type": "object",
+          "properties": {
+            "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "message": { "type": "string" },
+            "suggestions": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "priority": { 
+          "type": "string", 
+          "enum": ["low", "medium", "high", "urgent"],
+          "default": "medium"
+        },
+        "status": { 
+          "type": "string", 
+          "enum": ["pending", "processing", "completed", "ignored"],
+          "default": "pending"
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "processed_at": { "type": "string", "format": "date-time", "nullable": true }
+      },
+      "required": ["id", "session_id", "user_id", "feedback_type", "feedback_data"]
+    },
+    "CreateSessionRequest": {
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "User ID (or use authenticated user)" },
+        "researchTopic": { "type": "string", "minLength": 5, "maxLength": 500 },
+        "preferences": { "$ref": "#/components/schemas/AgentSession/properties/preferences" }
+      },
+      "required": ["researchTopic"]
+    },
+    "StartAgentsRequest": {
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "User ID (or use authenticated user)" },
+        "agentTypes": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["orchestrator", "source_discovery", "content_analysis", "synthesis", "fact_checking"] },
+          "minItems": 1,
+          "description": "Types of agents to start for this session"
+        }
+      },
+      "required": ["agentTypes"]
+    },
+    "AgentError": {
+      "type": "object",
+      "properties": {
+        "error": { "type": "string" },
+        "message": { "type": "string" },
+        "details": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" }
       }
     },
     "securitySchemes": {
@@ -2710,6 +2910,635 @@
               }
             }
           }
+        }
+      }
+    },
+    "/agents/sessions": {
+      "post": {
+        "summary": "Create a new research session",
+        "description": "Creates a new autonomous research session with specified topic and preferences",
+        "tags": ["Agents"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSessionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/AgentSession" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AgentError" }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" }
+        }
+      },
+      "get": {
+        "summary": "List user's research sessions",
+        "description": "Retrieves all research sessions for the authenticated user",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter sessions by status",
+            "schema": {
+              "type": "string",
+              "enum": ["created", "running", "paused", "completed", "stopped", "error"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of sessions to return",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of sessions to skip",
+            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AgentSession" }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "total": { "type": "integer" },
+                        "limit": { "type": "integer" },
+                        "offset": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}": {
+      "get": {
+        "summary": "Get session details",
+        "description": "Retrieves detailed information about a specific research session",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session details retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/AgentSession" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      },
+      "put": {
+        "summary": "Update session",
+        "description": "Updates session preferences or status",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "preferences": { "$ref": "#/components/schemas/AgentSession/properties/preferences" },
+                  "status": { "$ref": "#/components/schemas/AgentSession/properties/status" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/AgentSession" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      },
+      "delete": {
+        "summary": "Delete session",
+        "description": "Stops all agents and deletes the research session",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}/agents/start": {
+      "post": {
+        "summary": "Start agents for session",
+        "description": "Starts one or more agents to begin autonomous research",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StartAgentsRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agents started successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "agents": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "agentId": { "type": "string" },
+                              "type": { "type": "string" },
+                              "status": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "400": { "description": "Invalid agent types or session not ready" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}/agents/pause": {
+      "post": {
+        "summary": "Pause session agents",
+        "description": "Pauses all running agents in the session",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session paused successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}/agents/stop": {
+      "post": {
+        "summary": "Stop session agents",
+        "description": "Stops all running agents in the session",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session stopped successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}/status": {
+      "get": {
+        "summary": "Get session status",
+        "description": "Retrieves current status and agent information for a session",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "session": { "$ref": "#/components/schemas/AgentSession" },
+                        "agents": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Agent" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}/progress": {
+      "get": {
+        "summary": "Get session progress",
+        "description": "Retrieves detailed progress information including agent status and generated artifacts",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Progress information retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/AgentProgress" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}/artifacts": {
+      "get": {
+        "summary": "List session artifacts",
+        "description": "Retrieves all artifacts generated by agents in this session",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Filter artifacts by type",
+            "schema": {
+              "type": "string",
+              "enum": ["research_report", "executive_summary", "source_list", "analysis_results", "visualization", "bibliography"]
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "description": "Filter artifacts by agent ID",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifacts retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AgentArtifact" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}/feedback": {
+      "post": {
+        "summary": "Provide feedback on session",
+        "description": "Submit feedback on the session, specific agents, or artifacts",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agentId": { "type": "string", "description": "Specific agent to provide feedback on (optional)" },
+                  "artifactId": { "type": "string", "format": "uuid", "description": "Specific artifact to provide feedback on (optional)" },
+                  "type": { "$ref": "#/components/schemas/AgentFeedback/properties/feedback_type" },
+                  "feedback": { "$ref": "#/components/schemas/AgentFeedback/properties/feedback_data" },
+                  "priority": { "$ref": "#/components/schemas/AgentFeedback/properties/priority" }
+                },
+                "required": ["type", "feedback"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Feedback submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "feedbackId": { "type": "string", "format": "uuid" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "400": { "description": "Invalid feedback data" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/sessions/{sessionId}/events": {
+      "get": {
+        "summary": "Real-time session events",
+        "description": "Server-sent events stream for real-time updates on session progress",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "description": "Session ID",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event stream established",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-sent events stream with agent updates, progress, and artifact notifications"
+                }
+              }
+            }
+          },
+          "404": { "description": "Session not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/artifacts/{artifactId}": {
+      "get": {
+        "summary": "Get specific artifact",
+        "description": "Retrieves detailed information about a specific artifact",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "description": "Artifact ID",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "include_content",
+            "in": "query",
+            "description": "Whether to include the full artifact content",
+            "schema": { "type": "boolean", "default": true }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifact retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/AgentArtifact" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Artifact not found" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/agents/artifacts/{artifactId}/download": {
+      "get": {
+        "summary": "Download artifact",
+        "description": "Downloads the artifact in the requested format",
+        "tags": ["Agents"],
+        "parameters": [
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "description": "Artifact ID",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Download format",
+            "schema": { "type": "string", "enum": ["json", "pdf", "docx", "csv", "html"], "default": "json" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifact download",
+            "content": {
+              "application/json": {},
+              "application/pdf": {},
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {},
+              "text/csv": {},
+              "text/html": {}
+            }
+          },
+          "404": { "description": "Artifact not found" },
+          "400": { "description": "Unsupported format" },
+          "401": { "description": "Unauthorized" }
         }
       }
     }

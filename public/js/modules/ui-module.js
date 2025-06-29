@@ -51,6 +51,7 @@ class VSIUIModule {
             'dashboard': 'a[onclick="showDashboard()"]',
             'collections': 'a[onclick="showCollections()"]',
             'clusters': 'a[onclick="showClusters()"]',
+            'agents': 'a[onclick*="agents.showAgents"]',
             'search': 'a[onclick="showSearch()"]',
             'usage': 'a[onclick="showUsage()"]',
             'admin': 'a[onclick="showAdmin()"]'
@@ -68,6 +69,8 @@ class VSIUIModule {
                 'dashboard': 'Dashboard',
                 'collections': 'Collections',
                 'clusters': 'Clusters',
+                'agents': 'Research Agents',
+                'sessionDetail': 'Research Session',
                 'search': 'Search',
                 'usage': 'Usage Statistics',
                 'admin': 'Admin Dashboard',
@@ -165,6 +168,36 @@ class VSIUIModule {
                 ${actionButton}
             </div>
         `;
+    }
+
+    setActiveNav(navType) {
+        // Remove active from all nav links
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        
+        // Set active nav link
+        const navSelectors = {
+            'dashboard': 'a[onclick="showDashboard()"]',
+            'collections': 'a[onclick="showCollections()"]',
+            'clusters': 'a[onclick="showClusters()"]',
+            'agents': 'a[onclick*="agents.showAgents"]',
+            'search': 'a[onclick="showSearch()"]',
+            'usage': 'a[onclick="showUsage()"]',
+            'admin': 'a[onclick="showAdmin()"]'
+        };
+        
+        const activeNavLink = document.querySelector(navSelectors[navType]);
+        if (activeNavLink) {
+            activeNavLink.classList.add('active');
+        }
+    }
+
+    setPageTitle(title) {
+        const pageTitle = document.getElementById('pageTitle');
+        if (pageTitle) {
+            pageTitle.textContent = title;
+        }
     }
 }
 

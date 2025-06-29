@@ -29,6 +29,7 @@ class VSIApp {
             this.admin = new VSIAdminModule(this);
             this.usage = new VSIUsageModule(this);
             this.clusters = new VSIClustersModule(this);
+            this.agents = new VSIAgentsModule(this);
         } catch (error) {
             console.error('Error initializing modules:', error);
             throw error;
@@ -41,6 +42,11 @@ class VSIApp {
         
         // Initialize UI
         this.ui.init();
+        
+        // Initialize agents module
+        if (this.agents && typeof this.agents.init === 'function') {
+            this.agents.init();
+        }
         
         if (this.token) {
             await this.auth.loadUser();

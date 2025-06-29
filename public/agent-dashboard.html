@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSI Agent System - Research Assistant</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #2c3e50;
+        }
+        
+        .main-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px 0;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 24px;
+            font-weight: 700;
+            color: #2c3e50;
+            text-decoration: none;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            color: #7f8c8d;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: #667eea;
+        }
+        
+        .main-content {
+            background: white;
+            margin: 30px auto;
+            max-width: 1200px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            min-height: calc(100vh - 140px);
+        }
+        
+        .hero-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 60px 40px;
+            text-align: center;
+            border-bottom: 1px solid #e1e5e9;
+        }
+        
+        .hero-title {
+            font-size: 48px;
+            font-weight: 800;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero-subtitle {
+            font-size: 20px;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.6;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .feature-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .feature-icon {
+            font-size: 36px;
+            margin-bottom: 15px;
+        }
+        
+        .feature-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .feature-desc {
+            color: #7f8c8d;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            background: #2c3e50;
+            color: #bdc3c7;
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .footer-links a {
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        
+        .footer-links a:hover {
+            color: #ecf0f1;
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .nav-links {
+                gap: 20px;
+            }
+            
+            .hero-title {
+                font-size: 36px;
+            }
+            
+            .hero-subtitle {
+                font-size: 18px;
+            }
+            
+            .hero-section {
+                padding: 40px 20px;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .footer-links {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="main-header">
+        <div class="header-content">
+            <a href="/" class="logo">
+                <div class="logo-icon">🤖</div>
+                <span>VSI Agent System</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="/" class="active">Dashboard</a></li>
+                    <li><a href="/collections">Collections</a></li>
+                    <li><a href="/search">Search</a></li>
+                    <li><a href="/clusters">Clusters</a></li>
+                    <li><a href="/help">Help</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content" id="main-content">
+        <section class="hero-section">
+            <h1 class="hero-title">Intelligent Research Assistant</h1>
+            <p class="hero-subtitle">
+                Harness the power of AI agents to conduct comprehensive research, 
+                analyze vast amounts of data, and generate insightful reports automatically.
+            </p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-title">Source Discovery</div>
+                    <div class="feature-desc">
+                        Automatically find and evaluate relevant sources across your document collections
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-title">Content Analysis</div>
+                    <div class="feature-desc">
+                        Advanced thematic, sentiment, and trend analysis of research materials
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📝</div>
+                    <div class="feature-title">Report Generation</div>
+                    <div class="feature-desc">
+                        Generate comprehensive research reports with citations and insights
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔗</div>
+                    <div class="feature-title">Agent Collaboration</div>
+                    <div class="feature-desc">
+                        Multiple specialized agents working together for optimal results
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Agent System UI will be inserted here -->
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/api/docs">API Documentation</a>
+                <a href="/about">About</a>
+                <a href="/privacy">Privacy Policy</a>
+                <a href="/terms">Terms of Service</a>
+                <a href="/support">Support</a>
+            </div>
+            <p>&copy; 2025 VSI Vector Store Agent System. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Load the agent system UI -->
+    <script src="/js/agent-system.js"></script>
+</body>
+</html>

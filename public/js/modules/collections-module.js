@@ -713,10 +713,14 @@ class VSICollectionsModule {
             document.getElementById('tokenStatus').className = 'alert alert-warning d-flex align-items-center';
         }
         
-        // Generate code examples
-        this.generateCodeExamples(baseUrl, collectionId, this.app.currentCollection.name);
-        
+        // Show modal and generate examples when fully shown
         modal.show();
+        
+        // Listen for modal shown event to ensure DOM is ready
+        const modalElement = document.getElementById('developerModal');
+        modalElement.addEventListener('shown.bs.modal', () => {
+            this.generateCodeExamples(baseUrl, collectionId, this.app.currentCollection.name);
+        }, { once: true }); // Use once: true to ensure it only runs once
     }
 
     generateCodeExamples(baseUrl, collectionId, collectionName) {
@@ -1400,6 +1404,12 @@ if __name__ == "__main__":
         const smartContextCurlEl = document.getElementById('smartContextCurl');
         const smartContextJSEl = document.getElementById('smartContextJS');
         const smartContextPythonEl = document.getElementById('smartContextPython');
+        
+        console.log('Smart Context DOM elements found:', {
+            curl: !!smartContextCurlEl,
+            js: !!smartContextJSEl,
+            python: !!smartContextPythonEl
+        });
         
         if (smartContextCurlEl) smartContextCurlEl.textContent = smartContextCurl;
         if (smartContextJSEl) smartContextJSEl.textContent = smartContextJS;

@@ -508,6 +508,172 @@ body.loading {
 
 /* ==================== END ADVANCED CLUSTERING STYLES ==================== */
 
+/* Agent System Styles */
+.agent-card {
+  transition: all 0.3s ease;
+  border: 1px solid #e9ecef;
+}
+
+.agent-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.session-status-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.log-entry {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border-left: 3px solid #dee2e6;
+  background-color: #f8f9fa;
+  border-radius: 0.25rem;
+}
+
+.log-entry.info {
+  border-left-color: #0dcaf0;
+  background-color: #e7f6ff;
+}
+
+.log-entry.success {
+  border-left-color: #198754;
+  background-color: #e8f5e8;
+}
+
+.log-entry.warning {
+  border-left-color: #ffc107;
+  background-color: #fff3cd;
+}
+
+.log-entry.error {
+  border-left-color: #dc3545;
+  background-color: #ffe6e6;
+}
+
+.log-entry pre {
+  background-color: rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.result-card {
+  transition: all 0.3s ease;
+}
+
+.result-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.progress-bar-animated {
+  animation: progress-bar-stripes 1s linear infinite;
+}
+
+/* Agent navigation highlight */
+.nav-link[onclick*="agents"] {
+  position: relative;
+}
+
+.nav-link[onclick*="agents"]::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: var(--secondary-color);
+  transition: height 0.3s ease;
+}
+
+.nav-link[onclick*="agents"]:hover::before {
+  height: 70%;
+}
+
+/* Session detail view enhancements */
+#sessionDetailView .card {
+  border: none;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+#sessionDetailView .card-header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 1px solid #dee2e6;
+}
+
+/* Real-time updates animation */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.updating {
+  animation: pulse 2s infinite;
+}
+
+/* Custom scrollbar for logs */
+#sessionLogs, #sessionResults {
+  scrollbar-width: thin;
+  scrollbar-color: #ccc #f1f1f1;
+}
+
+#sessionLogs::-webkit-scrollbar, #sessionResults::-webkit-scrollbar {
+  width: 6px;
+}
+
+#sessionLogs::-webkit-scrollbar-track, #sessionResults::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+#sessionLogs::-webkit-scrollbar-thumb, #sessionResults::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+#sessionLogs::-webkit-scrollbar-thumb:hover, #sessionResults::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Agent template selection styling */
+#agentTemplateSelect {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e");
+}
+
+/* Loading states */
+.loading-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Mobile responsiveness for agent views */
+@media (max-width: 768px) {
+  #sessionDetailView .row {
+    margin-bottom: 1rem;
+  }
+  
+  #sessionDetailView .col-md-6 {
+    margin-bottom: 1rem;
+  }
+  
+  .log-entry, .result-card {
+    font-size: 0.9rem;
+  }
+}
+
 /* Utility classes */
 .text-primary-custom {
   color: var(--primary-color) !important;
