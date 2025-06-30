@@ -688,188 +688,241 @@ class AgentService extends EventEmitter {
         }
     }
 
-    getAgentClass(agentType) {
-        // Import agent classes
-        const { OrchestratorAgent } = require('../agents/OrchestratorAgent');
-        const { SourceDiscoveryAgent } = require('../agents/SourceDiscoveryAgent');
-        const { ContentAnalysisAgent } = require('../agents/ContentAnalysisAgent');
-        const { SynthesisAgent } = require('../agents/SynthesisAgent');
-        const { FactCheckingAgent } = require('../agents/FactCheckingAgent');
-        
-        const agentClasses = {
-            'orchestrator': OrchestratorAgent,
-            'source_discovery': SourceDiscoveryAgent,
-            'content_analysis': ContentAnalysisAgent,
-            'synthesis': SynthesisAgent,
-            'fact_checking': FactCheckingAgent,
-        };
-        
-        const AgentClass = agentClasses[agentType];
-        if (!AgentClass) {
-            throw new Error(`Unknown agent type: ${agentType}. Available types: ${Object.keys(agentClasses).join(', ')}`);
+    async restartSession(sessionId, userId, options = {}) {
+        try {
+            console.log(`🔄 Restarting session: ${sessionId}`);
+            
+            const session = await this.getSession(sessionId, userId);
+            
+            // Verify session is in a restartable state
+            const restartableStates = ['completed', 'failed', 'error', 'stopped'];
+            if (!restartableStates.includes(session.status)) {
+                throw new Error(`Cannot restart session in status: ${session.status}. Session must be completed, failed, stopped, or error.`);
+            }
+
+            const { 
+                clearArtifacts = true, 
+                clearMemory = false,
+                preserveSourceDiscovery = false,
+                agentTypes = null
+            } = options;
+            
+            console.log(`🔧 Restart options:`, { clearArtifacts, clearMemory, preserveSourceDiscovery });
+
+            // Stop any remaining agents (safety measure)
+            const sessionInfo = this.sessions.get(sessionId);
+            if (sessionInfo) {
+                console.log(`🛑 Stopping any remaining agents...`);
+                for (const agentId of sessionInfo.agents.keys()) {
+                    try {
+                        await this.stopAgent(agentId);
+                    } catch (error) {
+                        console.warn(`⚠️ Warning stopping agent ${agentId}:`, error.message);
+                    }
+                }
+                
+                // Clear agent tracking from session
+                sessionInfo.agents.clear();
+                
+                // Clear artifacts if requested
+                if (clearArtifacts) {
+                    console.log(`🗑️ Clearing session artifacts...`);
+                    if (preserveSourceDiscovery) {
+                        console.log(`📋 Preserving source discovery artifacts`);
+                        // Keep only source discovery artifacts
+                        for (const [key, artifact] of sessionInfo.artifacts) {
+                            if (!key.includes('source_discovery')) {
+                                sessionInfo.artifacts.delete(key);
+                            }
+                        }
+                    } else {
+                        sessionInfo.artifacts.clear();
+                    }
+                }
+                
+                // Reset progress
+                sessionInfo.progress = {
+                    overall: 0,
+                    agents: []
+                };
+            }
+
+            // Clear memory if requested
+            if (clearMemory) {
+                console.log(`🧠 Clearing session memory...`);
+                try {
+                    // Clear agent memory for this session
+                    await this.clearSessionMemory(sessionId);
+                } catch (error) {
+                    console.warn(`⚠️ Warning clearing session memory:`, error.message);
+                }
+            }
+
+            // Reset session status and timestamps
+            const updateData = { 
+                status: 'created',
+                error_message: null,
+                completed_at: null,
+                updated_at: new Date()
+            };
+            
+            await this.updateSession(sessionId, updateData);
+            console.log(`✅ Session reset to 'created' status`);
+
+            // Determine agent types to start
+            let typesToStart = agentTypes;
+            if (!typesToStart) {
+                // Use default agents or extract from preferences
+                const preferences = session.preferences || {};
+                typesToStart = preferences.agentTypes || ['orchestrator'];
+            }
+
+            console.log(`🚀 Starting fresh agents:`, typesToStart);
+            
+            // Extract auth token if available (for agent API calls)
+            const token = options.userToken || null;
+            
+            // Start fresh agents
+            const result = await this.startAgents(sessionId, userId, typesToStart, token);
+            
+            console.log(`🎉 Session restart completed successfully`);
+            return { 
+                success: true, 
+                message: 'Session restarted successfully',
+                agents: result.agents,
+                clearedArtifacts: clearArtifacts,
+                clearedMemory: clearMemory
+            };
+            
+        } catch (error) {
+            console.error(`❌ Error restarting session ${sessionId}:`, error);
+            
+            // Try to set session to error state if restart failed
+            try {
+                await this.updateSession(sessionId, { 
+                    status: 'error',
+                    error_message: `Restart failed: ${error.message}`
+                });
+            } catch (updateError) {
+                console.error(`❌ Failed to update session status after restart error:`, updateError);
+            }
+            
+            throw error;
         }
-        
-        return AgentClass;
     }
 
-    getAgentConfig(agentType, preferences) {
-        console.log(`⚙️ Generating config for agent type: ${agentType}`);
-        console.log(`📋 Input preferences:`, preferences);
-        
-        const parsedPreferences = this.parsePreferences(preferences);
-        console.log(`📋 Parsed preferences:`, parsedPreferences);
-        
-        // Generate agent-specific configuration based on preferences
+    // Helper method to clear session memory
+    async clearSessionMemory(sessionId) {
+        try {
+            // Clear session-specific memory (if table exists)
+            const query = 'DELETE FROM agent_memory WHERE session_id = $1';
+            await this.db.query(query, [sessionId]);
+            console.log(`🧹 Cleared memory for session ${sessionId}`);
+        } catch (error) {
+            // Ignore table not found errors (agent_memory is optional)
+            if (error.message.includes('does not exist') || error.message.includes('relation') && error.message.includes('does not exist')) {
+                console.log(`💭 Agent memory table not found, skipping memory cleanup`);
+            } else {
+                console.error(`❌ Error clearing session memory:`, error);
+                throw error;
+            }
+        }
+    }
+
+    // Agent class loading and configuration
+    getAgentClass(agentType) {
+        try {
+            switch (agentType) {
+                case 'orchestrator':
+                    const { OrchestratorAgent } = require('../agents/OrchestratorAgent');
+                    return OrchestratorAgent;
+                case 'source_discovery':
+                    const { SourceDiscoveryAgent } = require('../agents/SourceDiscoveryAgent');
+                    return SourceDiscoveryAgent;
+                case 'content_analysis':
+                    const { ContentAnalysisAgent } = require('../agents/ContentAnalysisAgent');
+                    return ContentAnalysisAgent;
+                case 'synthesis':
+                    const { SynthesisAgent } = require('../agents/SynthesisAgent');
+                    return SynthesisAgent;
+                case 'fact_checking':
+                    const { FactCheckingAgent } = require('../agents/FactCheckingAgent');
+                    return FactCheckingAgent;
+                case 'language':
+                    const { LanguageAgent } = require('../agents/LanguageAgent');
+                    return LanguageAgent;
+                default:
+                    throw new Error(`Unknown agent type: ${agentType}`);
+            }
+        } catch (error) {
+            console.error(`❌ Error loading agent class for ${agentType}:`, error);
+            throw new Error(`Failed to load agent class for type: ${agentType}`);
+        }
+    }
+
+    getAgentConfig(agentType, sessionPreferences = {}) {
         const baseConfig = {
-            agentType,
-            preferences: parsedPreferences,
+            agentType: agentType,
+            preferences: sessionPreferences,
             timeout: 30000,
             maxRetries: 3,
-            query: parsedPreferences.researchTopic || 'No research topic specified',
+            query: sessionPreferences.researchTopic || '',
             inputs: {
-                query: parsedPreferences.researchTopic || 'No research topic specified',
-                collections: parsedPreferences.collections || null
+                query: sessionPreferences.researchTopic || '',
+                collections: null
             }
         };
-        
-        console.log(`🔧 Base config generated:`, baseConfig);
 
-        // Add agent-specific configuration
+        // Type-specific configuration
         switch (agentType) {
+            case 'orchestrator':
+                return {
+                    ...baseConfig,
+                    specializedAgents: ['source_discovery', 'content_analysis', 'synthesis', 'fact_checking'],
+                    coordinationStrategy: 'sequential',
+                    useExternalSources: sessionPreferences.useExternalSources || false,
+                    externalContent: sessionPreferences.externalContent || {}
+                };
             case 'source_discovery':
-                const sourceConfig = {
+                return {
                     ...baseConfig,
-                    maxSources: parsedPreferences.maxSources || 50,
-                    qualityThreshold: parsedPreferences.qualityThreshold || 0.4, // Lowered for testing
-                    // External content configuration
-                    useExternalSources: parsedPreferences.enableExternalSources || false,
-                    externalContent: {
-                        maxExternalSources: parsedPreferences.maxExternalSources || 5,
-                        search: {
-                            enabled: parsedPreferences.enableWebSearch || false,
-                            provider: parsedPreferences.webSearchProvider || 'duckduckgo',
-                            maxResults: parsedPreferences.maxExternalSources || 5,
-                            timeout: 30000
-                        }
-                    }
+                    maxSources: sessionPreferences.maxSources || 50,
+                    qualityThreshold: sessionPreferences.qualityThreshold || 0.6,
+                    useExternalSources: sessionPreferences.useExternalSources || false,
+                    externalContent: sessionPreferences.externalContent || {}
                 };
-                console.log(`🔍 Source discovery config:`, sourceConfig);
-                return sourceConfig;
             case 'content_analysis':
-                const analysisConfig = {
+                return {
                     ...baseConfig,
-                    frameworks: parsedPreferences.analysisFrameworks || ['thematic', 'sentiment'],
-                    maxContextSize: parsedPreferences.maxContextSize || 4000,
-                    // External content configuration
-                    useExternalSources: parsedPreferences.enableExternalSources || false,
-                    externalContent: {
-                        enableWebSearch: parsedPreferences.enableWebSearch || false,
-                        enableWebBrowsing: parsedPreferences.enableWebBrowsing || false,
-                        maxExternalSources: parsedPreferences.maxExternalSources || 5,
-                        browser: {
-                            apiBase: parsedPreferences.browserApiBase || 'https://browserless.corrently.cloud',
-                            timeout: 60000,
-                            maxCommands: 50,
-                            maxConcurrentSessions: 3
-                        },
-                        search: {
-                            enabled: parsedPreferences.enableWebSearch || false,
-                            provider: parsedPreferences.webSearchProvider || 'duckduckgo',
-                            maxResults: parsedPreferences.maxExternalSources || 5,
-                            timeout: 30000
-                        }
-                    }
+                    analysisFrameworks: sessionPreferences.analysisFrameworks || ['thematic', 'sentiment'],
+                    maxContextSize: sessionPreferences.maxContextSize || 4000,
+                    useExternalSources: sessionPreferences.useExternalSources || false,
+                    externalContent: sessionPreferences.externalContent || {}
                 };
-                console.log(`📊 Content analysis config:`, analysisConfig);
-                return analysisConfig;
             case 'synthesis':
-                const synthesisConfig = {
+                return {
                     ...baseConfig,
-                    maxSynthesisLength: parsedPreferences.maxSynthesisLength || 5000,
-                    narrativeStyle: parsedPreferences.narrativeStyle || 'academic',
-                    includeReferences: parsedPreferences.includeReferences !== false,
-                    coherenceThreshold: parsedPreferences.coherenceThreshold || 0.8,
-                    structureTemplate: parsedPreferences.structureTemplate || 'research'
+                    maxSynthesisLength: sessionPreferences.maxSynthesisLength || 5000,
+                    narrativeStyle: sessionPreferences.narrativeStyle || 'academic',
+                    coherenceThreshold: sessionPreferences.coherenceThreshold || 0.8
                 };
-                console.log(`📝 Synthesis config:`, synthesisConfig);
-                return synthesisConfig;
             case 'fact_checking':
-                const factCheckConfig = {
+                return {
                     ...baseConfig,
-                    confidenceThreshold: parsedPreferences.confidenceThreshold || 0.7,
-                    maxClaimsToCheck: parsedPreferences.maxClaimsToCheck || 50,
-                    checkExternalSources: parsedPreferences.checkExternalSources || false,
-                    disputeThreshold: parsedPreferences.disputeThreshold || 0.3,
-                    verificationMethods: parsedPreferences.verificationMethods || ['source_cross_reference', 'statistical_validation']
+                    verificationSources: sessionPreferences.verificationSources || ['internal'],
+                    confidenceThreshold: sessionPreferences.confidenceThreshold || 0.7,
+                    useExternalSources: sessionPreferences.useExternalSources || false,
+                    externalContent: sessionPreferences.externalContent || {}
                 };
-                console.log(`✅ Fact checking config:`, factCheckConfig);
-                return factCheckConfig;
+            case 'language':
+                return {
+                    ...baseConfig,
+                    supportedLanguages: ['en', 'de', 'fr', 'es'],
+                    autoDetection: true,
+                    translationEnabled: sessionPreferences.translationEnabled || false
+                };
             default:
-                console.log(`🔧 Default config for ${agentType}:`, baseConfig);
                 return baseConfig;
-        }
-    }
-
-    async provideFeedback(sessionId, userId, feedbackData) {
-        try {
-            const session = await this.getSession(sessionId, userId);
-            const feedbackId = uuidv4();
-            
-            const query = `
-                INSERT INTO agent_feedback (id, session_id, user_id, agent_id, artifact_id, feedback_type, feedback_data, priority, status, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            `;
-            
-            await this.db.query(query, [
-                feedbackId,
-                sessionId,
-                userId,
-                feedbackData.agentId || null,
-                feedbackData.artifactId || null,
-                feedbackData.type || 'general',
-                JSON.stringify(feedbackData.feedback),
-                feedbackData.priority || 'medium',
-                'pending',
-                new Date()
-            ]);
-
-            this.emit('feedback_received', { sessionId, feedbackId, ...feedbackData });
-            return { success: true, feedbackId };
-        } catch (error) {
-            console.error(`❌ Error providing feedback:`, error);
-            throw error;
-        }
-    }
-
-    async getSessionLogs(sessionId, options = {}) {
-        try {
-            const { limit = 100, offset = 0, level } = options;
-            
-            let query = `
-                SELECT * FROM agent_logs 
-                WHERE session_id = $1
-            `;
-            const params = [sessionId];
-            
-            // Add level filter if specified
-            if (level) {
-                query += ` AND log_level = $${params.length + 1}`;
-                params.push(level);
-            }
-            
-            query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-            params.push(limit, offset);
-            
-            const result = await this.db.query(query, params);
-            
-            return result.rows.map(log => ({
-                ...log,
-                // PostgreSQL JSONB automatically deserializes to objects, so don't parse again
-                metadata: typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata || {}
-            }));
-        } catch (error) {
-            console.error(`❌ Error getting session logs:`, error);
-            throw error;
         }
     }
 }

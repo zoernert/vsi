@@ -114,43 +114,128 @@ class SynthesisAgent extends BaseAgent {
     }
 
     /**
-     * Load content analysis artifacts from shared memory
+     * Load content analysis artifacts from shared memory with smart context integration
      */
     async loadAnalysisArtifacts() {
         try {
-            const sharedMemory = await this.getSharedMemory();
-            const contentAnalysisData = sharedMemory.value?.contentAnalysis || {};
+            // Load content analysis results
+            const contentAnalysisData = await this.getSharedMemory('content_analysis_completed');
+            if (contentAnalysisData?.value) {
+                this.analysisArtifacts = contentAnalysisData.value || [];
+            }
             
-            this.analysisArtifacts = contentAnalysisData.artifacts || [];
+            // Load shared analysis context if available
+            const sharedAnalysisContext = await this.getSharedContext('analysis_base_context');
+            if (sharedAnalysisContext) {
+                this.baseAnalysisContext = sharedAnalysisContext;
+                console.log(`📖 Loaded shared analysis context for synthesis`);
+            }
             
-            await this.log('info', 'Loaded analysis artifacts', {
-                artifactCount: this.analysisArtifacts.length
+            await this.log('info', 'Loaded analysis artifacts with smart context', {
+                artifactCount: this.analysisArtifacts.length,
+                hasSharedContext: !!this.baseAnalysisContext
             });
             
         } catch (error) {
             await this.log('warn', 'Could not load analysis artifacts', { error: error.message });
             this.analysisArtifacts = [];
+            this.baseAnalysisContext = null;
         }
     }
 
     /**
-     * Load source content for reference
+     * Load source content for reference using smart context
      */
     async loadSourceContent() {
         try {
-            const sharedMemory = await this.getSharedMemory();
-            const sourceData = sharedMemory.value?.sourceDiscovery || {};
+            // Get curated sources from source discovery
+            const curatedSources = await this.getSharedMemory('curated_sources');
+            if (curatedSources?.value) {
+                this.sourceContent = curatedSources.value;
+                
+                // Generate synthesis-optimized context across all sources
+                await this.generateSynthesisContext();
+            }
             
-            this.sourceContent = sourceData.sources || [];
-            
-            await this.log('info', 'Loaded source content', {
-                sourceCount: this.sourceContent.length
+            await this.log('info', 'Loaded source content with smart context', {
+                sourceCount: this.sourceContent.length,
+                hasSynthesisContext: !!this.synthesisContext
             });
             
         } catch (error) {
             await this.log('warn', 'Could not load source content', { error: error.message });
             this.sourceContent = [];
         }
+    }
+
+    /**
+     * Generate synthesis-optimized smart context across multiple collections
+     */
+    async generateSynthesisContext() {
+        try {
+            if (!this.sourceContent || this.sourceContent.length === 0) return;
+            
+            console.log(`🧠 Generating synthesis context across ${this.sourceContent.length} collections`);
+            
+            const synthesisContexts = [];
+            
+            // Generate smart context for each relevant collection
+            for (const source of this.sourceContent) {
+                if (source.collectionId) {
+                    try {
+                        const contextQuery = this.buildSynthesisQuery();
+                        const context = await this.generateOptimalContext(
+                            source.collectionId,
+                            contextQuery,
+                            'synthesis', // Use synthesis strategy for narrative generation
+                            {
+                                maxContextSize: 8000,
+                                includeMetadata: true
+                            }
+                        );
+                        
+                        if (context.success) {
+                            synthesisContexts.push({
+                                ...context,
+                                collectionName: source.collectionName,
+                                sourceId: source.id
+                            });
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Failed to generate synthesis context for ${source.collectionName}:`, error.message);
+                    }
+                }
+            }
+            
+            // Combine contexts for comprehensive synthesis
+            if (synthesisContexts.length > 0) {
+                this.synthesisContext = await this.combineContexts(
+                    synthesisContexts, 
+                    'comprehensive', 
+                    { maxSize: 15000 }
+                );
+                
+                // Store for other agents
+                await this.storeSharedContext('synthesis_context', this.synthesisContext);
+                
+                console.log(`✅ Generated comprehensive synthesis context (${this.synthesisContext.context?.length || 0} chars)`);
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error generating synthesis context:`, error.message);
+            this.synthesisContext = null;
+        }
+    }
+
+    /**
+     * Build synthesis query based on configuration
+     */
+    buildSynthesisQuery() {
+        const baseQuery = this.config.query || 'comprehensive synthesis';
+        const template = this.structureTemplate || 'research';
+        const style = this.narrativeStyle || 'academic';
+        
+        return `${baseQuery} for ${template} style ${style} narrative synthesis`;
     }
 
     /**
@@ -181,35 +266,88 @@ class SynthesisAgent extends BaseAgent {
     }
 
     /**
-     * Gather and validate analysis data
+     * Gather and validate analysis data with smart context integration
      */
     async gatherAnalysisData() {
-        await this.log('info', 'Gathering analysis data for synthesis');
+        await this.log('info', 'Gathering analysis data for synthesis with smart context');
         
         // Validate we have sufficient data for synthesis
-        if (this.analysisArtifacts.length === 0) {
-            throw new Error('No content analysis artifacts available for synthesis');
+        if (this.analysisArtifacts.length === 0 && !this.synthesisContext) {
+            throw new Error('No content analysis artifacts or synthesis context available');
         }
         
-        // Extract key insights and themes
+        // Extract insights from analysis artifacts and smart context
         this.keyInsights = this.extractKeyInsights();
         this.mainThemes = this.extractMainThemes();
         this.supportingEvidence = this.extractSupportingEvidence();
         
-        await this.log('info', 'Analysis data gathered', {
+        // Extract additional insights from smart context if available
+        if (this.synthesisContext) {
+            const contextInsights = this.extractInsightsFromContext(this.synthesisContext);
+            this.keyInsights = [...this.keyInsights, ...contextInsights.insights];
+            this.mainThemes = [...this.mainThemes, ...contextInsights.themes];
+            this.supportingEvidence = [...this.supportingEvidence, ...contextInsights.evidence];
+        }
+        
+        await this.log('info', 'Analysis data gathered with smart context', {
             insights: this.keyInsights.length,
             themes: this.mainThemes.length,
-            evidence: this.supportingEvidence.length
+            evidence: this.supportingEvidence.length,
+            hasSmartContext: !!this.synthesisContext
         });
     }
 
     /**
-     * Create narrative outline
+     * Extract insights from smart context
+     */
+    extractInsightsFromContext(smartContext) {
+        const insights = [];
+        const themes = [];
+        const evidence = [];
+        
+        if (smartContext.metadata?.stats) {
+            const stats = smartContext.metadata.stats;
+            
+            // Extract cluster-based themes
+            if (stats.clustersRepresented) {
+                themes.push(...stats.clustersRepresented.map(cluster => ({
+                    name: cluster,
+                    source: 'smart_context_cluster',
+                    relevance: stats.averageRelevance || 0
+                })));
+            }
+            
+            // Extract diversity insights
+            if (stats.diversityScore > 0.5) {
+                insights.push({
+                    type: 'diversity',
+                    content: 'High content diversity detected across multiple sources',
+                    confidence: stats.diversityScore,
+                    source: 'smart_context'
+                });
+            }
+            
+            // Extract chunk-based evidence
+            if (smartContext.metadata.chunks) {
+                evidence.push(...smartContext.metadata.chunks.map(chunk => ({
+                    content: chunk.preview || '',
+                    relevance: chunk.similarity || 0,
+                    source: chunk.filename || 'unknown',
+                    clusterName: chunk.clusterName
+                })));
+            }
+        }
+        
+        return { insights, themes, evidence };
+    }
+
+    /**
+     * Create narrative outline using smart context
      */
     async createNarrativeOutline() {
-        await this.log('info', 'Creating narrative outline');
+        await this.log('info', 'Creating narrative outline with smart context');
         
-        const outlinePrompt = this.buildOutlinePrompt();
+        const outlinePrompt = this.buildOutlinePromptWithContext();
         
         try {
             const geminiService = this.getGeminiService();
@@ -217,8 +355,9 @@ class SynthesisAgent extends BaseAgent {
             
             this.synthesisOutline = this.parseOutlineResponse(outlineResponse);
             
-            await this.log('info', 'Narrative outline created', {
-                sections: this.synthesisOutline.sections?.length || 0
+            await this.log('info', 'Narrative outline created with smart context', {
+                sections: this.synthesisOutline.sections?.length || 0,
+                usedSmartContext: !!this.synthesisContext
             });
             
         } catch (error) {
@@ -229,16 +368,58 @@ class SynthesisAgent extends BaseAgent {
     }
 
     /**
-     * Generate coherent synthesis
+     * Build outline prompt incorporating smart context
+     */
+    buildOutlinePromptWithContext() {
+        let prompt = `Create a comprehensive outline for a ${this.structureTemplate} style narrative synthesis.\n\n`;
+        
+        // Add template structure
+        prompt += `Follow this structure: ${this.synthesisTemplate.structure.join(', ')}\n`;
+        prompt += `Writing style: ${this.synthesisTemplate.style}\n\n`;
+        
+        // Add analysis data
+        if (this.keyInsights.length > 0) {
+            prompt += `Key Insights to incorporate:\n`;
+            this.keyInsights.slice(0, 10).forEach((insight, i) => {
+                prompt += `${i + 1}. ${insight.content || insight.text}\n`;
+            });
+            prompt += '\n';
+        }
+        
+        if (this.mainThemes.length > 0) {
+            prompt += `Main Themes to cover:\n`;
+            this.mainThemes.slice(0, 8).forEach((theme, i) => {
+                prompt += `${i + 1}. ${theme.name || theme.text}\n`;
+            });
+            prompt += '\n';
+        }
+        
+        // Add smart context information
+        if (this.synthesisContext) {
+            prompt += `Smart Context Summary:\n`;
+            prompt += `- Context spans ${this.synthesisContext.metadata?.totalSources || 0} sources\n`;
+            if (this.synthesisContext.metadata?.clusters) {
+                prompt += `- Covers clusters: ${this.synthesisContext.metadata.clusters.join(', ')}\n`;
+            }
+            prompt += '\n';
+        }
+        
+        prompt += `Create a detailed outline that synthesizes this information into a coherent narrative.`;
+        
+        return prompt;
+    }
+
+    /**
+     * Generate coherent synthesis using smart context
      */
     async synthesizeContent() {
-        await this.log('info', 'Generating coherent synthesis');
+        await this.log('info', 'Generating coherent synthesis with smart context');
         
         if (!this.synthesisOutline) {
             throw new Error('No synthesis outline available');
         }
         
-        const synthesisPrompt = this.buildSynthesisPrompt();
+        const synthesisPrompt = this.buildSynthesisPromptWithContext();
         
         try {
             const geminiService = this.getGeminiService();
@@ -246,15 +427,60 @@ class SynthesisAgent extends BaseAgent {
             
             this.synthesizedNarrative = synthesisResponse.text || synthesisResponse;
             
-            await this.log('info', 'Synthesis generated', {
+            // Add metadata about smart context usage
+            this.narrativeMetadata = {
+                usedSmartContext: !!this.synthesisContext,
+                contextStrategy: this.synthesisContext?.strategy || null,
+                sourceCollections: this.synthesisContext?.metadata?.collections || [],
+                clustersIncluded: this.synthesisContext?.metadata?.clusters || [],
+                generatedAt: new Date()
+            };
+            
+            await this.log('info', 'Synthesis generated with smart context', {
                 narrativeLength: this.synthesizedNarrative.length,
-                wordCount: this.synthesizedNarrative.split(' ').length
+                wordCount: this.synthesizedNarrative.split(' ').length,
+                usedSmartContext: !!this.synthesisContext
             });
             
         } catch (error) {
             await this.log('error', 'Failed to generate synthesis', { error: error.message });
             throw error;
         }
+    }
+
+    /**
+     * Build synthesis prompt incorporating smart context
+     */
+    buildSynthesisPromptWithContext() {
+        let prompt = `Generate a comprehensive ${this.structureTemplate} style synthesis based on the following outline and supporting content.\n\n`;
+        
+        // Add outline
+        prompt += `OUTLINE:\n${JSON.stringify(this.synthesisOutline, null, 2)}\n\n`;
+        
+        // Add writing guidelines
+        prompt += `WRITING GUIDELINES:\n`;
+        prompt += `- Style: ${this.synthesisTemplate.style}\n`;
+        prompt += `- Maximum length: ${this.maxSynthesisLength} characters\n`;
+        prompt += `- Include references: ${this.includeReferences}\n\n`;
+        
+        // Add smart context content
+        if (this.synthesisContext?.context) {
+            prompt += `SUPPORTING CONTENT FROM SMART CONTEXT:\n`;
+            prompt += this.synthesisContext.context + '\n\n';
+        }
+        
+        // Add analysis insights
+        if (this.keyInsights.length > 0) {
+            prompt += `KEY INSIGHTS TO INCORPORATE:\n`;
+            this.keyInsights.forEach((insight, i) => {
+                prompt += `${i + 1}. ${insight.content || insight.text}\n`;
+            });
+            prompt += '\n';
+        }
+        
+        prompt += `Generate a coherent, well-structured synthesis that integrates all the provided information.`;
+        
+        return prompt;
     }
 
     /**

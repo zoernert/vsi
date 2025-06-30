@@ -55,40 +55,32 @@ class OrchestratorAgent extends BaseAgent {
             // Find relevant collections using search across all collections
             const relevantCollections = await this.findRelevantCollections(this.config.preferences.researchTopic, collections);
             
-            // Generate initial context across relevant collections
-            const contexts = [];
-            for (const collection of relevantCollections) {
-                try {
-                    const contextResponse = await this.generateSmartContext(
-                        collection.id,
-                        this.config.preferences.researchTopic,
-                        {
-                            maxContextSize: 2000,
-                            strategy: 'relevance'
-                        }
-                    );
-                    
-                    if (contextResponse.success) {
-                        contexts.push({
-                            collection: collection,
-                            context: contextResponse.data
-                        });
-                    }
-                } catch (error) {
-                    console.warn(`⚠️ Failed to generate context for collection ${collection.name}:`, error.message);
-                }
+            // Generate comprehensive research context using smart context API
+            const researchContexts = await this.generateResearchContexts(relevantCollections);
+            
+            // Create shared research context for all agents
+            if (researchContexts.length > 0) {
+                const primaryResearchContext = await this.combineContexts(
+                    researchContexts, 
+                    'comprehensive',
+                    { maxSize: 20000 }
+                );
+                
+                await this.storeSharedContext('primary_research_context', primaryResearchContext);
+                console.log(`✅ Generated shared research context (${primaryResearchContext.context?.length || 0} chars)`);
             }
             
             const researchScope = {
                 totalCollections: collections.length,
                 relevantCollections: relevantCollections,
-                contexts: contexts,
-                complexity: this.assessComplexity(relevantCollections, contexts),
-                estimatedDuration: this.estimateDuration(relevantCollections, contexts)
+                researchContexts: researchContexts,
+                complexity: this.assessComplexity(relevantCollections, researchContexts),
+                estimatedDuration: this.estimateDuration(relevantCollections, researchContexts),
+                smartContextGenerated: researchContexts.length > 0
             };
             
             await this.storeMemory('research_scope', researchScope);
-            console.log(`✅ Research scope analyzed: ${relevantCollections.length} relevant collections found`);
+            console.log(`✅ Research scope analyzed: ${relevantCollections.length} relevant collections, ${researchContexts.length} smart contexts generated`);
             
             return researchScope;
         } catch (error) {
@@ -108,6 +100,44 @@ class OrchestratorAgent extends BaseAgent {
             
             throw error;
         }
+    }
+
+    /**
+     * Generate research contexts using smart context API
+     */
+    async generateResearchContexts(relevantCollections) {
+        const contexts = [];
+        const researchTopic = this.config.preferences.researchTopic;
+        
+        for (const collection of relevantCollections) {
+            try {
+                console.log(`🧠 Generating research context for collection: ${collection.name}`);
+                
+                const contextResponse = await this.generateOptimalContext(
+                    collection.id,
+                    researchTopic,
+                    'exploratory', // Use exploratory strategy for research discovery
+                    {
+                        maxContextSize: 6000,
+                        includeMetadata: true
+                    }
+                );
+                
+                if (contextResponse.success) {
+                    contexts.push({
+                        ...contextResponse,
+                        collection: collection,
+                        relevanceScore: collection.relevanceScore || 0
+                    });
+                    
+                    console.log(`✅ Generated research context for ${collection.name} (${contextResponse.metadata?.stats?.contextSize || 0} chars)`);
+                }
+            } catch (error) {
+                console.warn(`⚠️ Failed to generate research context for collection ${collection.name}:`, error.message);
+            }
+        }
+        
+        return contexts;
     }
 
     /**
@@ -216,33 +246,66 @@ class OrchestratorAgent extends BaseAgent {
         return (avgScore * 0.4) + (contentRelevance * 0.4) + (Math.min(resultCount / 10, 1) * 0.2);
     }
 
-    assessComplexity(relevantCollections, contexts) {
+    assessComplexity(relevantCollections, researchContexts) {
         // Assess research complexity based on:
         // 1. Number of relevant collections
-        // 2. Diversity of content
-        // 3. Volume of information
+        // 2. Diversity of content from smart contexts
+        // 3. Volume of information and cluster distribution
         
         const collectionCount = relevantCollections.length;
-        const contextCount = contexts.length;
-        const avgContextSize = contextCount > 0 ? 
-            contexts.reduce((sum, ctx) => sum + (ctx.context?.length || 0), 0) / contextCount : 0;
+        const contextCount = researchContexts.length;
         
-        if (collectionCount <= 2 && avgContextSize < 1000) {
+        // Calculate smart context metrics
+        let avgContextSize = 0;
+        let avgDiversityScore = 0;
+        let totalClusters = new Set();
+        
+        if (contextCount > 0) {
+            avgContextSize = researchContexts.reduce((sum, ctx) => 
+                sum + (ctx.metadata?.stats?.contextSize || 0), 0) / contextCount;
+            
+            avgDiversityScore = researchContexts.reduce((sum, ctx) => 
+                sum + (ctx.metadata?.stats?.diversityScore || 0), 0) / contextCount;
+            
+            researchContexts.forEach(ctx => {
+                if (ctx.metadata?.stats?.clustersRepresented) {
+                    ctx.metadata.stats.clustersRepresented.forEach(cluster => 
+                        totalClusters.add(cluster)
+                    );
+                }
+            });
+        }
+        
+        const clusterCount = totalClusters.size;
+        
+        // Enhanced complexity assessment
+        if (collectionCount <= 2 && avgContextSize < 2000 && clusterCount <= 2) {
             return 'low';
-        } else if (collectionCount <= 5 && avgContextSize < 3000) {
+        } else if (collectionCount <= 5 && avgContextSize < 5000 && clusterCount <= 5 && avgDiversityScore < 0.6) {
             return 'medium';
         } else {
             return 'high';
         }
     }
 
-    estimateDuration(relevantCollections, contexts) {
-        // Estimate research duration in minutes
+    estimateDuration(relevantCollections, researchContexts) {
+        // Estimate research duration in minutes based on smart context metrics
         const baseTime = 10; // Base 10 minutes
-        const collectionTime = relevantCollections.length * 5; // 5 minutes per collection
-        const complexityMultiplier = contexts.length > 5 ? 1.5 : 1.0;
+        const collectionTime = relevantCollections.length * 3; // Reduced from 5 due to smart context efficiency
         
-        return Math.ceil((baseTime + collectionTime) * complexityMultiplier);
+        // Factor in context complexity
+        let complexityMultiplier = 1.0;
+        if (researchContexts.length > 0) {
+            const avgDiversityScore = researchContexts.reduce((sum, ctx) => 
+                sum + (ctx.metadata?.stats?.diversityScore || 0), 0) / researchContexts.length;
+            
+            complexityMultiplier = avgDiversityScore > 0.6 ? 1.3 : 1.0;
+        }
+        
+        // Smart context reduces processing time
+        const smartContextBonus = researchContexts.length > 0 ? 0.8 : 1.0;
+        
+        return Math.ceil((baseTime + collectionTime) * complexityMultiplier * smartContextBonus);
     }
 
     async createResearchPlan() {
@@ -427,18 +490,81 @@ class OrchestratorAgent extends BaseAgent {
     }
 
     async createSpecializedAgent(agentType, task) {
-        // This would integrate with the AgentService to create specialized agents
-        // For now, we'll simulate the agent creation
-        const agentId = `${this.sessionId}_${agentType}_${Date.now()}`;
-        
-        console.log(`🔧 Creating ${agentType} agent: ${agentId}`);
-        
-        // In a real implementation, this would:
-        // 1. Get the appropriate agent class for the type
-        // 2. Create agent configuration based on task inputs
-        // 3. Register and start the agent via AgentService
-        
-        return agentId;
+        try {
+            // Generate agent ID
+            const agentId = `${this.sessionId}_${agentType}_${Date.now()}`;
+            
+            console.log(`🔧 Creating ${agentType} agent: ${agentId}`);
+            
+            // Create agent configuration based on task inputs
+            const agentConfig = {
+                agentType: agentType,
+                preferences: {
+                    researchTopic: this.config.preferences.researchTopic,
+                    ...task.inputs
+                },
+                timeout: this.config.timeout || 30000,
+                maxRetries: this.config.maxRetries || 3,
+                query: this.config.preferences.researchTopic,
+                inputs: task.inputs || {},
+                expectedOutputs: task.expectedOutputs || [],
+                priority: task.priority || 'medium'
+            };
+            
+            // Get the agent class for this type
+            const AgentClass = this.getAgentClass(agentType);
+            if (!AgentClass) {
+                console.error(`❌ No agent class found for type: ${agentType}`);
+                return null;
+            }
+            
+            // Register the agent via AgentService
+            if (this.agentService) {
+                await this.agentService.registerAgent(agentId, AgentClass, agentConfig);
+                console.log(`📝 Registered ${agentType} agent: ${agentId}`);
+                
+                // Start the agent
+                const startResult = await this.agentService.startAgent(agentId, this.sessionId);
+                console.log(`� Started ${agentType} agent: ${agentId} with result:`, startResult);
+                
+                return agentId;
+            } else {
+                console.warn(`⚠️ AgentService not available, cannot create actual agent`);
+                return agentId; // Return simulated ID for now
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error creating ${agentType} agent:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get agent class for the given agent type
+     */
+    getAgentClass(agentType) {
+        try {
+            switch (agentType) {
+                case 'source_discovery':
+                    const { SourceDiscoveryAgent } = require('./SourceDiscoveryAgent');
+                    return SourceDiscoveryAgent;
+                case 'content_analysis':
+                    const { ContentAnalysisAgent } = require('./ContentAnalysisAgent');
+                    return ContentAnalysisAgent;
+                case 'synthesis':
+                    const { SynthesisAgent } = require('./SynthesisAgent');
+                    return SynthesisAgent;
+                case 'fact_checking':
+                    const { FactCheckingAgent } = require('./FactCheckingAgent');
+                    return FactCheckingAgent;
+                default:
+                    console.error(`❌ Unknown agent type: ${agentType}`);
+                    return null;
+            }
+        } catch (error) {
+            console.error(`❌ Error loading agent class for ${agentType}:`, error);
+            return null;
+        }
     }
 
     /**

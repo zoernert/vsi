@@ -176,6 +176,10 @@ class VSIAgentsModule {
                                 <button class="btn btn-sm btn-outline-success" onclick="app.agents.resumeSession('${session.id}')">
                                     <i class="fas fa-play"></i> Resume
                                 </button>
+                            ` : (session.status === 'completed' || session.status === 'failed' || session.status === 'error' || session.status === 'stopped') ? `
+                                <button class="btn btn-sm btn-outline-primary" onclick="app.agents.restartSession('${session.id}')">
+                                    <i class="fas fa-redo"></i> Restart
+                                </button>
                             ` : ''}
                             <button class="btn btn-sm btn-outline-danger" onclick="app.agents.deleteSession('${session.id}')">
                                 <i class="fas fa-trash"></i>
@@ -375,13 +379,14 @@ class VSIAgentsModule {
         const pauseBtn = document.getElementById('pauseSessionBtn');
         const resumeBtn = document.getElementById('resumeSessionBtn');
         const stopBtn = document.getElementById('stopSessionBtn');
+        const restartBtn = document.getElementById('restartSessionBtn');
 
         if (!this.currentSession) return;
 
         const status = this.currentSession.status;
 
         // Reset all buttons
-        [startBtn, pauseBtn, resumeBtn, stopBtn].forEach(btn => {
+        [startBtn, pauseBtn, resumeBtn, stopBtn, restartBtn].forEach(btn => {
             if (btn) btn.style.display = 'none';
         });
 
@@ -402,7 +407,8 @@ class VSIAgentsModule {
             case 'failed':
             case 'completed':
             case 'stopped':
-                // No action buttons for terminal states
+                // Show restart button for terminal states
+                if (restartBtn) restartBtn.style.display = 'inline-block';
                 break;
         }
     }
@@ -1051,191 +1057,127 @@ class VSIAgentsModule {
     }
 
     /**
-     * Delete session
+     * Restart session with options
      */
-    async deleteSession(sessionId) {
-        if (!confirm('Are you sure you want to delete this research session? This action cannot be undone.')) {
-            return;
-        }
+    async restartSession(sessionId) {
+        // Show restart options modal
+        this.showRestartSessionModal(sessionId);
+    }
 
+    /**
+     * Show restart session options modal
+     */
+    showRestartSessionModal(sessionId) {
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'restartSessionModal';
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Restart Research Session</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted mb-4">Choose what to reset when restarting this session:</p>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="clearArtifacts" checked>
+                            <label class="form-check-label" for="clearArtifacts">
+                                <strong>Clear artifacts</strong>
+                                <div class="small text-muted">Remove all previous research outputs and start fresh</div>
+                            </label>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="preserveSourceDiscovery">
+                            <label class="form-check-label" for="preserveSourceDiscovery">
+                                <strong>Preserve source discovery</strong>
+                                <div class="small text-muted">Keep previously discovered sources (only works if artifacts are cleared)</div>
+                            </label>
+                        </div>
+                        
+                        <div class="form-check mb-4">
+                            <input class="form-check-input" type="checkbox" id="clearMemory">
+                            <label class="form-check-label" for="clearMemory">
+                                <strong>Clear agent memory</strong>
+                                <div class="small text-muted">Remove all agent learning and context from previous runs</div>
+                            </label>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            The session will restart with the same configuration and research topic.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="app.agents.executeRestart('${sessionId}')">
+                            <i class="fas fa-redo me-2"></i>Restart Session
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        const modalInstance = new bootstrap.Modal(modal);
+        modalInstance.show();
+        
+        // Clean up modal when closed
+        modal.addEventListener('hidden.bs.modal', () => {
+            document.body.removeChild(modal);
+        });
+    }
+
+    /**
+     * Execute the restart with selected options
+     */
+    async executeRestart(sessionId) {
         try {
-            const response = await this.app.api.call(`/api/agents/sessions/${sessionId}`, {
-                method: 'DELETE'
+            const clearArtifacts = document.getElementById('clearArtifacts').checked;
+            const preserveSourceDiscovery = document.getElementById('preserveSourceDiscovery').checked;
+            const clearMemory = document.getElementById('clearMemory').checked;
+            
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('restartSessionModal'));
+            modal.hide();
+            
+            this.app.ui.showNotification('Restarting research session...', 'info');
+            
+            const response = await this.app.api.call(`/api/agents/sessions/${sessionId}/restart`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    clearArtifacts,
+                    preserveSourceDiscovery: clearArtifacts ? preserveSourceDiscovery : false,
+                    clearMemory
+                })
             });
 
             if (response && response.success) {
-                this.app.ui.showNotification('Research session deleted', 'success');
+                this.app.ui.showNotification(
+                    `Research session restarted with ${response.data.agents.length} agents`, 
+                    'success'
+                );
                 await this.loadSessions();
                 
-                // If we're viewing this session, go back to sessions list
+                // If viewing this session, start real-time updates
                 if (this.currentSession && this.currentSession.id === sessionId) {
-                    this.showAgents();
+                    this.currentSession.status = 'running';
+                    this.updateSessionButtons();
+                    this.startSessionUpdates();
                 }
             }
         } catch (error) {
-            console.error('Error deleting session:', error);
-            this.app.ui.showNotification('Error deleting research session', 'error');
-        }
-    }
-
-    /**
-     * Start real-time session updates
-     */
-    startSessionUpdates() {
-        if (!this.currentSession || this.eventSource) return;
-
-        // EventSource doesn't support Authorization headers, so pass token as query parameter
-        const token = this.app.token;
-        this.eventSource = new EventSource(`/api/agents/sessions/${this.currentSession.id}/events?token=${token}`);
-        
-        this.eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                this.handleSessionUpdate(data);
-            } catch (error) {
-                console.error('Error parsing session update:', error);
-            }
-        };
-
-        this.eventSource.onerror = (error) => {
-            console.error('Session update stream error:', error);
-            this.stopSessionUpdates();
-        };
-    }
-
-    /**
-     * Stop real-time session updates
-     */
-    stopSessionUpdates() {
-        if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = null;
-        }
-    }
-
-    /**
-     * Handle session update from stream
-     */
-    handleSessionUpdate(data) {
-        if (data.type === 'progress') {
-            const progressBar = document.getElementById('sessionProgressBar');
-            const progressText = document.getElementById('sessionProgressText');
-            if (progressBar && data.progress !== undefined) {
-                progressBar.style.width = `${data.progress}%`;
-                progressText.textContent = `${data.progress}% complete`;
-            }
-        } else if (data.type === 'log') {
-            // Add new log entry
-            this.appendLogEntry(data.log);
-        } else if (data.type === 'result') {
-            // Add new result
-            this.appendResult(data.result);
-        } else if (data.type === 'status') {
-            // Update session status
-            const statusBadge = document.getElementById('sessionDetailStatus');
-            if (statusBadge) {
-                statusBadge.textContent = data.status;
-                statusBadge.className = `badge ${this.getStatusBadgeClass(data.status)}`;
+            console.error('Error restarting session:', error);
+            let errorMessage = 'Error restarting research session';
+            
+            if (error.message && error.message.includes('Cannot restart session')) {
+                errorMessage = error.message;
             }
             
-            // Handle error status with user notification
-            if (data.status === 'error') {
-                this.app.ui.showNotification(
-                    `Session failed: ${data.message || data.error || 'Unknown error'}`, 
-                    'error'
-                );
-                
-                // Show error details in session view if available
-                const errorContainer = document.getElementById('sessionErrorDetails');
-                if (errorContainer && data.error) {
-                    errorContainer.innerHTML = `
-                        <div class="alert alert-danger mt-3">
-                            <h6 class="alert-heading">Session Error</h6>
-                            <p class="mb-1"><strong>Agent:</strong> ${data.agentId || 'Unknown'}</p>
-                            <p class="mb-0"><strong>Error:</strong> ${this.escapeHtml(data.error)}</p>
-                            ${data.timestamp ? `<small class="text-muted">Occurred at: ${new Date(data.timestamp).toLocaleString()}</small>` : ''}
-                        </div>
-                    `;
-                    errorContainer.style.display = 'block';
-                }
-                
-                this.stopSessionUpdates();
-            } else if (data.status === 'completed') {
-                this.app.ui.showNotification('Research session completed successfully', 'success');
-                this.stopSessionUpdates();
-            } else if (data.status === 'stopped') {
-                this.app.ui.showNotification('Research session stopped', 'info');
-                this.stopSessionUpdates();
-            }
-            
-            // Update current session status if we're viewing it
-            if (this.currentSession) {
-                this.currentSession.status = data.status;
-                this.updateSessionButtons();
-            }
-            
-            // Refresh sessions list to show updated status
-            this.loadSessions();
+            this.app.ui.showNotification(errorMessage, 'error');
         }
-    }
-
-    /**
-     * Append new log entry
-     */
-    appendLogEntry(log) {
-        const container = document.getElementById('sessionLogs');
-        if (!container) return;
-
-        // Map the log data properly based on source (SSE vs API)
-        const agentType = this.extractAgentType(log.agent_id || log.agentId) || log.agent_type || 'System';
-        const level = log.log_level || log.level || 'info';
-        const message = log.message;
-        const timestamp = log.created_at || log.timestamp;
-        const details = log.details || log.data;
-
-        const logHtml = `
-            <div class="log-entry ${level}" data-timestamp="${timestamp}">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <strong>${agentType}:</strong> ${this.escapeHtml(message)}
-                    </div>
-                    <small class="text-muted">${new Date(timestamp).toLocaleTimeString()}</small>
-                </div>
-                ${details && Object.keys(details).length > 0 ? `<pre class="mt-2 small"><code>${JSON.stringify(details, null, 2)}</code></pre>` : ''}
-            </div>
-        `;
-
-        container.insertAdjacentHTML('beforeend', logHtml);
-        container.scrollTop = container.scrollHeight;
-    }
-
-    /**
-     * Append new result
-     */
-    appendResult(result) {
-        const container = document.getElementById('sessionResults');
-        if (!container) return;
-
-        // Remove "no results" message if present
-        if (container.querySelector('.text-muted')) {
-            container.innerHTML = '';
-        }
-
-        const resultHtml = `
-            <div class="result-card card mb-3">
-                <div class="card-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">${result.title || result.type || 'Result'}</h6>
-                        <small class="text-muted">${new Date(result.createdAt || result.timestamp).toLocaleString()}</small>
-                    </div>
-                </div>
-                <div class="card-body">
-                    ${this.renderResultContent(result)}
-                </div>
-            </div>
-        `;
-
-        container.insertAdjacentHTML('beforeend', resultHtml);
     }
 
     /**

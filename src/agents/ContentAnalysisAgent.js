@@ -92,7 +92,7 @@ class ContentAnalysisAgent extends BaseAgent {
 
     async performDeepContentAnalysis() {
         try {
-            console.log(`🔍 Performing deep content analysis`);
+            console.log(`🔍 Performing deep content analysis using smart context`);
             
             // Get curated sources from source discovery agent
             const curatedSources = await this.getSharedMemory('curated_sources');
@@ -101,35 +101,51 @@ class ContentAnalysisAgent extends BaseAgent {
             }
             
             const sources = curatedSources.value;
-            console.log(`📚 Analyzing ${sources.length} curated sources`);
+            console.log(`📚 Analyzing ${sources.length} curated sources with smart context`);
             
             const analysisResults = [];
+            
+            // Generate shared analysis context for efficiency
+            const sharedAnalysisContext = await this.generateSharedAnalysisContext(sources);
+            if (sharedAnalysisContext) {
+                await this.storeSharedContext('analysis_base_context', sharedAnalysisContext);
+            }
             
             for (let i = 0; i < sources.length; i++) {
                 const source = sources[i];
                 this.updateProgress(15 + (i / sources.length) * 30, `Analyzing source ${i + 1}/${sources.length}`);
                 
                 try {
-                    // Generate smart context for detailed analysis
-                    let context = null;
+                    // Generate optimized smart context for this specific analysis
+                    let analysisContext = null;
                     if (source.collectionId) {
-                        const contextResponse = await this.generateSmartContext(
-                            source.collectionId,
-                            this.config.query || 'comprehensive analysis',
-                            {
-                                maxContextSize: this.maxContextSize,
-                                strategy: 'relevance',
-                                includeMetadata: true
-                            }
-                        );
+                        // Check for cached context first
+                        const query = this.buildAnalysisQuery(source);
+                        analysisContext = await this.getCachedContext(query, 'focused');
                         
-                        if (contextResponse.success) {
-                            context = contextResponse.data;
+                        if (!analysisContext) {
+                            const contextResponse = await this.generateOptimalContext(
+                                source.collectionId,
+                                query,
+                                'focused', // Use focused strategy for detailed analysis
+                                {
+                                    maxContextSize: this.maxContextSize,
+                                    includeMetadata: true
+                                }
+                            );
+                            
+                            if (contextResponse.success) {
+                                analysisContext = contextResponse;
+                            }
                         }
                     }
                     
-                    // Perform multi-framework analysis
-                    const analysis = await this.analyzeContent(source, context, this.analysisFrameworks);
+                    // Perform multi-framework analysis with smart context
+                    const analysis = await this.analyzeContentWithSmartContext(
+                        source, 
+                        analysisContext, 
+                        this.analysisFrameworks
+                    );
                     
                     analysisResults.push({
                         sourceId: source.id,
@@ -141,10 +157,12 @@ class ContentAnalysisAgent extends BaseAgent {
                         sentiment: analysis.sentiment,
                         concepts: analysis.concepts || [],
                         quality: analysis.quality || {},
+                        smartContextUsed: !!analysisContext,
+                        contextStrategy: analysisContext?.strategy || 'none',
                         processedAt: new Date()
                     });
                     
-                    console.log(`✅ Analyzed source ${source.id} - found ${analysis.themes?.length || 0} themes`);
+                    console.log(`✅ Analyzed source ${source.id} - found ${analysis.themes?.length || 0} themes (smart context: ${!!analysisContext})`);
                 } catch (error) {
                     console.warn(`⚠️ Error analyzing source ${source.id}:`, error.message);
                     // Continue with other sources
@@ -1033,6 +1051,130 @@ class ContentAnalysisAgent extends BaseAgent {
         }
         
         return distribution;
+    }
+
+    /**
+     * Generate shared analysis context for efficiency across multiple sources
+     */
+    async generateSharedAnalysisContext(sources) {
+        try {
+            if (!sources || sources.length === 0) return null;
+            
+            // Find the most comprehensive collection or use the first one
+            const primaryCollection = sources.find(s => s.isPrimary) || sources[0];
+            if (!primaryCollection?.collectionId) return null;
+            
+            console.log(`🧠 Generating shared analysis context from collection ${primaryCollection.collectionName}`);
+            
+            const sharedQuery = this.buildSharedAnalysisQuery(sources);
+            return await this.generateOptimalContext(
+                primaryCollection.collectionId,
+                sharedQuery,
+                'exploratory', // Use exploratory for diverse content discovery
+                {
+                    maxContextSize: 8000,
+                    includeMetadata: true
+                }
+            );
+        } catch (error) {
+            console.warn(`⚠️ Failed to generate shared analysis context:`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Build analysis query for specific source
+     */
+    buildAnalysisQuery(source) {
+        const baseQuery = this.config.query || 'analysis';
+        const frameworks = this.analysisFrameworks.join(' ');
+        
+        return `${baseQuery} ${frameworks} analysis for ${source.collectionName}`;
+    }
+
+    /**
+     * Build shared analysis query for multiple sources
+     */
+    buildSharedAnalysisQuery(sources) {
+        const baseQuery = this.config.query || 'comprehensive analysis';
+        const frameworks = this.analysisFrameworks.join(' ');
+        const collectionNames = sources.map(s => s.collectionName).join(' ');
+        
+        return `${baseQuery} ${frameworks} across ${collectionNames}`;
+    }
+
+    /**
+     * Analyze content using smart context instead of raw content
+     */
+    async analyzeContentWithSmartContext(source, smartContext, frameworks) {
+        const analysis = {
+            sourceId: source.id,
+            frameworks: frameworks,
+            themes: [],
+            insights: [],
+            sentiment: null,
+            concepts: [],
+            quality: {},
+            confidence: 0.0,
+            smartContextMetadata: smartContext?.metadata || null
+        };
+        
+        // Use smart context content for analysis instead of raw source content
+        const contentToAnalyze = smartContext?.context || source.content || '';
+        if (!contentToAnalyze) {
+            console.warn(`⚠️ No content available for analysis of source ${source.id}`);
+            return analysis;
+        }
+        
+        // Track that we're using smart context
+        if (smartContext) {
+            analysis.contextStats = {
+                strategy: smartContext.strategy,
+                contextSize: smartContext.metadata?.stats?.contextSize || 0,
+                chunksUsed: smartContext.metadata?.stats?.totalChunks || 0,
+                diversityScore: smartContext.metadata?.stats?.diversityScore || 0,
+                clustersRepresented: smartContext.metadata?.stats?.clustersRepresented || []
+            };
+        }
+        
+        // Apply each analysis framework
+        for (const framework of frameworks) {
+            try {
+                const frameworkResult = await this.applyAnalysisFramework(framework, contentToAnalyze, source, smartContext);
+                
+                // Merge results based on framework type
+                switch (framework) {
+                    case 'thematic':
+                        analysis.themes.push(...frameworkResult.themes);
+                        analysis.concepts.push(...frameworkResult.concepts);
+                        break;
+                    case 'sentiment':
+                        analysis.sentiment = frameworkResult.sentiment;
+                        break;
+                    case 'conceptual':
+                        analysis.concepts.push(...frameworkResult.concepts);
+                        break;
+                    case 'structural':
+                        analysis.quality = { ...analysis.quality, ...frameworkResult.quality };
+                        break;
+                    case 'temporal':
+                        analysis.insights.push(...frameworkResult.insights);
+                        break;
+                }
+                
+                // Aggregate insights
+                if (frameworkResult.insights) {
+                    analysis.insights.push(...frameworkResult.insights);
+                }
+            } catch (error) {
+                console.warn(`⚠️ Error applying ${framework} framework:`, error.message);
+            }
+        }
+        
+        // Calculate overall confidence
+        analysis.confidence = this.calculateAnalysisConfidence(analysis);
+        
+        return analysis;
     }
 }
 

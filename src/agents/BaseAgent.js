@@ -450,9 +450,10 @@ class BaseAgent {
     async getSharedMemory(key) {
         // Access shared memory across agents in the same session
         try {
-            // This would query the database for shared session memory
+            // Query the database for shared session memory
             return await this.loadSharedMemory(key);
         } catch (error) {
+            console.error(`❌ Error getting shared memory for key ${key}:`, error);
             return null;
         }
     }
@@ -615,53 +616,490 @@ class BaseAgent {
     }
 
     async loadSharedMemory(key) {
-        // Implementation would load memory shared across agents in the session
-        return null;
+        try {
+            if (!this.db) {
+                console.warn(`⚠️ No database service available for agent ${this.agentId}`);
+                return null;
+            }
+            
+            const query = `
+                SELECT * FROM agent_shared_memory 
+                WHERE session_id = $1 AND memory_key = $2
+                ORDER BY updated_at DESC
+                LIMIT 1
+            `;
+            
+            const result = await this.db.query(query, [this.sessionId, key]);
+            
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            const row = result.rows[0];
+            return {
+                key: row.memory_key,
+                value: JSON.parse(row.memory_value),
+                metadata: JSON.parse(row.metadata || '{}'),
+                createdAt: row.created_at,
+                updatedAt: row.updated_at
+            };
+        } catch (error) {
+            if (error.message.includes('does not exist')) {
+                console.log(`💭 Shared memory table not found, returning null for key: ${key}`);
+                return null;
+            }
+            
+            console.error(`❌ Error loading shared memory for agent ${this.agentId}:`, error);
+            return null;
+        }
     }
 
-    async loadSharedArtifact(artifactName) {
-        // Implementation would load artifacts shared across agents in the session
-        return null;
+    async storeSharedMemory(key, value, metadata = {}) {
+        try {
+            if (!this.db) {
+                console.warn(`⚠️ No database service available for agent ${this.agentId}, shared memory not stored`);
+                return false;
+            }
+            
+            const sharedMemoryEntry = {
+                session_id: this.sessionId,
+                memory_key: key,
+                memory_value: JSON.stringify(value),
+                metadata: JSON.stringify({
+                    ...metadata,
+                    createdBy: this.agentId,
+                    createdAt: new Date()
+                }),
+                created_at: new Date(),
+                updated_at: new Date()
+            };
+
+            // Use UPSERT to handle updates to existing keys
+            const query = `
+                INSERT INTO agent_shared_memory (session_id, memory_key, memory_value, metadata, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (session_id, memory_key) 
+                DO UPDATE SET 
+                    memory_value = EXCLUDED.memory_value,
+                    metadata = EXCLUDED.metadata,
+                    updated_at = EXCLUDED.updated_at
+                RETURNING *
+            `;
+            
+            await this.db.query(query, [
+                sharedMemoryEntry.session_id,
+                sharedMemoryEntry.memory_key,
+                sharedMemoryEntry.memory_value,
+                sharedMemoryEntry.metadata,
+                sharedMemoryEntry.created_at,
+                sharedMemoryEntry.updated_at
+            ]);
+
+            console.log(`💾 Stored shared memory: ${key} for session ${this.sessionId}`);
+            return true;
+        } catch (error) {
+            // If table doesn't exist, create it
+            if (error.message.includes('does not exist')) {
+                await this.createSharedMemoryTable();
+                // Retry the operation
+                return await this.storeSharedMemory(key, value, metadata);
+            }
+            
+            console.error(`❌ Error storing shared memory for agent ${this.agentId}:`, error);
+            return false;
+        }
     }
 
-    // Utility methods
-    matchesQuery(entry, query) {
-        // Simple text matching for memory search
-        const searchText = JSON.stringify(entry).toLowerCase();
-        return searchText.includes(query.toLowerCase());
+    async createSharedMemoryTable() {
+        try {
+            const createTableQuery = `
+                CREATE TABLE IF NOT EXISTS agent_shared_memory (
+                    id SERIAL PRIMARY KEY,
+                    session_id UUID NOT NULL,
+                    memory_key VARCHAR(255) NOT NULL,
+                    memory_value JSONB,
+                    metadata JSONB,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    UNIQUE(session_id, memory_key)
+                )
+            `;
+            
+            await this.db.query(createTableQuery);
+            console.log(`✅ Created agent_shared_memory table`);
+            return true;
+        } catch (error) {
+            console.error(`❌ Error creating shared memory table:`, error);
+            return false;
+        }
     }
 
-    // Lifecycle hooks (can be overridden by subclasses)
-    async onInitialize() {
-        // Called after successful initialization
+    // Enhanced Smart Context Methods
+    
+    /**
+     * Generate optimal smart context using advanced strategies
+     * @param {number} collectionId - Collection ID to generate context from
+     * @param {string} query - Query for context generation
+     * @param {string} strategy - Context strategy (comprehensive, focused, exploratory, synthesis)
+     * @param {object} options - Additional options
+     * @returns {Promise<object>} Generated smart context
+     */
+    async generateOptimalContext(collectionId, query, strategy = 'comprehensive', options = {}) {
+        try {
+            // Define strategy-specific parameters
+            const strategyParams = this.getContextStrategyParams(strategy, options);
+            
+            console.log(`🧠 Generating ${strategy} context for agent ${this.agentId}`);
+            
+            const contextOptions = {
+                query,
+                maxContextSize: strategyParams.maxContextSize,
+                maxChunks: strategyParams.maxChunks,
+                includeClusterMetadata: strategyParams.includeClusterMetadata,
+                diversityWeight: strategyParams.diversityWeight,
+                crossClusterThreshold: strategyParams.crossClusterThreshold,
+                clusterContextWeight: strategyParams.clusterContextWeight,
+                ...options
+            };
+
+            const response = await this.httpClient.post(
+                `/api/collections/${collectionId}/smart-context`,
+                contextOptions
+            );
+
+            if (response.data.success) {
+                const context = {
+                    ...response.data,
+                    strategy,
+                    generatedAt: new Date(),
+                    agentId: this.agentId,
+                    collectionId
+                };
+
+                // Cache context for reuse
+                await this.cacheContext(query, strategy, context);
+                
+                console.log(`✅ Generated ${strategy} context (${context.metadata?.stats?.contextSize || 0} chars, ${context.metadata?.stats?.totalChunks || 0} chunks)`);
+                return context;
+            } else {
+                throw new Error('Smart context generation failed');
+            }
+        } catch (error) {
+            console.error(`❌ Error generating optimal context for agent ${this.agentId}:`, error.message);
+            throw error;
+        }
     }
 
-    async onStart() {
-        // Called when execution starts
+    /**
+     * Get context strategy parameters based on strategy type
+     * @param {string} strategy - Context strategy
+     * @param {object} options - Override options
+     * @returns {object} Strategy parameters
+     */
+    getContextStrategyParams(strategy, options = {}) {
+        const strategies = {
+            comprehensive: {
+                maxContextSize: 8000,
+                maxChunks: 20,
+                includeClusterMetadata: true,
+                diversityWeight: 0.4,
+                crossClusterThreshold: 0.6,
+                clusterContextWeight: 0.3
+            },
+            focused: {
+                maxContextSize: 4000,
+                maxChunks: 10,
+                includeClusterMetadata: false,
+                diversityWeight: 0.2,
+                crossClusterThreshold: 0.8,
+                clusterContextWeight: 0.1
+            },
+            exploratory: {
+                maxContextSize: 6000,
+                maxChunks: 15,
+                includeClusterMetadata: true,
+                diversityWeight: 0.6,
+                crossClusterThreshold: 0.5,
+                clusterContextWeight: 0.4
+            },
+            synthesis: {
+                maxContextSize: 10000,
+                maxChunks: 25,
+                includeClusterMetadata: true,
+                diversityWeight: 0.5,
+                crossClusterThreshold: 0.7,
+                clusterContextWeight: 0.2
+            }
+        };
+
+        const baseParams = strategies[strategy] || strategies.comprehensive;
+        return { ...baseParams, ...options };
     }
 
-    async onProgress(progress) {
-        // Called when progress is updated
+    /**
+     * Get shared context from orchestrator or other agents
+     * @param {string} contextKey - Shared context key
+     * @returns {Promise<object|null>} Shared context or null if not found
+     */
+    async getSharedContext(contextKey) {
+        try {
+            const sharedContext = await this.getSharedMemory(`shared_context_${contextKey}`);
+            if (sharedContext?.value) {
+                console.log(`📖 Retrieved shared context: ${contextKey} for agent ${this.agentId}`);
+                return sharedContext.value;
+            }
+            return null;
+        } catch (error) {
+            console.error(`❌ Error getting shared context ${contextKey}:`, error.message);
+            return null;
+        }
     }
 
-    async onComplete() {
-        // Called when execution completes successfully
+    /**
+     * Store context for sharing with other agents
+     * @param {string} contextKey - Shared context key
+     * @param {object} context - Context to share
+     * @param {object} metadata - Additional metadata
+     * @returns {Promise<object>} Storage result
+     */
+    async storeSharedContext(contextKey, context, metadata = {}) {
+        try {
+            const sharedContextData = {
+                context,
+                metadata: {
+                    ...metadata,
+                    createdBy: this.agentId,
+                    createdAt: new Date(),
+                    sessionId: this.sessionId
+                }
+            };
+
+            await this.storeSharedMemory(`shared_context_${contextKey}`, sharedContextData);
+            console.log(`💾 Stored shared context: ${contextKey} by agent ${this.agentId}`);
+            return { success: true };
+        } catch (error) {
+            console.error(`❌ Error storing shared context ${contextKey}:`, error.message);
+            throw error;
+        }
     }
 
-    async onError(error) {
-        // Called when an error occurs
+    /**
+     * Combine multiple contexts intelligently
+     * @param {Array} contexts - Array of contexts to combine
+     * @param {string} strategy - Combination strategy (diversity, relevance, comprehensive)
+     * @param {object} options - Combination options
+     * @returns {Promise<object>} Combined context
+     */
+    async combineContexts(contexts, strategy = 'diversity', options = {}) {
+        try {
+            if (!contexts || contexts.length === 0) {
+                throw new Error('No contexts provided for combination');
+            }
+
+            if (contexts.length === 1) {
+                return contexts[0];
+            }
+
+            console.log(`🔀 Combining ${contexts.length} contexts using ${strategy} strategy`);
+
+            let combinedContent = '';
+            const combinedMetadata = {
+                strategy,
+                combinedAt: new Date(),
+                sourceContexts: [],
+                totalSources: 0,
+                clusters: new Set(),
+                collections: new Set()
+            };
+
+            switch (strategy) {
+                case 'diversity':
+                    combinedContent = this.combineForDiversity(contexts, combinedMetadata, options);
+                    break;
+                case 'relevance':
+                    combinedContent = this.combineForRelevance(contexts, combinedMetadata, options);
+                    break;
+                case 'comprehensive':
+                    combinedContent = this.combineForComprehensive(contexts, combinedMetadata, options);
+                    break;
+                default:
+                    combinedContent = this.combineForDiversity(contexts, combinedMetadata, options);
+            }
+
+            // Convert sets to arrays for JSON serialization
+            combinedMetadata.clusters = Array.from(combinedMetadata.clusters);
+            combinedMetadata.collections = Array.from(combinedMetadata.collections);
+
+            const combinedContext = {
+                success: true,
+                context: combinedContent,
+                metadata: combinedMetadata,
+                combinedBy: this.agentId
+            };
+
+            console.log(`✅ Combined contexts: ${combinedContent.length} chars from ${contexts.length} sources`);
+            return combinedContext;
+        } catch (error) {
+            console.error(`❌ Error combining contexts for agent ${this.agentId}:`, error.message);
+            throw error;
+        }
     }
 
-    async onPause() {
-        // Called when agent is paused
+    /**
+     * Combine contexts prioritizing diversity
+     */
+    combineForDiversity(contexts, metadata, options = {}) {
+        const maxCombinedSize = options.maxSize || 12000;
+        let content = '';
+        const usedSources = new Set();
+
+        // Sort contexts by diversity metrics
+        const sortedContexts = contexts.sort((a, b) => {
+            const aDiversity = a.metadata?.stats?.diversityScore || 0;
+            const bDiversity = b.metadata?.stats?.diversityScore || 0;
+            return bDiversity - aDiversity;
+        });
+
+        for (const context of sortedContexts) {
+            if (content.length >= maxCombinedSize) break;
+
+            const contextContent = context.context || '';
+            const remainingSpace = maxCombinedSize - content.length;
+
+            if (contextContent.length <= remainingSpace) {
+                content += `\n\n## Context from ${context.metadata?.collectionName || 'Unknown Collection'}\n`;
+                content += contextContent;
+
+                // Track metadata
+                metadata.sourceContexts.push({
+                    agentId: context.agentId || 'unknown',
+                    collectionId: context.collectionId,
+                    chunks: context.metadata?.stats?.totalChunks || 0
+                });
+
+                if (context.metadata?.stats?.clustersRepresented) {
+                    context.metadata.stats.clustersRepresented.forEach(cluster => 
+                        metadata.clusters.add(cluster)
+                    );
+                }
+
+                if (context.collectionId) {
+                    metadata.collections.add(context.collectionId);
+                }
+            }
+        }
+
+        metadata.totalSources = metadata.sourceContexts.length;
+        return content;
     }
 
-    async onResume() {
-        // Called when agent is resumed
+    /**
+     * Combine contexts prioritizing relevance
+     */
+    combineForRelevance(contexts, metadata, options = {}) {
+        const maxCombinedSize = options.maxSize || 10000;
+        let content = '';
+
+        // Sort by relevance scores
+        const sortedContexts = contexts.sort((a, b) => {
+            const aRelevance = a.metadata?.stats?.averageRelevance || 0;
+            const bRelevance = b.metadata?.stats?.averageRelevance || 0;
+            return bRelevance - aRelevance;
+        });
+
+        for (const context of sortedContexts) {
+            if (content.length >= maxCombinedSize) break;
+
+            const contextContent = context.context || '';
+            const remainingSpace = maxCombinedSize - content.length;
+
+            if (contextContent.length <= remainingSpace) {
+                content += contextContent + '\n\n';
+                
+                // Track metadata
+                metadata.sourceContexts.push({
+                    agentId: context.agentId || 'unknown',
+                    collectionId: context.collectionId,
+                    relevance: context.metadata?.stats?.averageRelevance || 0
+                });
+            }
+        }
+
+        metadata.totalSources = metadata.sourceContexts.length;
+        return content;
     }
 
-    async onCleanup() {
-        // Called during cleanup
+    /**
+     * Combine contexts comprehensively
+     */
+    combineForComprehensive(contexts, metadata, options = {}) {
+        const maxCombinedSize = options.maxSize || 15000;
+        let content = '# Comprehensive Context Assembly\n\n';
+
+        for (let i = 0; i < contexts.length; i++) {
+            if (content.length >= maxCombinedSize) break;
+
+            const context = contexts[i];
+            const contextContent = context.context || '';
+            const remainingSpace = maxCombinedSize - content.length;
+
+            if (contextContent.length <= remainingSpace) {
+                content += `## Section ${i + 1}: ${context.metadata?.collectionName || 'Source ' + (i + 1)}\n`;
+                content += contextContent + '\n\n';
+
+                // Track metadata
+                metadata.sourceContexts.push({
+                    agentId: context.agentId || 'unknown',
+                    collectionId: context.collectionId,
+                    section: i + 1
+                });
+            }
+        }
+
+        metadata.totalSources = metadata.sourceContexts.length;
+        return content;
+    }
+
+    /**
+     * Cache context for reuse
+     */
+    async cacheContext(query, strategy, context) {
+        try {
+            const cacheKey = `context_cache_${this.agentId}_${query}_${strategy}`;
+            const cacheData = {
+                context,
+                cachedAt: new Date(),
+                ttl: 30 * 60 * 1000 // 30 minutes TTL
+            };
+
+            await this.storeMemory(cacheKey, cacheData);
+        } catch (error) {
+            console.warn(`⚠️ Failed to cache context:`, error.message);
+            // Non-critical error, continue
+        }
+    }
+
+    /**
+     * Get cached context if available and valid
+     */
+    async getCachedContext(query, strategy) {
+        try {
+            const cacheKey = `context_cache_${this.agentId}_${query}_${strategy}`;
+            const cached = await this.retrieveMemory(cacheKey);
+
+            if (cached?.value) {
+                const age = Date.now() - new Date(cached.value.cachedAt).getTime();
+                if (age < cached.value.ttl) {
+                    console.log(`🎯 Using cached context for agent ${this.agentId}`);
+                    return cached.value.context;
+                }
+            }
+
+            return null;
+        } catch (error) {
+            console.warn(`⚠️ Failed to get cached context:`, error.message);
+            return null;
+        }
     }
 }
 

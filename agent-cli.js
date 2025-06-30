@@ -210,6 +210,54 @@ program
         }
     });
 
+// Restart a session
+program
+    .command('restart-session')
+    .description('Restart a completed or failed research session')
+    .argument('<session-id>', 'Session ID')
+    .option('-u, --user <user-id>', 'User ID', 'default-user')
+    .option('--clear-artifacts', 'Clear all previous artifacts', true)
+    .option('--preserve-sources', 'Preserve source discovery artifacts')
+    .option('--clear-memory', 'Clear agent memory')
+    .option('--agents <types>', 'Comma-separated list of agent types to start', 'orchestrator')
+    .action(async (sessionId, options) => {
+        try {
+            console.log(`🔄 Restarting session: ${sessionId}`);
+            
+            const agentTypes = options.agents.split(',').map(t => t.trim());
+            
+            const restartOptions = {
+                clearArtifacts: options.clearArtifacts,
+                preserveSourceDiscovery: options.preserveSources,
+                clearMemory: options.clearMemory,
+                agentTypes: agentTypes
+            };
+            
+            console.log(`🔧 Restart options:`, restartOptions);
+            
+            const result = await agentService.restartSession(sessionId, options.user, restartOptions);
+            
+            console.log(`✅ Session restarted successfully!`);
+            console.log(`   Agents started: ${result.agents.length}`);
+            result.agents.forEach(agent => {
+                console.log(`   🟢 ${agent.type}: ${agent.agentId} (${agent.status})`);
+            });
+            
+            if (result.clearedArtifacts) {
+                console.log(`   🗑️ Previous artifacts cleared`);
+            }
+            if (result.clearedMemory) {
+                console.log(`   🧠 Agent memory cleared`);
+            }
+            
+            console.log(`\n💡 Monitor progress:`);
+            console.log(`   node agent-cli.js session-status ${sessionId}`);
+        } catch (error) {
+            console.error('❌ Failed to restart session:', error.message);
+            process.exit(1);
+        }
+    });
+
 // Get session artifacts
 program
     .command('artifacts')
@@ -317,6 +365,7 @@ program
         console.log('  list-sessions    - List all sessions');
         console.log('  stop-session     - Stop a session');
         console.log('  pause-session    - Pause a session');
+        console.log('  restart-session  - Restart a session');
         console.log('  artifacts        - View session artifacts');
         console.log('  feedback         - Provide feedback');
         console.log('\nFor detailed help on any command, use: node agent-cli.js <command> --help');

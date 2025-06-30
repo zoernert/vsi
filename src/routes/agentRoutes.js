@@ -622,6 +622,77 @@ router.post('/sessions/:sessionId/stop', async (req, res) => {
     }
 });
 
+router.post('/sessions/:sessionId/restart', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { sessionId } = req.params;
+        const { 
+            clearArtifacts = true, 
+            clearMemory = false, 
+            preserveSourceDiscovery = false,
+            agentTypes = null
+        } = req.body;
+        
+        // Extract the bearer token for agents to use in API calls
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+        
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: 'Authentication token required for agent operations'
+            });
+        }
+        
+        console.log(`🔄 Restart request for session ${sessionId} with options:`, {
+            clearArtifacts, clearMemory, preserveSourceDiscovery, agentTypes
+        });
+        
+        const result = await agentService.restartSession(sessionId, userId, {
+            clearArtifacts,
+            clearMemory,
+            preserveSourceDiscovery,
+            agentTypes,
+            userToken: token
+        });
+        
+        // Broadcast restart status to connected clients
+        broadcastSessionUpdate(sessionId, {
+            type: 'status',
+            status: 'running',
+            message: `Session restarted with ${result.agents.length} agents`,
+            timestamp: new Date().toISOString(),
+            clearedArtifacts: result.clearedArtifacts,
+            clearedMemory: result.clearedMemory
+        });
+        
+        res.json({
+            success: true,
+            data: result,
+            message: 'Session restarted successfully'
+        });
+    } catch (error) {
+        console.error(`❌ Error restarting session ${req.params.sessionId}:`, error);
+        
+        if (error.message.includes('not found')) {
+            res.status(404).json({ 
+                success: false, 
+                message: 'Session not found or access denied'
+            });
+        } else if (error.message.includes('Cannot restart session')) {
+            res.status(400).json({ 
+                success: false, 
+                message: error.message
+            });
+        } else {
+            res.status(500).json({ 
+                success: false, 
+                message: error.message || 'Failed to restart session'
+            });
+        }
+    }
+});
+
 // Progress and artifacts
 router.get('/sessions/:sessionId/progress', async (req, res) => {
     try {
