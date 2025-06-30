@@ -21,7 +21,7 @@ async function testComprehensiveFixes() {
         // Initialize database and agent service
         console.log('🗄️ Initializing database service...');
         const databaseService = new DatabaseService();
-        await databaseService.testConnection();
+        await databaseService.query('SELECT 1'); // Test database connection
         console.log('✅ Database connection successful');
         
         console.log('🤖 Initializing agent service...');

@@ -2,8 +2,8 @@ const { BaseAgent } = require('./BaseAgent');
 const { ExternalContentService } = require('../services/externalContentService');
 
 class ContentAnalysisAgent extends BaseAgent {
-    constructor(agentId, sessionId, config, apiClient) {
-        super(agentId, sessionId, config, apiClient);
+    constructor(agentId, sessionId, config, apiClient, databaseService) {
+        super(agentId, sessionId, config, apiClient, databaseService);
         this.analysisFrameworks = config.analysisFrameworks || config.inputs?.analysisFrameworks || ['thematic', 'sentiment'];
         this.maxContextSize = config.maxContextSize || config.inputs?.maxContextSize || 4000;
         this.analyzedContent = [];

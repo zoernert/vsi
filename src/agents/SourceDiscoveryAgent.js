@@ -1,8 +1,8 @@
 const { BaseAgent } = require('./BaseAgent');
 
 class SourceDiscoveryAgent extends BaseAgent {
-    constructor(agentId, sessionId, config, apiClient) {
-        super(agentId, sessionId, config, apiClient);
+    constructor(agentId, sessionId, config, apiClient, databaseService) {
+        super(agentId, sessionId, config, apiClient, databaseService);
         this.discoveredSources = [];
         this.qualityThreshold = config.qualityThreshold || 0.6;
         this.maxSources = config.maxSources || 50;

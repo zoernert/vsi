@@ -622,7 +622,7 @@ class AgentService extends EventEmitter {
                     const AgentClass = this.getAgentClass(agentType);
                     console.log(`📦 Agent class loaded: ${AgentClass.name}`);
                     
-                    const config = this.getAgentConfig(agentType, session.preferences);
+                    const config = this.getAgentConfig(agentType, session.preferences, session.research_topic);
                     console.log(`⚙️ Agent config generated:`, config);
                     
                     await this.registerAgent(agentId, AgentClass, config);
@@ -861,15 +861,15 @@ class AgentService extends EventEmitter {
         }
     }
 
-    getAgentConfig(agentType, sessionPreferences = {}) {
+    getAgentConfig(agentType, sessionPreferences = {}, researchTopic = '') {
         const baseConfig = {
             agentType: agentType,
             preferences: sessionPreferences,
             timeout: 30000,
             maxRetries: 3,
-            query: sessionPreferences.researchTopic || '',
+            query: researchTopic || sessionPreferences.researchTopic || '',
             inputs: {
-                query: sessionPreferences.researchTopic || '',
+                query: researchTopic || sessionPreferences.researchTopic || '',
                 collections: null
             }
         };
