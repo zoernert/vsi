@@ -5,6 +5,9 @@
  * Tests that specialized agents are properly created and started
  */
 
+// Load environment variables
+require('dotenv').config();
+
 const { AgentService } = require('./src/services/agentService');
 const { DatabaseService } = require('./src/services/databaseService');
 const { OrchestratorAgent } = require('./src/agents/OrchestratorAgent');

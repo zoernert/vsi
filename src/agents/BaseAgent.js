@@ -8,6 +8,13 @@ class BaseAgent {
         this.config = config;
         this.api = apiClient;
         this.db = databaseService;
+        
+        // Debug logging
+        console.log(`🔧 BaseAgent constructor for ${agentId}: DB service = ${databaseService ? 'YES' : 'NO'}`);
+        if (databaseService) {
+            console.log(`🗄️ DB service type: ${databaseService.constructor.name}`);
+        }
+        
         this.status = 'initialized';
         this.memory = new Map();
         this.tasks = [];
@@ -582,6 +589,17 @@ class BaseAgent {
                 return false;
             }
             
+            // Ensure artifact has required fields
+            if (!artifact.id) {
+                artifact.id = uuidv4();
+            }
+            if (!artifact.type && artifact.artifact_type) {
+                artifact.type = artifact.artifact_type;
+            }
+            if (!artifact.type) {
+                artifact.type = 'general';
+            }
+            
             const query = `
                 INSERT INTO agent_artifacts (
                     id, session_id, agent_id, artifact_type, artifact_name, 
@@ -595,9 +613,9 @@ class BaseAgent {
                 this.sessionId,
                 this.agentId,
                 artifact.type,
-                artifact.metadata.name || artifact.type,
+                artifact.metadata?.name || artifact.type,
                 JSON.stringify(artifact.content),
-                JSON.stringify(artifact.metadata),
+                JSON.stringify(artifact.metadata || {}),
                 artifact.status || 'draft'
             ];
             

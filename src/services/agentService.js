@@ -152,7 +152,8 @@ class AgentService extends EventEmitter {
             console.log(`🔗 API client created for session: ${sessionId}${userToken ? ' (with auth token)' : ' (no auth token)'}`);
             
             const instance = new AgentClass(agentId, sessionId, agentInfo.config, apiClient, this.db);
-            console.log(`🆕 Agent instance created: ${AgentClass.name} with database service`);
+            console.log(`🆕 Agent instance created: ${AgentClass.name} with database service: ${this.db ? 'YES' : 'NO'}`);
+            console.log(`🗄️ Database service type: ${this.db ? this.db.constructor.name : 'undefined'}`);
             
             // Set reference to AgentService for event emission
             instance.setAgentService(this);

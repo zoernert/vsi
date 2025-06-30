@@ -93,7 +93,7 @@ async function testSmartContextIntegration() {
         });
 
         if (sessionResponse.data.success) {
-            const sessionId = sessionResponse.data.session?.id || sessionResponse.data.sessionId || sessionResponse.data.id;
+            const sessionId = sessionResponse.data.data?.id || sessionResponse.data.session?.id || sessionResponse.data.sessionId || sessionResponse.data.id;
             console.log(`✅ Created agent session: ${sessionId}`);
             console.log(`📊 Session data:`, JSON.stringify(sessionResponse.data, null, 2));
 
@@ -111,7 +111,10 @@ async function testSmartContextIntegration() {
 
             if (startResponse.data.success) {
                 console.log('✅ Orchestrator agent started successfully');
-                console.log(`📊 Started ${startResponse.data.agents.length} agents`);
+                console.log(`📊 Start response:`, JSON.stringify(startResponse.data, null, 2));
+                
+                const agentsCount = startResponse.data.data?.agents?.length || startResponse.data.agents?.length || 0;
+                console.log(`📊 Started ${agentsCount} agents`);
                 
                 // Step 6: Monitor agent progress
                 console.log('📊 Monitoring agent progress for 30 seconds...');
